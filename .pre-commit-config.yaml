@@ -1,0 +1,67 @@
+# Linters and formatters for both halves of the repo: Rust ships, Python trains.
+#
+#   uv run pre-commit install          # once, per clone
+#   uv run pre-commit run --all-files  # check everything now
+#   uv run pre-commit autoupdate       # pin newer hook releases
+#
+# Nothing here is the only place a check lives — every hook is a command you can run by
+# hand, and the Rust hooks call the workspace toolchain rather than a pinned copy, so they
+# cannot report something different from `cargo test`.
+#
+# Requires `rg` and `uv` on PATH.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      - id: check-toml
+      - id: check-yaml
+
+  - repo: local
+    hooks:
+      # Formats in place. pre-commit fails the commit when a hook changes a file, so a
+      # reformat shows up as "files were modified" and you re-stage.
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all
+        language: system
+        files: '(\.rs|Cargo\.toml|Cargo\.lock|rustfmt\.toml)$'
+        pass_filenames: false
+
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy --workspace --all-targets -- -D warnings
+        language: system
+        files: '(\.rs|Cargo\.toml|Cargo\.lock)$'
+        pass_filenames: false
+
+      # ruff comes from the root uv lockfile, so the hook and the CLI are one version.
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix
+        language: system
+        types: [python]
+
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types: [python]
+
+      # Unicode is fine; emoji are not. `\p{Emoji_Presentation}` is the property that
+      # separates the two: `✓` U+2713, `✗` U+2717, `★` U+2605, `→` U+2192 and `·` U+00B7
+      # pass, while U+2705 and U+1F528 do not. U+FE0F is checked separately because it is
+      # what promotes an ordinary symbol such as U+26A0 to an emoji-presented one.
+      # Those examples are given as codepoints on purpose — spelling them out literally
+      # would make this comment fail its own hook.
+      - id: no-emoji
+        name: no emoji
+        entry: >-
+          sh -c 'if rg -n "[\p{Emoji_Presentation}\x{FE0F}]" "$@"; then echo "emoji found; use a text tag such as [done] or a functional glyph such as ✓" >&2; exit 1; fi' --
+        language: system
+        types: [text]
