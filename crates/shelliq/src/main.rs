@@ -69,11 +69,7 @@ fn main() -> Result<()> {
             IndexAction::Stats => stats(&path),
         },
         Command::Explain { line } => explain(&path, &line.join(" ")),
-        Command::Search {
-            command,
-            query,
-            limit,
-        } => search(&path, &command, &query.join(" "), limit),
+        Command::Search { command, query, limit } => search(&path, &command, &query.join(" "), limit),
         Command::Flags { command } => list_flags(&path, &command),
     }
 }
@@ -112,8 +108,7 @@ fn stats(path: &std::path::Path) -> Result<()> {
 
 fn explain(path: &std::path::Path, line: &str) -> Result<()> {
     let index = Index::open(path)?;
-    let findings =
-        shelliq_verify::verify(&index, line).with_context(|| format!("verifying `{line}`"))?;
+    let findings = shelliq_verify::verify(&index, line).with_context(|| format!("verifying `{line}`"))?;
 
     if findings.is_empty() {
         println!("nothing to check in `{line}`");
