@@ -99,7 +99,8 @@ fn ls_matches_its_own_help_exactly() {
     };
     let parsed = parsed_long_flags("ls");
     assert_eq!(
-        parsed, truth,
+        parsed,
+        truth,
         "ls flag sets diverge\n  only in man:  {:?}\n  only in help: {:?}",
         parsed.difference(&truth).collect::<Vec<_>>(),
         truth.difference(&parsed).collect::<Vec<_>>()

@@ -158,9 +158,7 @@ pub fn verify(index: &Index, line: &str) -> Result<Vec<Finding>> {
                 match index.lookup_flag(&segment.command, flag_token)? {
                     FlagLookup::Exact(flag) => {
                         let needs_arg = flag.arg_type.is_some() && flag.arg_required;
-                        let satisfied = has_attached_arg
-                            || consumed_inline
-                            || args.peek().is_some_and(|n| !n.starts_with('-'));
+                        let satisfied = has_attached_arg || consumed_inline || args.peek().is_some_and(|n| !n.starts_with('-'));
                         if needs_arg && !satisfied {
                             findings.push(Finding::MissingArgument {
                                 token: flag_token.clone(),
@@ -286,13 +284,7 @@ mod tests {
         let idx = seeded();
         // -A takes NUM, so `5` is its argument, not the flag `-5`.
         let parts = split_bundle(&idx, "grep", "-A5").unwrap();
-        assert_eq!(
-            parts,
-            vec![
-                BundlePart::Flag("-A".into()),
-                BundlePart::Argument("5".into()),
-            ]
-        );
+        assert_eq!(parts, vec![BundlePart::Flag("-A".into()), BundlePart::Argument("5".into()),]);
     }
 
     #[test]
@@ -317,9 +309,7 @@ mod tests {
         let wrong: Vec<_> = findings
             .iter()
             .filter_map(|f| match f {
-                Finding::WrongCase { token, suggestion } => {
-                    Some((token.clone(), suggestion.short.clone().unwrap()))
-                }
+                Finding::WrongCase { token, suggestion } => Some((token.clone(), suggestion.short.clone().unwrap())),
                 _ => None,
             })
             .collect();
@@ -330,10 +320,7 @@ mod tests {
     fn a_correct_line_is_entirely_clean() {
         let idx = seeded();
         let findings = verify(&idx, "tar -xzf archive.tar.gz").unwrap();
-        assert!(
-            findings.iter().all(Finding::is_clean),
-            "expected all clean, got {findings:?}"
-        );
+        assert!(findings.iter().all(Finding::is_clean), "expected all clean, got {findings:?}");
         assert_eq!(findings.len(), 3);
     }
 

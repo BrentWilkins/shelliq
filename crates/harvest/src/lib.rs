@@ -95,11 +95,7 @@ pub struct ParsedCommand {
 }
 
 pub fn platform() -> &'static str {
-    if cfg!(target_os = "macos") {
-        "darwin"
-    } else {
-        "linux"
-    }
+    if cfg!(target_os = "macos") { "darwin" } else { "linux" }
 }
 
 /// Preference order when one name has pages in several sections.
@@ -217,10 +213,7 @@ pub fn harvest(name: &str) -> Result<ParsedCommand> {
 /// whole name.
 pub fn harvest_all(name: &str) -> Result<Vec<ParsedCommand>> {
     let paths = man_paths(name)?;
-    let harvested: Vec<ParsedCommand> = paths
-        .iter()
-        .filter_map(|p| harvest_path(name, p).ok())
-        .collect();
+    let harvested: Vec<ParsedCommand> = paths.iter().filter_map(|p| harvest_path(name, p).ok()).collect();
     if harvested.is_empty() {
         bail!("no man page for `{name}` could be parsed");
     }
@@ -232,13 +225,7 @@ fn harvest_path(name: &str, path: &str) -> Result<ParsedCommand> {
     let rendered = render_section(name, Some(&section))?;
     let bytes = std::fs::read(path).unwrap_or_default();
     let source_hash = hex(&Sha256::digest(&bytes));
-    Ok(parse_rendered(
-        name,
-        &section,
-        path,
-        &source_hash,
-        &rendered,
-    ))
+    Ok(parse_rendered(name, &section, path, &source_hash, &rendered))
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -261,13 +248,7 @@ fn section_from_path(path: &str) -> String {
 }
 
 /// Parse rendered man text into a command record.
-pub fn parse_rendered(
-    name: &str,
-    section: &str,
-    source_path: &str,
-    source_hash: &str,
-    text: &str,
-) -> ParsedCommand {
+pub fn parse_rendered(name: &str, section: &str, source_path: &str, source_hash: &str, text: &str) -> ParsedCommand {
     let lines: Vec<&str> = text.lines().collect();
     let mut flags: Vec<ParsedFlag> = Vec::new();
     let mut synopsis = String::new();
@@ -355,10 +336,9 @@ pub fn parse_rendered(
 /// A page may document `-r` and `--recursive` on separate lines; keeping both as one
 /// record means a lookup for either spelling finds the same facts.
 fn push_unique(flags: &mut Vec<ParsedFlag>, incoming: ParsedFlag) {
-    let clash = flags.iter_mut().find(|f| {
-        (f.short.is_some() && f.short == incoming.short)
-            || (f.long.is_some() && f.long == incoming.long)
-    });
+    let clash = flags
+        .iter_mut()
+        .find(|f| (f.short.is_some() && f.short == incoming.short) || (f.long.is_some() && f.long == incoming.long));
     match clash {
         Some(existing) => {
             if existing.short.is_none() {

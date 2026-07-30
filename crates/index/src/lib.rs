@@ -89,10 +89,7 @@ impl Index {
         }
         let base = std::env::var("XDG_DATA_HOME")
             .map(std::path::PathBuf::from)
-            .unwrap_or_else(|_| {
-                std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
-                    .join(".local/share")
-            });
+            .unwrap_or_else(|_| std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".local/share"));
         base.join("shelliq/index.sqlite")
     }
 
@@ -150,11 +147,9 @@ impl Index {
     }
 
     pub fn command_exists(&self, name: &str) -> Result<bool> {
-        let n: i64 = self.conn.query_row(
-            "SELECT count(*) FROM commands WHERE name = ?1",
-            params![name],
-            |r| r.get(0),
-        )?;
+        let n: i64 = self
+            .conn
+            .query_row("SELECT count(*) FROM commands WHERE name = ?1", params![name], |r| r.get(0))?;
         Ok(n > 0)
     }
 
@@ -179,9 +174,7 @@ impl Index {
 
     /// The section that answers a bare command lookup, by `SECTION_PREFERENCE`.
     fn preferred_section(&self, command: &str) -> Result<Option<String>> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT section FROM commands WHERE name = ?1")?;
+        let mut stmt = self.conn.prepare("SELECT section FROM commands WHERE name = ?1")?;
         let mut sections = stmt
             .query_map(params![command], |r| r.get::<_, String>(0))?
             .collect::<Result<Vec<_>, _>>()?;
@@ -192,7 +185,9 @@ impl Index {
     /// Check one flag token, case-sensitively, then case-insensitively as a suggestion.
     pub fn lookup_flag(&self, command: &str, token: &str) -> Result<FlagLookup> {
         let Some(section) = self.preferred_section(command)? else {
-            return Ok(FlagLookup::Unknown { typed: token.to_string() });
+            return Ok(FlagLookup::Unknown {
+                typed: token.to_string(),
+            });
         };
 
         let exact = self.query_one(
@@ -226,21 +221,15 @@ impl Index {
                 typed: token.to_string(),
                 suggestion: Box::new(row),
             },
-            None => FlagLookup::Unknown { typed: token.to_string() },
+            None => FlagLookup::Unknown {
+                typed: token.to_string(),
+            },
         })
     }
 
-    fn query_one(
-        &self,
-        sql: &str,
-        command: &str,
-        section: &str,
-        token: &str,
-    ) -> Result<Option<FlagRow>> {
+    fn query_one(&self, sql: &str, command: &str, section: &str, token: &str) -> Result<Option<FlagRow>> {
         let mut stmt = self.conn.prepare(sql)?;
-        let row = stmt
-            .query_row(params![command, section, token], row_to_flag)
-            .optional()?;
+        let row = stmt.query_row(params![command, section, token], row_to_flag).optional()?;
         Ok(row)
     }
 
@@ -269,18 +258,15 @@ impl Index {
              LIMIT ?4",
         )?;
         let rows = stmt
-            .query_map(
-                params![match_expr, command, section, limit as i64],
-                row_to_flag,
-            )?
+            .query_map(params![match_expr, command, section, limit as i64], row_to_flag)?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
     }
 
     pub fn stats(&self) -> Result<(i64, i64)> {
-        let commands =
-            self.conn
-                .query_row("SELECT count(*) FROM commands", [], |r| r.get::<_, i64>(0))?;
+        let commands = self
+            .conn
+            .query_row("SELECT count(*) FROM commands", [], |r| r.get::<_, i64>(0))?;
         let flags = self
             .conn
             .query_row("SELECT count(*) FROM flags", [], |r| r.get::<_, i64>(0))?;
@@ -450,9 +436,6 @@ mod tests {
         let mut shrunk = grep_fixture();
         shrunk.flags.truncate(1);
         idx.insert_command(&shrunk).unwrap();
-        assert!(matches!(
-            idx.lookup_flag("grep", "-i").unwrap(),
-            FlagLookup::Unknown { .. }
-        ));
+        assert!(matches!(idx.lookup_flag("grep", "-i").unwrap(), FlagLookup::Unknown { .. }));
     }
 }
