@@ -1,0 +1,11 @@
+[package]
+name = "shelliq-harvest"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Man page and --help harvesting for shelliq"
+
+[dependencies]
+anyhow = "1.0.104"
+sha2 = "0.11.0"

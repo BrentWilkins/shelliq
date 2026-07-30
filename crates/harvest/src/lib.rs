@@ -1,0 +1,560 @@
+//! Harvesting command facts from man pages.
+//!
+//! P0 parses *rendered* `man` output rather than roff source. `mandoc -T markdown` is the
+//! preferred path described in PLAN.md — it understands both `man` and `mdoc` macros, so
+//! BSD and macOS pages work identically — but mandoc is not installed everywhere, so the
+//! rendered path is what ships first. Both paths must agree on the same fixtures.
+//!
+//! The rendered layout comes from the roff `.TP` macro: a tag at column 7 and its body at
+//! column 14. Rendering with hyphenation and justification disabled at a very wide
+//! `MANWIDTH` keeps descriptions on predictable lines and stops words being split across
+//! them.
+
+use anyhow::{Context, Result, bail};
+use sha2::{Digest, Sha256};
+use std::process::Command;
+
+/// Bumped whenever parsing behaviour changes.
+///
+/// The index stores this alongside each row's `source_hash`. A parser fix must invalidate
+/// previously harvested rows even though every source file is byte-identical, otherwise
+/// the index silently keeps serving output built by older, buggier code.
+pub const PARSER_VERSION: u32 = 1;
+
+/// Column where a `.TP` tag begins in rendered output.
+const TAG_INDENT: usize = 7;
+/// Column where a `.TP` body begins.
+const BODY_INDENT: usize = 14;
+/// Rendering width. Wide enough that descriptions rarely wrap at all.
+const MAN_WIDTH: &str = "400";
+
+/// Sections that mention flags without defining them.
+///
+/// `ls` and many GNU tools define their options under DESCRIPTION rather than OPTIONS, so
+/// this is a denylist rather than an allowlist. An allowlist would silently lose every
+/// `ls` flag.
+const SKIP_SECTIONS: &[&str] = &[
+    "EXAMPLES",
+    "EXAMPLE",
+    "SEE ALSO",
+    "AUTHOR",
+    "AUTHORS",
+    "COPYRIGHT",
+    "REPORTING BUGS",
+    "BUGS",
+    "HISTORY",
+    "NOTES",
+    "CAVEATS",
+    "FILES",
+    "EXIT STATUS",
+    "RETURN VALUE",
+    "STANDARDS",
+];
+
+/// One flag as written in the page. `short` and `long` are two spellings of one flag, so
+/// `-r, --recursive` is a single record rather than two.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParsedFlag {
+    /// Exact short spelling including the leading dash, case preserved: `-r` and `-R` are
+    /// different flags and must never be folded together.
+    pub short: Option<String>,
+    pub long: Option<String>,
+    /// Placeholder name for the flag's argument, e.g. `SIZE` in `--block-size=SIZE`.
+    pub arg_type: Option<String>,
+    /// False when the page writes the argument as optional, e.g. `--color[=WHEN]`.
+    pub arg_required: bool,
+    pub description: String,
+    /// Subsection the flag was defined under, preserved for grouped display.
+    pub group: Option<String>,
+    /// 1-based line in the rendered page, used for citations like `grep(1):142`.
+    pub source_line: usize,
+}
+
+impl ParsedFlag {
+    /// How the flag is displayed: `-r, --recursive`.
+    pub fn spelling(&self) -> String {
+        match (&self.short, &self.long) {
+            (Some(s), Some(l)) => format!("{s}, {l}"),
+            (Some(s), None) => s.clone(),
+            (None, Some(l)) => l.clone(),
+            (None, None) => String::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ParsedCommand {
+    pub name: String,
+    pub section: String,
+    pub platform: String,
+    pub synopsis: String,
+    pub description: String,
+    pub source_path: String,
+    pub source_hash: String,
+    pub flags: Vec<ParsedFlag>,
+}
+
+pub fn platform() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "darwin"
+    } else {
+        "linux"
+    }
+}
+
+/// Preference order when one name has pages in several sections.
+///
+/// A CLI assistant wants the *command*, so user commands (1) and admin commands (8) come
+/// first, then games (6), then the overview and file-format pages, and only then the
+/// syscall and library sections. Without this, `kill` resolves to the section 2 syscall
+/// rather than the shell command, and `mount` to section 8 by accident rather than by
+/// intent.
+const SECTION_PREFERENCE: &[&str] = &["1", "8", "6", "7", "5", "2", "3"];
+
+/// Rank a section for command lookup. Lower sorts first.
+pub fn section_rank(section: &str) -> usize {
+    SECTION_PREFERENCE
+        .iter()
+        .position(|s| *s == section)
+        .unwrap_or(SECTION_PREFERENCE.len())
+}
+
+/// Path to the default man page source file, via `man -w`.
+pub fn man_path(name: &str) -> Result<String> {
+    man_paths(name)?
+        .into_iter()
+        .next()
+        .context(format!("no man page for `{name}`"))
+}
+
+/// Every man page source file for this name, across all sections.
+///
+/// `man -w` alone returns only the default section, which silently discards content: on
+/// this machine `signal` resolves to the 84-line section 2 syscall page while the
+/// 378-line section 7 overview goes unindexed. `time` has pages in sections 1, 2, and 7.
+pub fn man_paths(name: &str) -> Result<Vec<String>> {
+    let out = Command::new("man")
+        .args(["-w", "-a", name])
+        .output()
+        .context("running `man -w -a`")?;
+    if !out.status.success() {
+        bail!("no man page for `{name}`");
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    let mut paths: Vec<String> = text
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(str::to_string)
+        .collect();
+    if paths.is_empty() {
+        bail!("no man page for `{name}`");
+    }
+    paths.sort_by_key(|p| section_rank(&section_from_path(p)));
+    Ok(paths)
+}
+
+/// Render a man page to plain text.
+///
+/// Hyphenation and justification are disabled so that words are never split across lines
+/// and runs of spaces inside a description are not padding artifacts — the parser relies
+/// on a run of two or more spaces meaning "the tag ended here".
+pub fn render(name: &str) -> Result<String> {
+    render_section(name, None)
+}
+
+/// Render a specific section, or the default one when `section` is `None`.
+pub fn render_section(name: &str, section: Option<&str>) -> Result<String> {
+    let mut cmd = Command::new("man");
+    cmd.env("MANWIDTH", MAN_WIDTH)
+        .env("LC_ALL", "C.UTF-8")
+        .args(["--no-hyphenation", "--no-justification", "--pager", "cat"]);
+    if let Some(s) = section {
+        cmd.arg(s);
+    }
+    cmd.arg(name);
+
+    let out = cmd.output().context("running `man`")?;
+    if !out.status.success() {
+        bail!("no man page for `{name}`");
+    }
+    Ok(strip_overstrike(&String::from_utf8_lossy(&out.stdout)))
+}
+
+/// Remove `X\bX` bold and `_\bX` underline sequences.
+///
+/// GNU man strips these when output is not a terminal, but other implementations do not,
+/// and macOS `man` is one of them.
+fn strip_overstrike(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < chars.len() {
+        if i + 2 < chars.len() && chars[i + 1] == '\u{8}' {
+            // Keep the character overstruck on top, not the one underneath.
+            out.push(chars[i + 2]);
+            i += 3;
+        } else if chars[i] == '\u{8}' {
+            i += 1;
+        } else {
+            out.push(chars[i]);
+            i += 1;
+        }
+    }
+    out
+}
+
+/// Harvest the preferred man page for a name — the command, not the syscall.
+pub fn harvest(name: &str) -> Result<ParsedCommand> {
+    let path = man_path(name)?;
+    harvest_path(name, &path)
+}
+
+/// Harvest every section that documents this name.
+///
+/// Returned in `SECTION_PREFERENCE` order, so the first entry is the one a shell user
+/// most likely means. Sections that fail to render are skipped rather than aborting the
+/// whole name.
+pub fn harvest_all(name: &str) -> Result<Vec<ParsedCommand>> {
+    let paths = man_paths(name)?;
+    let harvested: Vec<ParsedCommand> = paths
+        .iter()
+        .filter_map(|p| harvest_path(name, p).ok())
+        .collect();
+    if harvested.is_empty() {
+        bail!("no man page for `{name}` could be parsed");
+    }
+    Ok(harvested)
+}
+
+fn harvest_path(name: &str, path: &str) -> Result<ParsedCommand> {
+    let section = section_from_path(path);
+    let rendered = render_section(name, Some(&section))?;
+    let bytes = std::fs::read(path).unwrap_or_default();
+    let source_hash = hex(&Sha256::digest(&bytes));
+    Ok(parse_rendered(
+        name,
+        &section,
+        path,
+        &source_hash,
+        &rendered,
+    ))
+}
+
+fn hex(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+    bytes.iter().fold(String::new(), |mut s, b| {
+        let _ = write!(s, "{b:02x}");
+        s
+    })
+}
+
+/// `/usr/share/man/man1/ls.1.gz` -> `1`
+fn section_from_path(path: &str) -> String {
+    path.rsplit('/')
+        .next()
+        .map(|f| f.strip_suffix(".gz").unwrap_or(f))
+        .and_then(|f| f.rsplit('.').next())
+        .filter(|s| !s.is_empty() && s.starts_with(|c: char| c.is_ascii_digit()))
+        .unwrap_or("1")
+        .to_string()
+}
+
+/// Parse rendered man text into a command record.
+pub fn parse_rendered(
+    name: &str,
+    section: &str,
+    source_path: &str,
+    source_hash: &str,
+    text: &str,
+) -> ParsedCommand {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut flags: Vec<ParsedFlag> = Vec::new();
+    let mut synopsis = String::new();
+    let mut description = String::new();
+
+    let mut section_name = String::new();
+    let mut group: Option<String> = None;
+    let mut i = 0;
+
+    while i < lines.len() {
+        let line = lines[i];
+        let indent = indent_of(line);
+        let trimmed = line.trim_end();
+
+        // Section heading: flush left.
+        if indent == 0 && !trimmed.is_empty() {
+            section_name = trimmed.trim().to_string();
+            group = None;
+            i += 1;
+            continue;
+        }
+
+        // Subsection heading sits between the section margin and the tag margin.
+        if indent > 0 && indent < TAG_INDENT && !trimmed.is_empty() {
+            group = Some(trimmed.trim().to_string());
+            i += 1;
+            continue;
+        }
+
+        if section_name == "SYNOPSIS" && synopsis.is_empty() && indent >= TAG_INDENT {
+            synopsis = trimmed.trim().to_string();
+        }
+        if section_name == "DESCRIPTION" && description.is_empty() && indent >= TAG_INDENT {
+            let t = trimmed.trim();
+            if !t.starts_with('-') {
+                description = t.to_string();
+            }
+        }
+
+        let skipped = SKIP_SECTIONS.contains(&section_name.as_str());
+        if !skipped && indent == TAG_INDENT && trimmed[TAG_INDENT..].starts_with('-') {
+            let content = &trimmed[TAG_INDENT..];
+            let (spec, inline) = split_tag(content);
+            if let Some(mut parsed) = parse_spec(spec) {
+                let mut desc_parts: Vec<String> = Vec::new();
+                if !inline.trim().is_empty() {
+                    desc_parts.push(inline.trim().to_string());
+                }
+                // Body lines sit at BODY_INDENT until a blank line ends the entry.
+                let mut j = i + 1;
+                while j < lines.len() {
+                    let b = lines[j];
+                    if b.trim().is_empty() || indent_of(b) < BODY_INDENT {
+                        break;
+                    }
+                    desc_parts.push(b.trim().to_string());
+                    j += 1;
+                }
+                parsed.description = desc_parts.join(" ");
+                parsed.group = group.clone();
+                parsed.source_line = i + 1;
+                push_unique(&mut flags, parsed);
+                i = j;
+                continue;
+            }
+        }
+
+        i += 1;
+    }
+
+    ParsedCommand {
+        name: name.to_string(),
+        section: section.to_string(),
+        platform: platform().to_string(),
+        synopsis,
+        description,
+        source_path: source_path.to_string(),
+        source_hash: source_hash.to_string(),
+        flags,
+    }
+}
+
+/// Merge a flag into the list, combining spellings that describe the same option.
+///
+/// A page may document `-r` and `--recursive` on separate lines; keeping both as one
+/// record means a lookup for either spelling finds the same facts.
+fn push_unique(flags: &mut Vec<ParsedFlag>, incoming: ParsedFlag) {
+    let clash = flags.iter_mut().find(|f| {
+        (f.short.is_some() && f.short == incoming.short)
+            || (f.long.is_some() && f.long == incoming.long)
+    });
+    match clash {
+        Some(existing) => {
+            if existing.short.is_none() {
+                existing.short = incoming.short;
+            }
+            if existing.long.is_none() {
+                existing.long = incoming.long;
+            }
+            if existing.description.is_empty() {
+                existing.description = incoming.description;
+            }
+        }
+        None => flags.push(incoming),
+    }
+}
+
+fn indent_of(line: &str) -> usize {
+    line.len() - line.trim_start_matches(' ').len()
+}
+
+/// Split a `.TP` tag line into its flag spec and any description on the same line.
+///
+/// A run of two or more spaces separates them. Justification is disabled during rendering
+/// precisely so that such a run is never an artifact of padding.
+fn split_tag(content: &str) -> (&str, &str) {
+    match content.find("  ") {
+        Some(i) => (&content[..i], &content[i..]),
+        None => (content, ""),
+    }
+}
+
+/// Parse `-A NUM, --after-context=NUM` into one flag record.
+fn parse_spec(spec: &str) -> Option<ParsedFlag> {
+    let spec = spec.trim();
+    if !spec.starts_with('-') {
+        return None;
+    }
+
+    let mut flag = ParsedFlag {
+        short: None,
+        long: None,
+        arg_type: None,
+        arg_required: true,
+        description: String::new(),
+        group: None,
+        source_line: 0,
+    };
+    let mut saw_any = false;
+
+    for part in spec.split(',') {
+        let part = part.trim();
+        if !part.starts_with('-') || part == "-" || part == "--" {
+            continue;
+        }
+        let (name, arg, required) = split_arg(part);
+        if name.len() < 2 || !is_flag_name(name) {
+            continue;
+        }
+        if name.starts_with("--") {
+            if flag.long.is_none() {
+                flag.long = Some(name.to_string());
+            }
+        } else if flag.short.is_none() {
+            flag.short = Some(name.to_string());
+        }
+        if let Some(a) = arg
+            && flag.arg_type.is_none()
+        {
+            flag.arg_type = Some(a.to_string());
+            flag.arg_required = required;
+        }
+        saw_any = true;
+    }
+
+    saw_any.then_some(flag)
+}
+
+/// Separate a flag from its argument: `--color[=WHEN]`, `--width=COLS`, `-w COLS`,
+/// `--form <name=content>`.
+///
+/// Returns the flag name, the argument placeholder, and whether it is required.
+///
+/// The delimiters are checked in positional order rather than a fixed priority. Splitting
+/// on `=` first would break `--form <name=content>`, whose `=` sits inside the placeholder
+/// and belongs to the argument, not to the flag.
+fn split_arg(part: &str) -> (&str, Option<&str>, bool) {
+    let bracket = part.find("[=");
+    let eq = part.find('=');
+    let space = part.find(' ');
+    let first = [bracket, eq, space].into_iter().flatten().min();
+
+    match first {
+        Some(i) if Some(i) == bracket => {
+            let arg = part[i + 2..].trim_end_matches(']');
+            (&part[..i], Some(arg), false)
+        }
+        Some(i) if Some(i) == space => {
+            let raw = part[i + 1..].trim();
+            let optional = raw.starts_with('[');
+            let arg = raw.trim_matches(|c| c == '[' || c == ']' || c == '<' || c == '>');
+            if arg.is_empty() {
+                (&part[..i], None, true)
+            } else {
+                (&part[..i], Some(arg), !optional)
+            }
+        }
+        Some(i) => (&part[..i], Some(&part[i + 1..]), true),
+        None => (part, None, true),
+    }
+}
+
+/// Reject prose that merely begins with a dash, e.g. `-- and then some text`.
+///
+/// A flag name is dashes followed by alphanumerics, `-`, `_`, or `.`, and must contain at
+/// least one alphanumeric character. `grep`'s numeric `-NUM` form satisfies this, and `.`
+/// is allowed for version-bearing names like `curl --http1.1` and `--tlsv1.2`.
+fn is_flag_name(name: &str) -> bool {
+    let body = name.trim_start_matches('-');
+    !body.is_empty()
+        && body.chars().any(|c| c.is_ascii_alphanumeric())
+        && body
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn splits_flag_from_inline_description() {
+        let (spec, desc) = split_tag("-c     with -lt: sort by ctime");
+        assert_eq!(spec, "-c");
+        assert_eq!(desc.trim(), "with -lt: sort by ctime");
+    }
+
+    #[test]
+    fn tag_with_no_inline_description() {
+        let (spec, desc) = split_tag("-b, --escape");
+        assert_eq!(spec, "-b, --escape");
+        assert_eq!(desc, "");
+    }
+
+    #[test]
+    fn parses_short_and_long_together() {
+        let f = parse_spec("-b, --escape").unwrap();
+        assert_eq!(f.short.as_deref(), Some("-b"));
+        assert_eq!(f.long.as_deref(), Some("--escape"));
+        assert_eq!(f.arg_type, None);
+    }
+
+    #[test]
+    fn parses_required_argument() {
+        let f = parse_spec("--block-size=SIZE").unwrap();
+        assert_eq!(f.long.as_deref(), Some("--block-size"));
+        assert_eq!(f.arg_type.as_deref(), Some("SIZE"));
+        assert!(f.arg_required);
+    }
+
+    #[test]
+    fn parses_optional_argument() {
+        let f = parse_spec("--color[=WHEN]").unwrap();
+        assert_eq!(f.long.as_deref(), Some("--color"));
+        assert_eq!(f.arg_type.as_deref(), Some("WHEN"));
+        assert!(!f.arg_required);
+    }
+
+    #[test]
+    fn parses_separated_argument() {
+        let f = parse_spec("-A NUM, --after-context=NUM").unwrap();
+        assert_eq!(f.short.as_deref(), Some("-A"));
+        assert_eq!(f.long.as_deref(), Some("--after-context"));
+        assert_eq!(f.arg_type.as_deref(), Some("NUM"));
+    }
+
+    #[test]
+    fn case_is_preserved_as_distinct_flags() {
+        let lower = parse_spec("-r, --recursive").unwrap();
+        let upper = parse_spec("-R, --dereference-recursive").unwrap();
+        assert_ne!(lower.short, upper.short);
+    }
+
+    #[test]
+    fn rejects_prose_beginning_with_a_dash() {
+        assert!(parse_spec("- this is prose, not a flag").is_none());
+        assert!(parse_spec("-- and then some text").is_none());
+    }
+
+    #[test]
+    fn strips_overstrike_bold() {
+        assert_eq!(strip_overstrike("a\u{8}ab\u{8}b"), "ab");
+    }
+
+    #[test]
+    fn section_parsed_from_path() {
+        assert_eq!(section_from_path("/usr/share/man/man1/ls.1.gz"), "1");
+        assert_eq!(section_from_path("/usr/share/man/man5/passwd.5.gz"), "5");
+    }
+}

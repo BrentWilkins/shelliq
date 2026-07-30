@@ -1,0 +1,13 @@
+[package]
+name = "shelliq-index"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "SQLite index of command flags, subcommands, and examples for shelliq"
+
+[dependencies]
+anyhow = "1.0.104"
+rusqlite = { version = "0.40.1", features = ["bundled"] }
+serde = "1.0.229"
+shelliq-harvest = { version = "0.1.0", path = "../harvest" }
