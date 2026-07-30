@@ -1,10 +1,10 @@
 # shelliq
 
-A local, verifiable CLI assistant. It answers "is it `-r` or `-R`?" from the man pages
-installed on *this* machine, and cites the line it got the answer from.
+A local CLI assistant. It answers "is it `-r` or `-R`?" from the man pages installed on
+*this* machine, and cites the line it got the answer from.
 
-Status: **P0**. The index, man-page harvester, and verifier work. There is no model yet,
-and most of the point is that the common cases never need one.
+Status: **P0**. The index, man-page harvester, and option checker work. There is no model
+yet, and most of the point is that the common cases never need one.
 
 ## Try it
 
@@ -31,7 +31,7 @@ $ shelliq explain grep -sirN pattern .
 ```
 
 That last example is the reason the project exists. A wrong case hides invisibly inside a
-bundled short flag — `-sirN` looks fine — so the verifier decomposes bundles before
+bundled short flag — `-sirN` looks fine — so the checker decomposes bundles before
 checking anything.
 
 ```console
@@ -44,19 +44,26 @@ $ shelliq index stats
 
 Facts and fluency are kept apart:
 
-| Concern                             | Owner                        |
-| ----------------------------------- | ---------------------------- |
-| Flag facts, case, arguments         | SQLite index, built locally  |
-| English → command shape             | A small model (later phases) |
-| Whether the answer is actually right | The verifier, index-backed  |
+| Concern                              | Owner                        |
+| ------------------------------------ | ---------------------------- |
+| Flag facts, case, arguments          | SQLite index, built locally  |
+| English → command shape              | A small model (later phases) |
+| Whether each option spelling exists  | Option checker, index-backed |
 
 A local small model on its own is *less* reliable than a cloud one. What makes shelliq
-trustworthy is not that it runs locally — it is that every flag it reports is checked
-against the man page on your disk and carries a citation. Running locally is the privacy
-story, not the accuracy story.
+useful is not that it runs locally — it is that every option it reports is looked up in the
+man page on your disk and carries a citation. Running locally is the privacy story, not the
+accuracy story.
 
-The index is generated per machine and never shipped, so it cannot drift from your
-installed versions, and macOS needs no data transfer.
+**What the checker does and does not tell you.** It tells you an option spelling exists for
+that command on this machine, with roughly the right argument shape. It does not tell you
+the command does what you asked, that the operands are right, that the flags make sense
+together, or that running it is safe. A checked command is not a verified command; see
+the claim ladder in `PLAN.md`.
+
+The index is built per machine and never shipped, so macOS needs no data transfer. It can
+still go stale — it reflects the pages as of the last build, so `shelliq index --refresh`
+after an upgrade is what keeps it honest.
 
 ## Footprint
 
@@ -71,8 +78,8 @@ without shelliq containing any backend code.
 crates/shelliq/   CLI entrypoint
 crates/harvest/   man page parser, --help crawler
 crates/index/     schema, FTS5, ranking
-crates/verify/    tokenizer, bundle decomposition, flag checking
-shell/            zsh and bash integration
+crates/verify/    tokenizer, bundle decomposition, option checking
+shell/            zsh and bash integration (not written yet)
 training/         JAX/Flax fine-tuning (uv, Python 3.14, development only)
 ```
 
@@ -82,9 +89,9 @@ not to work.
 ## Accuracy
 
 The parser is checked against each tool's own `--help` rather than a hand-counted figure.
-It reproduces `curl --help all` exactly at 258 long flags and `ls --help` exactly at 44,
-with no divergence in either direction. Run `cargo test` to verify against the pages on
-your machine.
+It reproduces the **long** flags of `curl --help all` exactly at 258 and of `ls --help`
+exactly at 44, with no divergence in either direction. Short flags are not covered by that
+comparison. Run `cargo test` to check against the pages on your machine.
 
 ## License
 

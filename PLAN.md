@@ -16,7 +16,7 @@ reshaped that, and the reshaping is the interesting part.
 - Flags extract **deterministically**. The P0 parser reproduces `curl --help all` exactly —
   258 long flags, zero difference in either direction — and `ls --help` exactly at 44.
   (The figures quoted earlier in planning, `curl` 396 and `rsync` 382, were an overcount:
-  that heuristic also matched flags *mentioned inside description bodies*, such as curl's
+  that heuristic also matched flags _mentioned inside description bodies_, such as curl's
   "--alt-svc can be used several times". The measured numbers are in
   `crates/harvest/tests/real_pages.rs`.)
 - Emitting command _syntax_ is easy (small formal grammar). Understanding **English** is
@@ -25,19 +25,26 @@ reshaped that, and the reshaping is the interesting part.
 - **`ollama`, `kubectl`, `cargo`, `uv`, `pnpm`, `ruff`, `just` have no man pages at all.**
   The harvester must also crawl `--help`.
 - Shell history is full of **bundled short flags** — `-fsSL`, `-sirn`, `-xzf`, `-LsSf`. The
-  verifier must decompose bundles, because a wrong case hides invisibly inside `-sirn`.
+  option checker must decompose bundles, because a wrong case hides invisibly inside
+  `-sirn`.
 
 **Architecture — facts and fluency separated:**
 
-| Concern                             | Owner                               | Why                               |
-| ----------------------------------- | ----------------------------------- | --------------------------------- |
-| Flag facts, case, args, subcommands | SQLite index, generated per-machine | Deterministic, exact, citable     |
-| English → command shape             | Fine-tuned Qwen2.5-Coder-0.5B       | Needs pretrained language ability |
-| Correctness of the answer           | Verifier, index-backed              | Catches model hallucination       |
+| Concern                             | Owner                               | Why                                 |
+| ----------------------------------- | ----------------------------------- | ----------------------------------- |
+| Flag facts, case, args, subcommands | SQLite index, generated per-machine | Deterministic, exact, citable       |
+| English → command shape             | Fine-tuned Qwen2.5-Coder-0.5B       | Needs pretrained language ability   |
+| Whether each option spelling exists | Option checker, index-backed        | Catches invented and miscased flags |
 
 The trust story is not "it's local" — a local 0.5B alone is _less_ reliable than cloud
-Copilot. It is **the verifier**: every flag checked against the man page on this machine,
-with a citation. Local is the privacy story, not the accuracy story.
+Copilot. It is that **every option spelling is reconciled against the man page on this
+machine and carries a citation**. Local is the privacy story, not the accuracy story.
+
+**That guarantee is narrow, and the plan previously overstated it.** The checker establishes
+that a command name is indexed and that each literal option spelling exists for it with
+roughly the right argument shape. It establishes nothing about whether the command does what
+was asked, whether its operands are right, or whether running it is safe. See
+[What the checker does not establish](#what-the-checker-does-not-establish).
 
 **Why this beats what exists:** `tldr` is hand-written markdown, no model, answers only
 pre-written questions. Warp AI and GitHub Copilot CLI are cloud calls to frontier models
@@ -105,34 +112,67 @@ guessed at here.
 Embedding `llama-cpp-2` for a zero-dependency single-binary install stays available as a
 later opt-in Cargo feature. It is not how v1 ships.
 
+**[plan] The HTTP boundary is leanness bought with a trust boundary, and it needs a policy.**
+"Speaks HTTP to ollama" is only a privacy win while that endpoint is on this machine.
+Nothing in "HTTP" prevents a configured base URL, an `HTTP_PROXY` in the environment, or a
+302 from shipping the user's shell buffer — which routinely contains hostnames, paths, and
+occasionally credentials — to someone else's server. Invariant 15 would be violated by
+configuration alone. So:
+
+- **Loopback or a Unix socket only, by default.** A non-loopback endpoint is refused unless
+  explicitly enabled, after a warning that says what gets sent.
+- **Ambient proxy variables ignored** for local inference, and redirects disabled.
+- **Request and response size and time limits**, with responses treated as untrusted input —
+  a compromised or hostile local server is in the threat model.
+- **Model artifacts verified against a pinned digest**, with published provenance.
+- **Never pull a model from inside a shell widget.** A keystroke does not get to start a
+  500MB download; fetching is an explicit command.
+
 ## Approach
 
-```text
-harvest (Rust, per machine, incremental)
-  man pages via mandoc -T markdown  ──┐
-  --help crawl, recursive subcommands ├──> index.sqlite (+FTS5)
-  zsh/bash builtins                  ─┘
-                                             │
-                                             v
-                                     deterministic router
-                                     ╱          │          ╲
-                            exact_flag    fuzzy_search   generate
-                            (exhaustive)  (top-k)        (must verify)
-                                 │             │              │
-                                 └─────────────┴──────► verifier ──► cited answer
+```mermaid
+flowchart TD
+    man["man pages<br/>mandoc -T markdown"] --> idx
+    help["--help crawl<br/>recursive subcommands"] --> idx
+    builtins["zsh / bash builtins"] --> idx
+    idx[("index.sqlite<br/>+ FTS5")] --> router{"deterministic<br/>router"}
+    router -->|exhaustive| exact["exact_flag"]
+    router -->|top-k| fuzzy["fuzzy_search"]
+    router -->|prose| gen["generate"]
+    exact --> checker["option checker"]
+    fuzzy --> checker
+    gen --> checker
+    checker --> answer["cited answer,<br/>or abstention"]
+
+    subgraph harvest["harvest — Rust, per machine, incremental"]
+        man
+        help
+        builtins
+    end
 ```
 
 Repo: `/home/brent/code/shelliq/` — name free on crates.io, PyPI, and npm.
 Binary `shelliq`, aliased to `q` locally. It is read far more than typed; the primary UX is
 keybindings.
 
+**Status tags.** This document mixes shipped behaviour with intended design, so every
+non-obvious claim carries one of these. An untagged statement is background, not a claim
+about the code.
+
+| Tag       | Meaning                                                  |
+| --------- | -------------------------------------------------------- |
+| `[done]`  | Implemented and measured on this machine                  |
+| `[built]` | Implemented, not yet validated against an external gate   |
+| `[plan]`  | Designed, not written                                     |
+| `[exp]`   | Exploratory — may not survive contact with a measurement  |
+
 ```text
-crates/shelliq/       clap CLI entrypoint
-crates/harvest/       man parser, --help crawler
-crates/index/         schema, FTS5, fuzzy ranking, RRF, refresh
-crates/verify/        tokenizer, bundle splitter, flag checker
-shell/                shelliq.zsh, shelliq.bash
-training/             Python+JAX: nnx Qwen, HF loader, data gen, train (dev-only)
+crates/shelliq/   [done] clap CLI: explain, search, flags, index build/stats
+crates/harvest/   [done] man parser   · [plan] --help crawler
+crates/index/     [done] schema, FTS5 · [plan] fuzzy ranking, RRF, refresh, target identity
+crates/verify/    [done] bundle splitter, flag checker · [plan] shell-syntax abstention
+shell/            [plan] shelliq.zsh, shelliq.bash — directory does not exist yet
+training/         [plan] nnx Qwen, HF loader, data gen, train (uv project scaffolded only)
 ```
 
 **Language split: Rust ships, Python trains.** A Rust static binary starts in ~2ms, so
@@ -146,19 +186,49 @@ Verified present: rustc 1.95, cargo 1.95, and crates `rusqlite` (86M dl), `shlex
 ### 1. Index
 
 ```sql
+-- [done] shipped in P0
 commands(id, name, platform, section, version, synopsis, description,
-         source_path, source_hash, harvested_at)
+         source_path, source_hash, parser_version, harvested_at)
 subcommands(id, command_id, path, summary)      -- 'ollama list', 'git remote add'
 flags(id, command_id, subcommand_id, short, long, arg_type, arg_required,
-      description, group, source_line,
-      rank_personal,    -- local shell history frequency
-      rank_tldr)        -- appears in tldr examples
+      description, group, source_line, rank_personal, rank_tldr)
 examples(id, command_id, text, description, source)
-commands_fts, examples_fts, flags_fts           -- FTS5 over descriptions
+examples_fts, flags_fts                         -- FTS5 over descriptions
 ```
 
 `flags.short` preserves case exactly; `-r` and `-R` are distinct rows. That property alone
 answers the original complaint with zero inference.
+
+**[plan] What P0 got wrong about identity.** `UNIQUE (name, platform, section)` assumes one
+`tool` per machine. One machine routinely has several: `/usr/bin/python` and a virtualenv's,
+GNU and BSD `sed`, a Homebrew `grep` shadowing Apple's, a shell builtin shadowing both, and
+a man page belonging to a different installation than the binary `PATH` actually resolves
+to. A `linux|darwin` tag cannot represent that, and P0 does not even filter on the tag it
+stores. Facts must bind to the **executable the shell would run**, not to a name:
+
+```sql
+-- [plan] P0.5
+targets(id, name, exec_path, exec_kind, exec_hash, package, version,
+        platform, arch, path_precedence, shadowed_by, first_seen, last_checked)
+        -- exec_kind: file | builtin | alias | function | absent
+sources(id, target_id, kind, path, content_hash, parser_version, harvested_at)
+        -- kind: man | help | builtin-doc | tldr | info
+example_flags(example_id, flag_id)   -- which flag an example's prose actually exercises
+meta('schema_version')               -- migrations get tests, not hope
+```
+
+`commands` and `flags` then hang off `sources`, and a lookup resolves the current target
+first, then selects facts for that target. Where man and `--help` disagree for the same
+target, both stay visible and labelled; they are never silently merged, because the
+disagreement is itself information (see `grep --colour` in Verification).
+
+**[plan] Argument shape needs a mode, not two nullable columns.** `arg_type` plus a defaulted
+`arg_required` cannot distinguish "takes no argument" from "takes an optional one", and says
+nothing about attachment (`-A5` vs `-A 5` vs `--color=auto`), repeatability, cardinality,
+arguments that begin with `-`, mutual exclusion, or whether a flag is global or scoped to a
+subcommand. Replace both with an explicit `arg_mode` (`none | optional | required`) and an
+`attachment` (`attached | separate | either`). Until that lands, the P0 guarantee is
+**limited argument-shape checking**, and this document says so wherever it makes the claim.
 
 ### 2. Harvester
 
@@ -168,23 +238,49 @@ mandoc is **not installed here** (`apt install mandoc`; macOS ships it), so P0 s
 validated rendered-text indentation heuristic and treats mandoc as an upgrade. Both paths
 are validated against the same fixtures.
 
-**`--help` crawler** — covers the no-man-page tools. Run `TOOL --help`, parse the near
+**[plan] `--help` crawler** — covers the no-man-page tools. Run `TOOL --help`, parse the near
 universal `-x, --xxx  description` shape that clap, cobra, and argparse all emit, extract
 subcommands, recurse to depth 3.
 
-Safety, plainly: this executes arbitrary binaries. Mitigations — 5s timeout, only ever pass
-`--help`/`help`, skip setuid, and gate the first full `PATH` sweep behind a user-reviewed
-`~/.config/shelliq/allowlist.toml`.
+**Containment, honestly.** This executes arbitrary binaries, and the P0 answer — 5s timeout,
+setuid check, reviewed allowlist — was consent, not containment. `--help` is a convention;
+a binary is free to load plugins, read credentials, open sockets, write files, or fork
+before it ever looks at argv. The subcommand recursion also breaks the "only ever pass
+`--help`" promise, since reaching `ollama list --help` means passing `list` too. What the
+crawler must actually do:
 
-**Staleness via fingerprint, not just hash.** Every row carries `source_hash` +
-`harvested_at`, and the index as a whole carries a **pipeline fingerprint** (parser version
+| Risk                                             | Containment                                                                                                   |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| Arbitrary startup behaviour                      | OS sandbox where available (bwrap/seccomp, `sandbox-exec`); documented as absent elsewhere                    |
+| Descendants outliving the timeout                | Own process group, kill the group, not the parent                                                             |
+| Unbounded output exhausting memory               | Hard byte cap on stdout/stderr, truncate and mark                                                             |
+| Hanging on stdin                                 | stdin closed, never a tty                                                                                     |
+| Reading the user's config or cwd                 | Minimal environment, temporary working directory                                                              |
+| Fork bombs                                       | Process-count limit (`RLIMIT_NPROC`)                                                                          |
+| Allowlisted name resolving elsewhere later       | Approve a canonical path + `exec_hash`, recheck symlink target, owner, mode, and caps immediately before exec |
+| `PATH` full of user-writable venv/npm/cargo dirs | Reject writable-by-non-root locations by default, opt in per path                                             |
+| Terminal escape injection via help text          | Strip control characters before indexing _and_ before display                                                 |
+| Privilege                                        | Never run as root, and never from a root package hook                                                         |
 
-- options). A parser change therefore invalidates the index the same way a package upgrade
-  does — a `source_hash` alone would silently serve rows built by old, buggier code.
-  `shelliq index --refresh` re-parses only what changed: full build ~2–5 min, refresh
-  seconds. Auto-trigger via `DPkg::Post-Invoke` on Ubuntu, `launchd` on macOS. Because the
-  index is generated locally and never shipped, **macOS needs no data transfer and cannot
-  drift**.
+**Lazy beats sweeping.** Harvest a command the first time it is asked about, not by walking
+`PATH`. It serves the actual use case, avoids executing hundreds of irrelevant binaries,
+keeps staleness checks cheap, and makes crawling third-party executables an explicit
+per-command opt-in rather than one blanket consent.
+
+**[plan] Staleness is detected, not assumed away.** Every source carries `content_hash` +
+`parser_version`; every target carries `exec_hash`. A parser change invalidates rows the
+same way a package upgrade does — `content_hash` alone would silently serve rows built by
+old, buggier code. Lookups do a cheap identity check and report **fresh**, **possibly
+stale**, or **stale**, each with stated evidence. `shelliq index --refresh` rebuilds into a
+sibling database and swaps it atomically, and reconciles _removals_ as well as changes, so
+an uninstalled tool stops being a fact.
+
+The earlier claim that a locally generated index **"cannot drift"** was wrong and is
+withdrawn. Local generation removes _shipping_ drift — no vendored GNU facts served on a
+Mac — but the index goes stale the moment you `apt upgrade`, `brew install`, activate a
+virtualenv, change `PATH`, or fix the parser. `DPkg::Post-Invoke` is also withdrawn: a root
+package hook writing a user-owned index gets ownership and privilege exactly backwards. Use
+a user-level lazy refresh instead.
 
 ### 3. Router — the speed win
 
@@ -255,32 +351,138 @@ Three remedies, cheapest first:
    redirects") where man's is mechanism-oriented. This promotes the `examples` table from a
    P3 dataset input to a **Tier 0 index input** — it is the vocabulary bridge, and it needs
    no model.
+
+   Two constraints, or it does more harm than good. tldr pages are **generic**, so every
+   flag in an example must be checked against the current target before it can boost
+   anything — otherwise a GNU flag from a tldr page becomes a machine-specific "fact" on a
+   Mac, which is the precise failure mode this project exists to avoid. And a
+   command-level example cannot say _which_ of its flags the prose is about, so matched
+   prose maps to specific flags through `example_flags` rather than smearing across the
+   whole line.
+
 2. **Cross-reference expansion.** curl descriptions cite each other: `--location-trusted`
-   reads "Like -L, --location, but…", and it *did* rank in the top 5. Extracting flag
+   reads "Like -L, --location, but…", and it _did_ rank in the top 5. Extracting flag
    spellings mentioned inside matched descriptions and boosting those targets would surface
-   `-L` from its neighbours. Pure SQL, no new dependency.
+   `-L` from its neighbours. Propagation is SQL; **extracting reliable edges is not** —
+   prose mentions a flag for many reasons besides being related to it, so the edges get
+   parsed into an explicit graph, expansion is capped at **one hop with a score penalty**,
+   and the edge extractor gets its own precision measurement.
 3. **The model.** Bridging mechanism-language to task-language is exactly what a language
    model is for. This is real evidence for the P1 decision point rather than an assumption.
 
-Remedies 1 and 2 land in P1. Until then, `shelliq search` states its coverage honestly —
+Remedies 1 and 2 land in P1A. Until then, `shelliq search` states its coverage honestly —
 "10 of 258, matched on description" — rather than implying it found the best answer.
 
-### 5. Verifier — the crown jewel
+**One showcase query is not an evaluation.** "Does it find `-L`?" is a regression test, not
+a measurement. Search gets a labelled query set — task-phrased queries with known-correct
+flags across GNU, BSD, and help-crawled tools — scored by **Recall@k and MRR**, with the
+baseline recorded before tldr and cross-references land so the improvement is attributable.
+The 2.35 ms latency figure is also a P0 measurement of a smaller pipeline; it gets
+re-measured after tldr, nucleo, expansion, and RRF are in the path.
 
-1. Tokenize into pipeline segments via `shlex`, each `(command, subcommand, flags, args)`.
+### 5. The option checker — the crown jewel, correctly sized
+
+Called "the verifier" earlier in this document's life. The rename is not cosmetic: the old
+name invited the reader to believe a checked command was _right_, and it is not.
+
+1. Tokenize into pipeline segments, each `(command, subcommand, flags, args)`.
 2. **Decompose bundled shorts**: `-sirn` → `-s -i -r -n`, `-fsSL` → `-f -s -S -L`.
-3. Look up each command in the index.
+3. Resolve the target, then look up each command in the index for that target.
 4. Per flag, **case-sensitive** exact match:
-   - hit → OK, attach citation
-   - miss but case-insensitive hit → **auto-correct and say so**: "`-R` isn't valid for
-     `grep`; did you mean `-r`?"
-   - miss entirely → mark unverified; never silently pass
-5. Check arg-taking flags got args.
+   - hit → known, attach citation
+   - miss but case-insensitive hit → **suggest, never rewrite**: "`-N` is not valid for
+     `grep`; did you mean `-n`?"
+   - miss entirely → mark unknown; never silently pass
+5. Check arg-taking flags got arguments, within the limits of the schema.
 6. Unknown command → say so rather than trusting the model.
 
-Emits the command annotated with per-flag citations (`grep(1):142`).
+Emits the command annotated with per-flag citations (`grep(1):168`).
 
-### 6. Training (JAX — the learning half, Python, dev-only)
+**The wrong-case example was itself wrong.** This plan twice used "`-R` isn't valid for
+`grep`; did you mean `-r`?" Both flags are valid — `-r` is `--recursive`, `-R` is
+`--dereference-recursive` — and `real_pages.rs:111` exists specifically to assert they are
+distinct. Rewriting one to the other would have silently changed whether symlinks are
+followed. The honest example is the `-N` versus `-n` case the code actually implements, and
+this is why case folding **suggests and never rewrites**: it can also produce several
+candidates, and picking one is a semantic decision the tool is not entitled to make.
+
+**Syntax it does not understand, it refuses.** `shlex` is a word splitter, not a shell
+grammar. It has no concept of redirection, command substitution, process substitution,
+heredocs, subshells, arithmetic expansion, or environment prefixes, and P0 recognises `|`
+and `&&` only when they arrive as isolated tokens — so `grep -r foo>out` and `a|b` are
+misread. Worse, when `shlex::split` fails outright on unbalanced quotes it returns nothing,
+P0 turns that into zero segments, zero findings, and **exit 0** — fail-open on precisely the
+input that deserves suspicion.
+
+The fix is a `Finding::Unsupported` variant and a hard rule: **unrecognised shell syntax
+produces an explicit abstention with a non-zero exit, never silence.** Fail-closed
+abstention is the part that must land in P0.5, because it converts a wrong answer into no
+answer for a few hundred lines of code.
+
+**On the AST: this is a dependency, not a compiler.** A shell AST is standard equipment —
+every shell builds one, `shellcheck` and `shfmt` are built on third-party ones, and editors
+syntax-highlight bash through `tree-sitter-bash`. Writing a POSIX shell grammar by hand is
+genuinely nasty (the lexer depends on the parser state; heredocs, `case` patterns, and
+`$(( ))` versus `$( ( ) )` are all special cases), which is exactly why nobody sensible
+writes one. Maintained crates, checked on crates.io 2026-07-29:
+
+| Crate              | Version | Notes                                                                         |
+| ------------------ | ------- | ----------------------------------------------------------------------------- |
+| `brush-parser`     | 0.4.0   | POSIX/bash tokenizer + parser, extracted from the `brush` shell — closest fit |
+| `yash-syntax`      | 0.23.1  | POSIX shell syntax, from the `yash` shell                                     |
+| `tree-sitter-bash` | 0.25.1  | Error-tolerant CST; parses partial buffers, useful for a live ZLE widget      |
+| `conch-parser`     | 0.1.1   | Unmaintained — do not use                                                     |
+
+Adoption is a P1A/P2 evaluation, not a P0.5 blocker. The walk over `brush-parser`'s tree to
+pull out `(command, flags, operands)` per simple command is a few hundred lines; the
+tree-sitter option is attractive precisely because it returns a tree for a half-typed line,
+where a strict POSIX parser returns an error. Either way the work is a visitor, not a
+grammar.
+
+#### What the checker does not establish
+
+Stated plainly, because the architecture table used to imply otherwise. Checking succeeds
+and the command may still be wrong, useless, or destructive. It cannot tell you:
+
+- whether the command accomplishes what was asked;
+- whether the positional operands are the right files, hosts, or values;
+- whether a set of individually valid flags is meaningful together, or contradictory;
+- whether flags are scoped correctly — global versus subcommand-local;
+- whether redirections, substitutions, globs, variables, aliases, or functions are safe;
+- whether `rm -rf`, `curl … | sh`, `dd`, `chmod -R`, or `sudo` is _appropriate here_;
+- whether the command's output would indicate success.
+
+So the result is reported as a ladder of increasingly strong claims, and the UI never
+collapses them into one word:
+
+| Level                      | Meaning                                              |
+| -------------------------- | ---------------------------------------------------- |
+| **Parsed**                 | The line was fully understood as shell syntax        |
+| **Options known**          | Every option spelling exists for the resolved target |
+| **Argument shape checked** | Arity matched, within the schema's limits            |
+| **Functionally tested**    | Actually executed somewhere safe — not implemented   |
+| **Safety reviewed**        | A human looked at it — never claimed by the tool     |
+
+**[plan] A separate risk notice, and it is a warning, not a proof.** Destructive operations,
+privilege escalation, network-to-shell pipelines, recursive deletes, and writes outside the
+working directory get flagged for attention. It will have false negatives; it is a prompt to
+look, never a clearance. **Generated commands only ever populate the editable buffer**, are
+never executed, and leave one-step undo intact.
+
+### 6. Citations need provenance, not just a line number
+
+`grep(1):168` is a line in _shelliq's own rendering_ at `MANWIDTH=400` with hyphenation and
+justification off. It is not a line the user can find in their own `man grep`, it moves when
+the parser changes, and a help-crawled tool has no man page to cite at all. A citation that
+cannot be checked is decoration.
+
+[plan] A citation therefore carries source kind, the canonical source path or executable
+identity, a content hash, the **exact option-definition excerpt** as harvested, and a stable
+anchor (section heading plus option spelling) — with the rendered line number kept only as a
+supplementary hint. `shelliq source grep(1):168` prints the stored excerpt and its
+provenance, which makes every claim independently inspectable rather than merely cited.
+
+### 7. Training (JAX — the learning half, Python, dev-only)
 
 Base: **Qwen2.5-Coder-0.5B-Instruct**, reimplemented in `flax.nnx`: RMSNorm, RoPE, SwiGLU
 MLP, GQA (24 layers, hidden 896, 14 Q heads, 2 KV heads, head_dim 64, tied embeddings). A
@@ -293,10 +495,25 @@ _not_ o.
 **Hard gate before training:** same prompt through HF `transformers` and the nnx port,
 logits within 1e-3. Most ports fail silently; this catches it.
 
-Full fine-tune fits easily — 0.5B bf16 weights+grads plus fp32 Adam moments ≈ 6GB of 24GB.
-Full FT first; LoRA (r=16, q/k/v/o/gate/up/down) as the second exercise, since
-`convert_lora_to_gguf.py` is already in the local llama.cpp checkout. Reuse `grain` and
-`orbax` from the course; `optax.adamw`, cosine schedule, warmup.
+**Memory: 6GB was arithmetic, not a measurement.** 0.5B bf16 weights + grads + fp32 Adam
+moments does come to roughly 6GB, but that figure ignores activations, XLA scratch buffers,
+the fp32 master copy, sequence length, batch size, and compilation overhead — the terms that
+actually decide whether a step fits. It gets measured at a stated
+batch/sequence/rematerialisation configuration before it is quoted again.
+
+**LoRA first, full fine-tune second.** The previous order was backwards for engineering and
+right only for learning. LoRA (r=16, q/k/v/o/gate/up/down) is cheaper, iterates faster, and
+`convert_lora_to_gguf.py` is already in the local llama.cpp checkout; full fine-tuning stays
+on the list explicitly as a **learning objective**, which is a legitimate reason but not an
+efficiency one. Reuse `grain` and `orbax` from the course; `optax.adamw`, cosine schedule,
+warmup.
+
+**[plan] The model should emit a constrained structure, not shell text.** Have it produce a
+command AST — command, subcommand, flags with arguments, operands — which shelliq renders
+deterministically with correct quoting. Unconstrained shell text hands the model the job of
+being a shell escaper, which is both the easiest thing to get wrong and the worst thing to
+get wrong. A structured boundary also makes option checking exact instead of a re-parse of
+text the model already had structured in its head.
 
 **Dataset** (~30–50k pairs), each formatted with a `<context>` block of retrieved index
 entries so training matches retrieval-augmented inference, tagged `# platform: linux|darwin`:
@@ -315,19 +532,32 @@ entries so training matches retrieval-augmented inference, tagged `# platform: l
    also grows with every session, for free.
 3. **NL2Bash** — ~9k pairs, older and noisier; filter hard.
 4. **Synthetic from the index** — local `qwen3-coder:30b` generates NL queries + commands
-   from real harvested flags. **Every pair filtered through the verifier**; only clean
-   pairs kept. A self-cleaning dataset.
+   from real harvested flags. **Every pair filtered through the option checker**; pairs
+   naming an option the index does not have are dropped. That removes invented flags, not
+   wrong answers — a pair can pass the checker and still be poor advice, so the checker is
+   a cheap first filter ahead of eval, not a quality gate.
 
 Local `.zsh_history` stays out of the training set and is used **only** for
 `rank_personal` completion ordering — that is what "personal" should mean, and it keeps the
-dataset free of a user's private command lines. Any transcript-derived data is scrubbed for
-secrets and paths before it is used, and never leaves the machine.
+dataset free of a user's private command lines.
+
+**Two pipelines, and they never join.** Sources 1 and 3 are public and licensed; source 2 is
+private and source 4 is derived from a private index. Mixing them into one set of weights
+would make the weights as sensitive as the transcripts, and no amount of scrubbing gets that
+sensitivity back out. So:
+
+| Artifact                   | May train on                       | May be published |
+| -------------------------- | ---------------------------------- | ---------------- |
+| Base distributable weights | tldr, NL2Bash — reviewed, licensed | yes              |
+| Personal adapter (LoRA)    | + transcripts, local index         | **never**        |
+
+Dataset provenance and licence are recorded per source, per record — not per corpus.
 
 **Export:** nnx → safetensors in HF layout → existing `convert_hf_to_gguf.py` →
 `llama-quantize`. Use **Q6_K or Q8_0**, not Q4 — 0.5B degrades noticeably at Q4, and Q8 is
 still only ~500MB.
 
-### 7. Shell integration
+### 8. Shell integration
 
 Designed not to fight oh-my-zsh, zsh-autosuggestions, or zsh-syntax-highlighting:
 
@@ -352,118 +582,205 @@ confirm before touching that file.
 Adapted from author-corpus-rag, which states its guarantees as a numbered contract rather
 than leaving them implicit. These are testable claims, not aspirations.
 
-1. Flag facts — existence, case, arity — come **only** from the index, never from the model.
-2. A flag is matched **case-sensitively**. `-r` and `-R` are never conflated; a
-   case-insensitive hit is reported as a _correction_, never silently accepted.
-3. Any generated command passes the verifier before display. Unverifiable segments are
-   labeled unverified; they are never presented as correct.
-4. An unknown command is reported as unknown. It is never assumed to be GNU.
-5. Exhaustive answers ("all flags for `curl`") come from SQL. Fuzzy results always report
+Each carries the status of its _enforcement_, not of its desirability. An invariant that is
+merely written down is marked [plan], because "we intend to" is not a guarantee.
+
+1. [done] Flag facts — existence, case, arity — come **only** from the index, never from the model.
+2. [done] A flag is matched **case-sensitively**. `-r` and `-R` are never conflated; a
+   case-insensitive hit is reported as a _suggestion_ and never applied automatically.
+3. [plan] Any generated command is checked before display. Segments that cannot be checked are
+   labelled as such; they are never presented as correct.
+4. [done] An unknown command is reported as unknown. It is never assumed to be GNU.
+5. [done] Exhaustive answers ("all flags for `curl`") come from SQL. Fuzzy results always report
    non-exhaustive coverage.
-6. Fuzzy and BM25 scores are never blended into one number, and never shown as confidence.
+6. [plan] Fuzzy and BM25 scores are never blended into one number, and never shown as confidence.
    Fusion combines ranks.
-7. Every displayed flag carries a citation to its source page and line.
-8. The index records platform. A `darwin` row is never served on `linux` or vice versa.
-9. The harvester passes only `--help`/`help`, never other arguments, and never runs setuid
-   binaries.
-10. Tier 0 has no ML dependency at runtime — no model, no embeddings, no network.
-11. The model is never required. Every Tier 0 path works with the model absent.
-    11a. shelliq embeds no inference engine and no GPU backend. Acceleration is inherited from
-    the user's ollama or llama-server over HTTP, so Metal, Vulkan, SYCL, and CUDA are
+7. [done] Every displayed flag carries a citation. [plan] That citation resolves to an inspectable
+   excerpt with source identity, not only to a rendered line number.
+8. [plan] **Not enforced today.** The index records platform, but `preferred_section` and
+   `lookup_flag` filter on name and section alone (`crates/index/src/lib.rs:184`, `:202`),
+   so a `darwin` row _would_ be served on `linux` if one existed. P0.5 resolves the target
+   first and filters every query by it.
+9. **[!] Superseded.** The harvester passes subcommand tokens too — `ollama list --help`
+   requires it — so "only `--help`/`help`" was never achievable alongside recursion. Replaced
+   by: the crawler runs only approved executables identified by path _and_ hash, sandboxed
+   where the OS allows, never as root, never setuid, with bounded output and process count.
+10. [done] Tier 0 has no ML dependency at runtime — no model, no embeddings, no network.
+11. [done] The model is never required. Every Tier 0 path works with the model absent.
+    11a. [done] shelliq embeds no inference engine and no GPU backend. Acceleration is inherited
+    from the user's ollama or llama-server over HTTP, so Metal, Vulkan, SYCL, and CUDA are
     supported without shelliq containing a line of backend code.
-12. Routing decisions are inspectable: `rule_id`, `rationale`, `matched_signals`, no score.
-13. A stale index is reported as stale, never served silently as current.
-14. Local shell history informs ranking only, never the training set. The ranking it
+12. [plan] Routing decisions are inspectable: `rule_id`, `rationale`, `matched_signals`, no score.
+13. [plan] A stale index is reported as stale, never served silently as current. `parser_version`
+    is stored but no lookup reads it and there is no refresh command, so this is aspiration
+    until P0.5.
+14. [plan] Local shell history informs ranking only, never the training set. The ranking it
     produces is a frequency table of command and flag tokens — never command text.
-15. No data derived from this machine leaves it. There is no telemetry, no upload, and no
-    default that sends a command line anywhere.
-16. Any locally-derived corpus is scrubbed before it can enter a training set, and the
+15. [plan] No data derived from this machine leaves it. No telemetry, no upload, and no default
+    that sends a command line anywhere — which requires the loopback-only inference policy
+    above, not merely the absence of upload code.
+16. [plan] Any locally-derived corpus is scrubbed before it can enter a training set, and the
     scrubber fails closed: a line it cannot confidently clean is dropped, not repaired.
     The dataset build aborts rather than emitting an unscrubbed pair.
+17. [plan] Unrecognised shell syntax produces an explicit abstention and a non-zero exit. Silence
+    is never used to mean "clean". Today a `shlex` parse failure yields zero findings and
+    exit 0, which is the opposite.
+18. [plan] shelliq never executes a command it generated or completed. Output goes to the
+    editable buffer, and undo works.
+19. [plan] Weights that leave this machine are trained only on reviewed, licensed public data.
+    Anything trained on transcripts or the local index stays local and non-exportable.
+20. [plan] Harvested text is length-bounded and stripped of terminal control sequences before it
+    is stored, displayed, or sent to a model. The index and its WAL are created `0600`:
+    even a frequency table discloses what the user works on.
 
 ## Phases
 
 Each ends with something usable.
 
-- **P0** — Rust harvester + index + `shelliq explain grep -r`. Solves the original
-  complaint with no model at all. **This is Tier 0 and it is the whole point.**
-- **P1** — verifier + fuzzy display + shell widgets, using ollama `qwen2.5-coder:1.5b` as a
-  placeholder generator over HTTP. Full UX, no custom training. **Decision point: if this
-  is good enough, P2–P4 become a JAX learning exercise rather than a requirement.**
-- **P2** — nnx Qwen port + logit-parity gate.
-- **P3** — dataset build + fine-tune + eval.
-- **P4** — GGUF export, swap into `llama-server`, benchmark vs the placeholder.
-- **P5** — macOS: run harvester there, verify mdoc parsing, platform-tagged divergence.
+- **P0** — **done.** Rust harvester + index + option checker + `shelliq explain grep -r`.
+  Solves the original complaint with no model at all. **This is Tier 0 and it is the whole
+  point.**
+- **P0.5 — trust hardening.** Nothing new for the user; it makes P0's existing claims true.
+  Narrowed terminology, fail-closed shell parsing, target/executable identity, enforced
+  platform and subcommand scoping, provenance-bearing citations, staleness detection with
+  atomic refresh, schema versioning and migration tests, `0600` index. **This comes before
+  the crawler and before any model**, because both multiply the cost of the gaps.
+- **P1A — safe Tier 0 UX.** Lazy `--help` harvesting with real containment; tldr vocabulary
+  bridge filtered through local facts; the labelled search evaluation set; shell widgets with
+  correct quoting, undo, and the no-fight compatibility matrix.
+- **P1B — optional generation on an existing model.** ollama `qwen2.5-coder:1.5b` over
+  loopback, structured output, no auto-execution, no automatic case rewrites, plus the
+  intent/safety/abstention/prompt-injection evaluations. **Decision point: if this is good
+  enough, everything below is a JAX learning exercise rather than a requirement.**
+- **P2+ — custom-model experiment, a separate track.** nnx Qwen port and logit-parity gate;
+  dataset build, LoRA fine-tune, eval; GGUF export and benchmark against the P1B placeholder.
+  Deliberately **not** in the shipping dependency chain — it proceeds only if P1B shows the
+  model earns its place.
+- **P5 — macOS.** Run the harvester on the M1, validate mdoc parsing, platform-tagged
+  divergence, and Tier 0 with no Python present.
+
+The reordering is the review's, and it is right: P0 shipped a good Tier 0 alongside claims
+stronger than the code supports. Hardening those claims is cheaper now than after a crawler
+and a model are layered on top of them.
 
 ## Acceptance criteria
 
 Each phase has an exit gate. A phase is not done until every gate passes, and a gate is a
 measurement, not an opinion. Measured values below are from this machine.
 
-### P0 — index and verifier, no model — **PASSED**
+### P0 — index and option checker, no model — **PASSED**
 
-| Gate                                              | Target      | Measured             |
-| ------------------------------------------------- | ----------- | -------------------- |
-| Parser matches `curl --help all`                   | exact       | 258 = 258, 0 diff [done] |
-| Parser matches `ls --help`                         | exact       | 44 = 44, 0 diff [done]   |
-| `-r` and `-R` distinct rows with citations         | required    | [done]                   |
-| Wrong case inside a bundle detected                | `-sirN`→`-n`| [done]                   |
-| Arg-taking flag not split as a bundle              | `-A5`       | `-A` + `5` [done]        |
-| Every man section indexed, not just the default    | required    | `signal` 2 and 7 [done]  |
-| Bare `kill` resolves to the command, not the syscall | section 1 | [done]                   |
-| Fabricated flag never reported as valid            | required    | [done]                   |
-| Unindexed command reported, not assumed GNU        | required    | [done]                   |
-| `explain` exit code non-zero when problems found   | required    | [done]                   |
-| Release binary size                                | < 10 MiB    | **1.69 MiB** [done]      |
-| Default build links no inference library           | required    | libc/libm/libgcc only [done] |
-| `explain` latency, cold process                    | < 10 ms     | **2.0 ms** [done]        |
-| `search` latency, cold process                     | < 10 ms     | **2.35 ms** [done]       |
-| Test suite                                         | all green   | 39 passing [done]        |
+| Gate                                                 | Target       | Measured              | Result |
+| ---------------------------------------------------- | ------------ | --------------------- | ------ |
+| **Long-flag** recall/precision vs `curl --help all`  | exact        | 258 = 258, 0 diff     | pass   |
+| **Long-flag** recall/precision vs `ls --help`        | exact        | 44 = 44, 0 diff       | pass   |
+| `-r` and `-R` distinct rows with citations           | required     | —                     | pass   |
+| Wrong case inside a bundle detected                  | `-sirN`→`-n` | —                     | pass   |
+| Arg-taking flag not split as a bundle                | `-A5`        | `-A` + `5`            | pass   |
+| Every man section indexed, not just the default      | required     | `signal` 2 and 7      | pass   |
+| Bare `kill` resolves to the command, not the syscall | section 1    | —                     | pass   |
+| Fabricated flag never reported as valid              | required     | —                     | pass   |
+| Unindexed command reported, not assumed GNU          | required     | —                     | pass   |
+| `explain` exit code non-zero when problems found     | required     | —                     | pass   |
+| Release binary size                                  | < 10 MiB     | **1.69 MiB**          | pass   |
+| Default build links no inference library             | required     | libc/libm/libgcc only | pass   |
+| `explain` latency, cold process                      | < 10 ms      | **2.0 ms**            | pass   |
+| `search` latency, cold process                       | < 10 ms      | **2.35 ms**           | pass   |
+| Test suite                                           | all green    | 39 passing            | pass   |
 
 The latency figures include process start, opening SQLite, and the query. This is the
 measurement that retires the daemon question: a Rust binary invoked per keystroke-batch is
 comfortably inside the Tab budget, so there is nothing resident to build, supervise, or
 explain to a user.
 
-### P1 — full UX on a placeholder model
+**What that table does not say.** The two equality gates compare **long-flag sets for two
+GNU programs on the versions installed here**. They are strong evidence for exactly that and
+no more — they say nothing about short flags, aliases, argument requirements, description
+fidelity, grouping, subcommands, mdoc/BSD pages, unusual formatting, or localised output.
+They also _skip_ rather than fail when a page is missing, which is right for a per-machine
+tool but means they are not CI evidence on their own. P0.5 adds checked-in fixtures — man,
+mdoc, clap, Cobra, argparse, click, hand-rolled help, and deliberately malformed output —
+scored for **precision and recall per field**, plus fuzz and control-character tests.
+
+### P0.5 — trust hardening
+
+| Gate                                                                               | Target   |
+| ---------------------------------------------------------------------------------- | -------- |
+| No user-facing string calls a whole command "verified", "correct", or "safe"       | required |
+| Unsupported shell syntax → explicit abstention, non-zero exit                      | required |
+| Unbalanced quotes → abstention, **not** zero findings and exit 0                   | required |
+| Redirections, substitutions, heredocs, subshells → abstain or parse, never misread | required |
+| Every fact query filtered by resolved target, platform, and subcommand scope       | required |
+| Two installs of one tool resolve to distinct targets                               | required |
+| `shelliq source <citation>` prints excerpt + provenance                            | required |
+| Stale index reported as stale; refresh is atomic and reconciles removals           | required |
+| Schema migration from the P0 database, with a test                                 | required |
+| Index and WAL created `0600`; control characters stripped on ingest                | required |
+| Parser fixtures: precision and recall per field, per format                        | recorded |
+
+### P1A — safe Tier 0 UX
 
 - Description search finds `-L, --location` from "follow redirect" — currently **failing**,
   see section 4. Fixed by tldr ingestion and cross-reference expansion.
-- Full `PATH` sweep completes behind the allowlist gate with no binary run outside it.
-- `ollama`, `kubectl`, `cargo`, `uv` indexed via the `--help` crawler, subcommands included.
-- End to end: "get me the 5 most recently installed models in ollama" produces a command
-  whose every segment verifies.
-- Router: labelled cases, `exact_flag` never fires on prose, `generate` never fires on a
-  well-formed command line.
+- Labelled search set: **Recall@5 and MRR recorded before and after** tldr and
+  cross-references, so the gain is attributable rather than asserted.
+- Cross-reference edge extraction measured for precision; expansion capped at one hop.
+- Every tldr example flag validated against the local target before it boosts anything; a
+  GNU-only flag never becomes a fact on a Mac.
+- Latency re-measured with tldr, nucleo, expansion, and RRF all in the path.
+- `ollama`, `kubectl`, `cargo`, `uv` indexed lazily via the `--help` crawler, subcommands
+  included, each under the containment table in section 2.
+- Containment proved, not assumed: a deliberately hostile test binary that forks, writes,
+  emits escape sequences, floods stdout, and hangs on stdin is harvested without effect.
+- No binary outside the approved set is executed; approval is by path **and** hash.
 - No-fight check: with `shelliq.zsh` sourced, `git che<TAB>`, `docker run --rm<TAB>`, and
   autosuggestions behave exactly as before.
-- Model path < 2 s warm on CPU, < 500 ms on GPU.
-- **Decision point.** If P1 is good enough, P2–P4 are a JAX learning exercise, not a
+
+### P1B — optional generation on an existing model
+
+- Non-loopback endpoint refused unless explicitly enabled; proxies and redirects ignored.
+- Model emits a structured command AST; shelliq renders and quotes it deterministically.
+- Nothing is executed. Buffer replacement only, undo intact, no automatic case rewrites.
+- End to end: "get me the 5 most recently installed models in ollama" produces a command
+  whose every segment resolves. (`ollama` has no man page, so this exercises the crawler.)
+- Router: labelled cases, `exact_flag` never fires on prose, `generate` never fires on a
+  well-formed command line.
+- Abstention measured: on prompts the index cannot support, it declines rather than invents.
+- Prompt-injection resistance measured against hostile help text and poisoned retrieved
+  context.
+- Unsafe-suggestion rate measured on an adversarial prompt set.
+- Model path < 2 s warm on CPU, < 500 ms on GPU, reported as p50 and p95, cold and warm.
+- **Decision point.** If P1B is good enough, P2+ is a JAX learning exercise, not a
   requirement. This is a legitimate stopping place, and saying so now prevents sunk cost
   from making the decision later.
 
-### P2 — nnx port
+### P2+ — custom-model experiment
 
 - Same prompt through HF `transformers` and the nnx port agree within **1e-3** on logits.
   Hard gate; nothing downstream starts until it passes.
-
-### P3 — fine-tune
-
-- Held-out NL→command set: fine-tuned 0.5B beats base 0.5B on exact match and on
-  verifier-clean rate.
-- Fine-tuned 0.5B within reach of `qwen2.5-coder:1.5b` on verifier-clean rate.
-- Every synthetic training pair passed the verifier before entering the set.
+- Step memory measured at a stated batch/sequence/rematerialisation config, not estimated.
+- Held-out splits are **command-level and source-level**, never a random pair split — a
+  random split leaks `tar` from train into test and reports memorisation as skill. Include
+  unseen commands and an unseen platform.
+- Beats base 0.5B _and_ base-plus-structured-prompting; the second baseline is the honest
+  one, since prompting a base model is what a user would otherwise do.
+- Scored on intent success or functional equivalence in a container, not exact match alone:
+  a differently-worded command can be right, and a command with all-valid flags can be
+  dangerously wrong. Options-known rate is reported as a floor, never as accuracy.
+- Operand and argument correctness scored separately from flag correctness.
 - **Scrubber gate, blocking.** The scrubber's test suite includes a planted secret of every
   class in the privacy table and catches all of them. An audited random sample of the
   scrubbed set shows zero surviving secrets. Training does not start until both pass.
+- **Canary gate.** Planted canaries are inserted into any private training set and tested
+  for extraction afterwards. A recoverable canary means the adapter is not even locally
+  acceptable.
 - No `.zsh_history` command text appears anywhere in the dataset — only its derived
   frequency counts, and only in the index.
-
-### P4 — ship the model
-
-- GGUF loads in `llama-server` and answers correctly at Q6_K or Q8_0.
-- Benchmarked against the P1 placeholder on the same held-out set, reusing harness patterns
-  from `~/code/local-llm/benchmarks/`.
+- Distributable weights trace to reviewed licensed data only; the transcript-derived adapter
+  is marked non-exportable and never uploaded.
+- GGUF loads in `llama-server` and answers correctly at Q6_K or Q8_0, benchmarked against
+  the P1B placeholder on the same held-out set, reusing harness patterns from
+  `~/code/local-llm/benchmarks/`.
 
 ### P5 — macOS
 
@@ -474,29 +791,37 @@ explain to a user.
 
 ## Verification
 
-- **Parser** — [done] done. Ground truth is each tool's own `--help`, not a hand-counted
-  figure. `curl` matches `curl --help all` exactly (258, zero difference either way); `ls`
-  matches exactly at 44. `grep --colour` and `tar --show-snapshot-field-ranges` appear only
-  in `--help` and are absent from the man page — a genuine divergence, asserted as such.
-- **Multi-section** — [done] done. `man -w` returns only the default section, which loses
+- **Parser** — [done], for **long flags on the installed GNU versions**. Ground truth is
+  each tool's own `--help`, not a hand-counted figure. `curl` matches `curl --help all`
+  exactly (258, zero difference either way); `ls` matches exactly at 44. `grep --colour` and
+  `tar --show-snapshot-field-ranges` appear only in `--help` and are absent from the man
+  page — a genuine divergence, asserted as such, and the reason the two sources stay
+  separately attributed rather than merged. [plan] Checked-in fixtures extend this to short
+  flags, arity, descriptions, mdoc, and non-GNU help dialects.
+- **Multi-section** — [done]. `man -w` returns only the default section, which loses
   content: `signal` defaults to the 84-line section 2 syscall page while the 378-line
   section 7 overview is the one usually wanted, and `time` has pages in 1, 2, and 7.
   `harvest_all` indexes every section; `SECTION_PREFERENCE` makes bare `kill` resolve to
   the section 1 command rather than the section 2 syscall.
-- **Bundle splitter** — [done] done. `-sirn` and `-xzf` decompose; `grep -sirN` flags `-N` and
+- **Bundle splitter** — [done]. `-sirn` and `-xzf` decompose; `grep -sirN` flags `-N` and
   suggests `-n`; `grep -A5` yields `-A` with argument `5` rather than the flag `-5`,
   because the index says `-A` takes an argument.
 - **Router** — labeled cases; `exact_flag` must never fire on prose, `generate` must never
   fire on a well-formed command line.
-- **Port parity** — nnx vs HF logits within 1e-3. Hard gate before P3.
-- **Verifier units** — `grep -R` → suggests `-r`; fabricated `--frobnicate` → unverified;
-  `tar -czf` → clean.
+- **Port parity** — nnx vs HF logits within 1e-3. Hard gate before any fine-tune.
+- **Option checker units** — `grep -N` → suggests `-n`; `grep -R` → **valid, distinct from
+  `-r`, never rewritten**; fabricated `--frobnicate` → unknown; `tar -czf` → options known.
+- **Abstention units** — [plan] `grep -r foo > out`, `a|b`, `echo "unbalanced`, `$(rm -rf /)`,
+  and a heredoc each produce an explicit abstention with a non-zero exit, never a clean
+  result and never silence.
 - **End-to-end** — "get me the 5 most recently installed models in ollama" produces a
-  verified command. `ollama` has no man page, so this exercises the `--help` crawler.
-- **Model eval** — held-out NL→command set. Exact match, verifier-clean rate, and
-  containerized functional equivalence on a safe subset. Compare base 0.5B / fine-tuned
-  0.5B / `qwen2.5-coder:1.5b` / `qwen3-coder:30b`, reusing harness patterns in
-  `~/code/local-llm/benchmarks/`.
+  command whose options all resolve. `ollama` has no man page, so this exercises the
+  crawler.
+- **Model eval** — held-out NL→command set split by command and by source. Intent success
+  and containerised functional equivalence on a safe subset, with exact match and
+  options-known rate reported as secondary floors. Compare base 0.5B / base 0.5B with
+  structured prompting / fine-tuned 0.5B / `qwen2.5-coder:1.5b` / `qwen3-coder:30b`, reusing
+  harness patterns in `~/code/local-llm/benchmarks/`.
 - **Latency** — index lookups <10ms (Tab path); model path <500ms warm on GPU, <2s on CPU.
 - **Leanness** — Tier 0 binary under 10MB; assert the default build links no inference
   library and opens no socket.
@@ -506,7 +831,7 @@ explain to a user.
 ## Decisions taken during P0
 
 **No TUI framework — not Ratatui, not Bubbletea.** Both are full-screen frameworks that
-claim the alternate screen and run an event loop. shelliq's output is *inline*: it prints
+claim the alternate screen and run an event loop. shelliq's output is _inline_: it prints
 beneath the prompt while zsh's line editor still owns the terminal, and the Tab dropdown is
 rendered by zsh's own `menu select`. Taking over the screen would fight the line editor,
 which is precisely the constraint the shell integration is built around. Bubbletea would
@@ -514,9 +839,9 @@ additionally reintroduce Go, undoing the single-runtime decision.
 
 What is actually needed is colour, and that is `anstyle` — already in clap's dependency
 tree, so it costs nothing. Syntax highlighting comes free from a source a generic
-highlighter does not have: the verifier has already parsed the line into command,
-subcommand, flags, and arguments, so colouring by *verification status* (green verified,
-yellow wrong-case, red unknown) is both cheaper and more informative than lexical
+highlighter does not have: the option checker has already parsed the line into command,
+subcommand, flags, and arguments, so colouring by _checker finding_ (green known, yellow
+wrong-case, red unknown, grey unsupported syntax) is both cheaper and more informative than lexical
 highlighting. zsh-syntax-highlighting continues to colour the buffer itself.
 
 Ratatui earns its place only in an optional full-screen `shelliq browse curl` explorer.
@@ -542,9 +867,19 @@ configured for single quotes to match the house style.
 Two rules, and the first one does most of the work.
 
 **Local-only by default.** Nothing derived from this machine leaves it. The index is built
-here and never shipped. Shell history is read here and never shipped. There is no
-telemetry. The model, when it exists, is trained here and only the *weights* are
-distributable — and only after the gate below.
+here and never shipped. Shell history is read here and never shipped. There is no telemetry,
+and the inference endpoint is loopback-only unless the user overrides it deliberately.
+
+**Weights trained on private data are not distributable, scrubbed or not.** The earlier
+position — train on everything locally, publish the weights once scrubbing passes an audit —
+does not survive scrutiny. Secret detectors have false negatives by construction, and "an
+audited sample found nothing" is not evidence that a corpus is publishable; it is evidence
+about the sample. Transcripts additionally carry things no entropy or pattern check will
+ever catch: copyrighted project source, client names, internal hostnames, personal data, and
+low-entropy passwords that look exactly like ordinary words. So the split in section 7 is
+structural rather than procedural — **the private adapter is never exported**, and the
+distributable weights never see private data in the first place. Scrubbing is then risk
+reduction on the local artifact, which is all it was ever capable of being.
 
 **`.zsh_history` never becomes training text.** It is used for exactly one thing: counting
 how often a command and flag token appear, to order completions. A frequency table is not
@@ -558,26 +893,46 @@ one, and the dataset build aborts rather than emitting an unscrubbed pair.
 
 What the scrubber removes, in order:
 
-| Class                | Handling                                              |
-| -------------------- | ----------------------------------------------------- |
-| Home and user paths  | `/home/<user>/…` → `~/…`, usernames → `<user>`         |
-| Hostnames, private IPs | → `<host>`, `<ip>`                                   |
-| Email addresses      | → `<email>`                                            |
-| Known key formats    | AWS, GitHub `ghp_`, Slack, JWT, `-----BEGIN … KEY-----` → drop the pair |
-| URL credentials      | `https://user:pass@…` → drop the pair                  |
-| Env assignments of secret-shaped names | `*_TOKEN=`, `*_SECRET=`, `*_KEY=`, `PASSWORD=` → drop the pair |
-| High-entropy strings | Base64/hex runs over a length and entropy threshold → drop the pair |
-| Anything unrecognized but suspicious | drop the pair                          |
+| Class                                  | Handling                                                                |
+| -------------------------------------- | ----------------------------------------------------------------------- |
+| Home and user paths                    | `/home/<user>/…` → `~/…`, usernames → `<user>`                          |
+| Hostnames, private IPs                 | → `<host>`, `<ip>`                                                      |
+| Email addresses                        | → `<email>`                                                             |
+| Known key formats                      | AWS, GitHub `ghp_`, Slack, JWT, `-----BEGIN … KEY-----` → drop the pair |
+| URL credentials                        | `https://user:pass@…` → drop the pair                                   |
+| Env assignments of secret-shaped names | `*_TOKEN=`, `*_SECRET=`, `*_KEY=`, `PASSWORD=` → drop the pair          |
+| High-entropy strings                   | Base64/hex runs over a length and entropy threshold → drop the pair     |
+| Anything unrecognized but suspicious   | drop the pair                                                           |
 
 Dropping beats redacting for the credential classes. A redacted secret still teaches the
-model the *shape* of the command that carried it, and a model can memorize and later emit
+model the _shape_ of the command that carried it, and a model can memorize and later emit
 what it was trained on; discarding a few thousand pairs from a 30–50k set costs nothing
 worth protecting.
 
-**Gate.** Before P3 training begins, an audited random sample of the scrubbed set must show
-zero surviving secrets, and the scrubber's own test suite must include planted secrets of
-every class above. This is listed in the P3 acceptance criteria. If the audit fails,
-training does not start.
+**Gate.** Before any fine-tune begins, an audited random sample of the scrubbed set must
+show zero surviving secrets, the scrubber's own test suite must include planted secrets of
+every class above, and planted canaries must be unrecoverable from the trained adapter. This
+is listed in the P2+ acceptance criteria. If any of the three fails, training does not
+start.
+
+## Threat model
+
+Written out because "it runs locally" is not a threat model, and several of these were
+invisible while the design assumed all local input is friendly input.
+
+| Threat                                                  | Response                                                                                   |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Hostile `--help` output or a hostile man page           | Length caps, control characters stripped on ingest and display, sandboxed execution        |
+| Terminal escape injection through a flag description    | Strip before store _and_ before print; the index is not trusted output                     |
+| Poisoned tldr/info content or retrieved context         | Flags validated against the local target; context is data, never instruction               |
+| Prompt injection reaching the model through help text   | Structured output only, options re-checked after generation, measured in P1B               |
+| Malicious or compromised local model server             | Loopback default, size and time limits, responses parsed as untrusted                      |
+| Tampered GGUF                                           | Pinned digest, published provenance, no silent pull                                        |
+| Index file disclosure — even frequency tables leak      | `0600` on the database and its WAL and SHM files                                           |
+| Symlink or path attack on the index location            | Refuse to open through a symlink into an unexpected owner                                  |
+| Corrupt database                                        | Detect, report, rebuild — never serve partial facts silently                               |
+| Sensitive text in the shell buffer                      | Never leaves the machine; never logged; never sent without an explicit non-loopback opt-in |
+| Completion quoting bugs producing an unintended command | shelliq renders and quotes; nothing auto-executes                                          |
 
 ## External command corpora — two uses, not one
 
@@ -586,7 +941,7 @@ asciinema recordings, troubleshooting writeups) are worth mining, but they divid
 categories with very different value and very different risk.
 
 **As training pairs — only where intent is attached.** The task is English → command, so a
-bare command list supplies the *output* side and nothing else. Raw `.bash_history` has no
+bare command list supplies the _output_ side and nothing else. Raw `.bash_history` has no
 intent attached; turning it into pairs means synthesizing the English with a model, which
 is already what the index-driven synthetic pipeline does, from cleaner input. The exception
 is the third category, and it is the best of the three: **troubleshooting writeups**, where
@@ -615,7 +970,7 @@ use:
 3. **Staleness.** Public dotfiles skew old: Python 2, `ifconfig`, pre-systemd. This one is
    self-correcting — see below.
 
-**The verifier makes noisy sources safe.** Every candidate pair is checked against the
+**The option checker makes noisy sources less noisy.** Every candidate pair is checked against the
 local index and dropped unless every flag resolves. A pair using `ifconfig -a` on a machine
 that has only `ip` simply fails and is discarded. That turns a data-quality problem into a
 throughput problem, and it is the same mechanism already required for synthetic data —
@@ -623,17 +978,52 @@ extended to cover every external source.
 
 Value ranking for the dataset:
 
-| Source                    | Pre-paired | Licence   | Use              |
-| ------------------------- | ---------- | --------- | ---------------- |
-| tldr-pages                | yes        | CC-BY-4.0 | backbone         |
-| Claude Code transcripts   | yes        | local     | 2,231 measured   |
-| Troubleshooting writeups  | yes, messy | varies    | vocabulary       |
-| Raw public histories      | no         | unclear   | frequency prior  |
+| Source                   | Pre-paired | Licence   | Use             |
+| ------------------------ | ---------- | --------- | --------------- |
+| tldr-pages               | yes        | CC-BY-4.0 | backbone        |
+| Claude Code transcripts  | yes        | local     | 2,231 measured  |
+| Troubleshooting writeups | yes, messy | varies    | vocabulary      |
+| Raw public histories     | no         | unclear   | frequency prior |
+
+## Review of 2026-07-29
+
+`plan_review.md` audited this document against the P0 code. Ten findings, all of which
+checked out against the source; the changes above are the response. Recorded here because
+the corrections are more useful than the original text was.
+
+| #   | Finding                                                       | Disposition                                                                                                                    |
+| --- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | "Verified" implied correct and safe                           | Accepted. Renamed to option checking; added the claim ladder and the _does not establish_ list; abstention is now invariant 17 |
+| 2   | Allowlist is consent, not containment                         | Accepted. Containment table; lazy harvesting replaces the `PATH` sweep; invariant 9 superseded                                 |
+| 3   | Platform tag cannot identify the executable                   | Accepted. `targets`/`sources` schema; invariant 8 marked unenforced with the two call sites named                              |
+| 4   | Private transcripts and publishable weights shared a pipeline | Accepted. Structural split: the personal adapter is non-exportable                                                             |
+| 5   | HTTP endpoint could be remote                                 | Accepted. Loopback default, no ambient proxies, no redirects                                                                   |
+| 6   | `grep -R` → `-r` contradicts the project's own test           | Accepted — a genuine error. Both flags are valid; the example is now `-N`/`-n`, and case folding suggests rather than rewrites |
+| 7   | `arg_type` + `arg_required` too weak for the arity claim      | Accepted. `arg_mode` + `attachment`; the P0 claim is restated as _limited_                                                     |
+| 8   | "Exact" parser result is narrower than the prose implied      | Accepted. Relabelled long-flag-only on installed versions; fixtures in P0.5                                                    |
+| 9   | Citations lack provenance                                     | Accepted. Excerpt + identity + hash; `shelliq source` makes them inspectable                                                   |
+| 10  | "Cannot drift" is false                                       | Accepted and withdrawn. Freshness states, atomic refresh, `DPkg::Post-Invoke` dropped                                          |
+
+One thing the review understated, found while checking finding 1: when `shlex::split` fails
+on unbalanced quotes, `segments()` returns an empty vector, so `explain` finds zero problems
+and **exits 0**. That is fail-open on the input most deserving of suspicion, and it is the
+first fix in P0.5.
+
+Two of its recommendations are accepted in principle but deliberately staged. A real shell
+parser producing an AST is the right end state and is a dependency rather than a project of
+its own (candidates in section 5), but P0.5 ships **fail-closed abstention** first, because
+abstaining converts a wrong answer into no answer at a fraction of the cost, and the parser
+can then be added without changing what the tool promises. Likewise, renaming
+the `verify` crate is deferred: the user-visible vocabulary and the `Finding` variants are
+what mislead, and churning the crate name buys nothing the narrowed claims do not.
 
 ## Open items
 
-- The `--help` crawler executes binaries. The allowlist gate covers it, but it deserves a
-  second look before the first full `PATH` sweep.
+- Sandbox availability is uneven. bwrap and seccomp cover Linux, `sandbox-exec` is deprecated
+  but present on macOS, and there is no good story for other platforms. Document where
+  containment is real and where it is only convention, rather than implying uniformity.
+- A risk notice for destructive commands has its own failure mode: it will make some users
+  trust an unflagged command more than they should. Wording matters more than coverage.
 - `mandoc -T markdown` output quality is unverified — mandoc isn't installed here and
   installing it needs a sudo prompt. This matters less than expected: the rendered-text
   parser now matches `--help` exactly on curl and ls, so mandoc is an alternative rather
