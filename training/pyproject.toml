@@ -3,6 +3,7 @@ name = "shelliq-training"
 version = "0.1.0"
 description = "JAX/Flax nnx fine-tuning for shelliq. Development only; never shipped to users."
 requires-python = ">=3.14"
+license = "MIT OR Apache-2.0"
 dependencies = [
     "datasets>=5.0.1",
     "flax>=0.12.8",
