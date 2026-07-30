@@ -7,7 +7,7 @@ dependencies = [
     "datasets>=5.0.1",
     "flax>=0.12.8",
     "grain>=0.2.18",
-    "jax[cuda12]>=0.11.0",
+    "jax[cuda13]>=0.11.0",
     "numpy>=2.5.1",
     "optax>=0.2.8",
     "orbax-checkpoint>=0.12.1",
@@ -15,17 +15,9 @@ dependencies = [
     "transformers>=5.14.1",
 ]
 
+# Style lives in the repo root so there is one copy of it.
 [tool.ruff]
-line-length = 100
-
-[tool.ruff.format]
-quote-style = "single"
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM"]
-
-[tool.ruff.lint.flake8-quotes]
-inline-quotes = "single"
+extend = "../pyproject.toml"
 
 [dependency-groups]
 dev = [

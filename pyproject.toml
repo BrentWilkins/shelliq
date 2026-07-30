@@ -1,0 +1,26 @@
+[project]
+name = "shelliq-dev"
+version = "0.1.0"
+description = "Development tooling for shelliq. Holds the linters; ships nothing."
+requires-python = ">=3.14"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.6.1",
+    "ruff>=0.16.0",
+]
+
+# The canonical Python style for the repo. `training/pyproject.toml` extends this rather
+# than restating it, so the two cannot drift apart.
+[tool.ruff]
+line-length = 130
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.flake8-quotes]
+inline-quotes = "single"
