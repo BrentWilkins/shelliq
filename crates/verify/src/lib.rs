@@ -1,28 +1,30 @@
 //! Checking a command line against the index.
 //!
-//! The verifier is what makes a generated command trustworthy: every flag is confirmed
-//! against the man page installed on this machine, and anything that cannot be confirmed
-//! is labelled rather than waved through.
+//! The claim this makes is narrow and worth stating exactly: each literal option spelling
+//! in the line exists for that command in the index built from this machine's man pages,
+//! with roughly the right argument shape. Not that the command is correct, that its
+//! operands are right, that the flags make sense together, or that running it is safe. See
+//! the claim ladder in `PLAN.md`.
 //!
 //! Bundled short flags are the reason this cannot be a naive token scan. Real command
 //! lines are full of `-fsSL`, `-sirn`, `-xzf`, and `-LsSf`, and a wrong case hides
 //! invisibly inside a bundle — `-sirN` looks fine at a glance. Decomposing bundles is
 //! therefore a correctness requirement, not a nicety.
+//!
+//! The other half of honesty is refusing to answer. Syntax the scanner cannot analyse
+//! produces a [`Finding::Unsupported`] abstention and a non-zero exit, never silence.
+
+mod syntax;
 
 use anyhow::Result;
 use shelliq_index::{FlagLookup, FlagRow, Index};
 
-/// One `cmd ... ` stage of a pipeline.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Segment {
-    pub command: String,
-    pub args: Vec<String>,
-}
+pub use syntax::{Segment, Unsupported, Word, segments};
 
-/// What the verifier concluded about one flag.
+/// What the checker concluded about one flag.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Finding {
-    /// Confirmed against the index, with a citation.
+    /// Found in the index, with a citation.
     Verified { token: String, flag: Box<FlagRow> },
     /// Exists under a different case. The answer to the original complaint.
     WrongCase { token: String, suggestion: Box<FlagRow> },
@@ -32,45 +34,18 @@ pub enum Finding {
     UnknownCommand { command: String },
     /// A flag that requires an argument did not get one.
     MissingArgument { token: String, flag: Box<FlagRow> },
+    /// Shell syntax the checker does not analyse. Reported explicitly, because the
+    /// alternative — saying nothing — reads as approval.
+    Unsupported { construct: Unsupported, text: String },
 }
 
 impl Finding {
     /// Whether this finding is consistent with a correct command line.
+    ///
+    /// An abstention is not clean. Nothing was checked, so nothing can be claimed.
     pub fn is_clean(&self) -> bool {
         matches!(self, Finding::Verified { .. })
     }
-}
-
-/// Split a command line into pipeline segments.
-///
-/// Uses `shlex` so quoting is respected: `grep -r "a | b"` is one segment, not two.
-pub fn segments(line: &str) -> Vec<Segment> {
-    let Some(tokens) = shlex::split(line) else {
-        return Vec::new();
-    };
-    let mut out = Vec::new();
-    let mut current: Vec<String> = Vec::new();
-
-    for token in tokens {
-        if matches!(token.as_str(), "|" | "||" | "&&" | ";" | "&") {
-            push_segment(&mut out, &mut current);
-        } else {
-            current.push(token);
-        }
-    }
-    push_segment(&mut out, &mut current);
-    out
-}
-
-fn push_segment(out: &mut Vec<Segment>, current: &mut Vec<String>) {
-    if current.is_empty() {
-        return;
-    }
-    let command = current.remove(0);
-    out.push(Segment {
-        command,
-        args: std::mem::take(current),
-    });
 }
 
 /// One element of a decomposed bundle.
@@ -118,34 +93,64 @@ pub fn split_bundle(index: &Index, command: &str, token: &str) -> Result<Vec<Bun
     Ok(parts)
 }
 
-/// Verify every flag in a command line.
+/// Check every flag in a command line.
 pub fn verify(index: &Index, line: &str) -> Result<Vec<Finding>> {
     let mut findings = Vec::new();
 
-    for segment in segments(line) {
-        if !index.command_exists(&segment.command)? {
+    // Fail closed. A line the scanner cannot read yields one abstention rather than an
+    // empty result: zero findings is indistinguishable from a clean line to every caller,
+    // and to the exit status, which is how P0 came to approve `grep -r "unclosed`.
+    let segments = match segments(line) {
+        Ok(segments) => segments,
+        Err(construct) => {
+            return Ok(vec![Finding::Unsupported {
+                construct,
+                text: line.to_string(),
+            }]);
+        }
+    };
+
+    for segment in segments {
+        // An expanded command name could be anything, so nothing downstream is checkable.
+        if segment.command.opaque {
+            findings.push(Finding::Unsupported {
+                construct: Unsupported::Expansion,
+                text: segment.command.text.clone(),
+            });
+            continue;
+        }
+        if !index.command_exists(&segment.command.text)? {
             findings.push(Finding::UnknownCommand {
-                command: segment.command.clone(),
+                command: segment.command.text.clone(),
             });
             continue;
         }
 
         let mut args = segment.args.iter().peekable();
         while let Some(arg) = args.next() {
-            if arg == "--" {
+            // `$OPTS` may expand to flags, so it cannot be dismissed as an operand. The
+            // rest of the line is still worth checking, so this costs only the one word.
+            if arg.opaque {
+                findings.push(Finding::Unsupported {
+                    construct: Unsupported::Expansion,
+                    text: arg.text.clone(),
+                });
+                continue;
+            }
+            if arg.text == "--" {
                 break;
             }
-            if !arg.starts_with('-') || arg == "-" {
+            if !arg.text.starts_with('-') || arg.text == "-" {
                 continue;
             }
 
             // A long flag may carry its argument inline: `--block-size=M`.
-            let (token, inline_arg) = match arg.split_once('=') {
+            let (token, inline_arg) = match arg.text.split_once('=') {
                 Some((t, v)) if t.starts_with("--") => (t.to_string(), Some(v.to_string())),
-                _ => (arg.clone(), None),
+                _ => (arg.text.clone(), None),
             };
 
-            let parts = split_bundle(index, &segment.command, &token)?;
+            let parts = split_bundle(index, &segment.command.text, &token)?;
             let mut consumed_inline = inline_arg.is_some();
 
             for (i, part) in parts.iter().enumerate() {
@@ -155,10 +160,11 @@ pub fn verify(index: &Index, line: &str) -> Result<Vec<Finding>> {
                 };
                 let has_attached_arg = matches!(parts.get(i + 1), Some(BundlePart::Argument(_)));
 
-                match index.lookup_flag(&segment.command, flag_token)? {
+                match index.lookup_flag(&segment.command.text, flag_token)? {
                     FlagLookup::Exact(flag) => {
                         let needs_arg = flag.arg_type.is_some() && flag.arg_required;
-                        let satisfied = has_attached_arg || consumed_inline || args.peek().is_some_and(|n| !n.starts_with('-'));
+                        let satisfied =
+                            has_attached_arg || consumed_inline || args.peek().is_some_and(|n| !n.text.starts_with('-'));
                         if needs_arg && !satisfied {
                             findings.push(Finding::MissingArgument {
                                 token: flag_token.clone(),
@@ -182,7 +188,7 @@ pub fn verify(index: &Index, line: &str) -> Result<Vec<Finding>> {
                     }
                     FlagLookup::Unknown { .. } => {
                         findings.push(Finding::UnknownFlag {
-                            command: segment.command.clone(),
+                            command: segment.command.text.clone(),
                             token: flag_token.clone(),
                         });
                     }
@@ -252,15 +258,15 @@ mod tests {
 
     #[test]
     fn pipeline_splits_into_segments() {
-        let segs = segments("grep -r foo | head -5");
+        let segs = segments("grep -r foo | head -5").unwrap();
         assert_eq!(segs.len(), 2);
-        assert_eq!(segs[0].command, "grep");
-        assert_eq!(segs[1].command, "head");
+        assert_eq!(segs[0].command.text, "grep");
+        assert_eq!(segs[1].command.text, "head");
     }
 
     #[test]
     fn quoted_pipe_is_not_a_segment_boundary() {
-        let segs = segments(r#"grep -r "a | b" ."#);
+        let segs = segments(r#"grep -r "a | b" ."#).unwrap();
         assert_eq!(segs.len(), 1);
     }
 
@@ -375,6 +381,85 @@ mod tests {
         let idx = seeded();
         let findings = verify(&idx, "grep -r x | tar -xzf y").unwrap();
         assert_eq!(findings.len(), 4);
+        assert!(findings.iter().all(Finding::is_clean));
+    }
+
+    /// The fail-open bug this phase exists to close. P0 returned zero findings here, which
+    /// every caller — including the exit status — read as "clean".
+    #[test]
+    fn an_unbalanced_quote_abstains_instead_of_passing() {
+        let idx = seeded();
+        let findings = verify(&idx, r#"grep -r "unclosed"#).unwrap();
+        let [Finding::Unsupported { construct, .. }] = findings.as_slice() else {
+            panic!("expected one abstention, got {findings:?}");
+        };
+        assert_eq!(*construct, Unsupported::UnbalancedQuote);
+        assert!(!findings[0].is_clean());
+    }
+
+    #[test]
+    fn unreadable_syntax_abstains_for_the_whole_line() {
+        let idx = seeded();
+        for (line, expected) in [
+            ("grep -r foo>out", Unsupported::Redirection),
+            ("grep -r foo 2>/dev/null", Unsupported::Redirection),
+            ("grep -r $(cat f)", Unsupported::CommandSubstitution),
+            ("grep -r `cat f`", Unsupported::CommandSubstitution),
+            ("(grep -r foo)", Unsupported::Subshell),
+            (r"grep -r \", Unsupported::DanglingEscape),
+        ] {
+            let findings = verify(&idx, line).unwrap();
+            assert!(
+                matches!(
+                    findings.as_slice(),
+                    [Finding::Unsupported { construct, .. }] if *construct == expected
+                ),
+                "line {line:?} got {findings:?}"
+            );
+        }
+    }
+
+    /// Abstaining on the whole line for a redirection would be over-broad here: the flag
+    /// is quoted text, not syntax, and P0's own test asserted the quoted case works.
+    #[test]
+    fn a_quoted_metacharacter_does_not_trigger_abstention() {
+        let idx = seeded();
+        let findings = verify(&idx, r#"grep -r "a > b" ."#).unwrap();
+        assert!(findings.iter().all(Finding::is_clean), "got {findings:?}");
+    }
+
+    /// An expansion could be anything, including flags, so the word is not silently taken
+    /// for an operand — but the flags either side of it are still worth reporting.
+    #[test]
+    fn an_expansion_costs_its_word_and_no_more() {
+        let idx = seeded();
+        let findings = verify(&idx, "grep -i $OPTS -r .").unwrap();
+        assert_eq!(findings.len(), 3, "got {findings:?}");
+        assert!(findings[0].is_clean());
+        assert!(matches!(
+            &findings[1],
+            Finding::Unsupported { construct: Unsupported::Expansion, text } if text == "$OPTS"
+        ));
+        assert!(findings[2].is_clean());
+    }
+
+    #[test]
+    fn an_expanded_command_name_is_not_looked_up() {
+        let idx = seeded();
+        let findings = verify(&idx, "$TOOL -r .").unwrap();
+        let [Finding::Unsupported { construct, text }] = findings.as_slice() else {
+            panic!("expected one abstention, got {findings:?}");
+        };
+        assert_eq!(*construct, Unsupported::Expansion);
+        assert_eq!(text, "$TOOL");
+    }
+
+    /// P0 read `a|b` as one segment and so never checked `tar`.
+    #[test]
+    fn an_attached_pipe_still_checks_both_segments() {
+        let idx = seeded();
+        let findings = verify(&idx, "grep -r x|tar -xzf y").unwrap();
+        assert_eq!(findings.len(), 4, "got {findings:?}");
         assert!(findings.iter().all(Finding::is_clean));
     }
 }
