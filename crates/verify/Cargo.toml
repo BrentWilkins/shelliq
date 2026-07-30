@@ -4,12 +4,11 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Command line tokenizing, flag bundle decomposition, and index-backed verification"
+description = "Command line scanning, flag bundle decomposition, and index-backed option checking"
 
 [dependencies]
 anyhow = "1.0.104"
 shelliq-index = { version = "0.1.0", path = "../index" }
-shlex = "2.0.1"
 
 [dev-dependencies]
 shelliq-harvest = { path = "../harvest" }

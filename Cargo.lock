@@ -419,7 +419,6 @@ dependencies = [
  "anyhow",
  "shelliq-harvest",
  "shelliq-index",
- "shlex",
 ]
 
 [[package]]

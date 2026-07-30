@@ -124,7 +124,7 @@ fn explain(path: &std::path::Path, line: &str) -> Result<()> {
     }
 
     if problems > 0 {
-        println!("\n{problems} of {} need attention", findings.len());
+        println!("\n{problems} of {} not confirmed", findings.len());
         std::process::exit(1);
     }
     Ok(())
@@ -229,6 +229,11 @@ mod render {
                  {DIM}{}{DIM:#}",
                 flag.arg_type.as_deref().unwrap_or("ARG"),
                 flag.citation()
+            ),
+            Finding::Unsupported { construct, text } => format!(
+                "  {YELLOW}⊘{YELLOW:#} {BOLD}{}{BOLD:#}  not checked: contains {construct}  \
+                 {DIM}(abstained rather than guess){DIM:#}",
+                truncate(text, 48),
             ),
         }
     }
