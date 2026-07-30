@@ -565,9 +565,11 @@ Designed not to fight oh-my-zsh, zsh-autosuggestions, or zsh-syntax-highlighting
   Never touches Tab.
 - `C-x C-h` — explain/fuzzy-search flags for the current buffer. Index-only, no model.
 - Tab, safely — a **fallback** completer, never a replacement:
+
   ```zsh
   zstyle ':completion:*' completer _complete _shelliq _approximate
   ```
+
   `_shelliq` runs only when `_complete` produces nothing, so `_git`, `_docker`, and every
   tool-provided completer keep priority. Inherits the existing `menu select` dropdown UI.
 
