@@ -1,0 +1,9 @@
+/target
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+.venv/
+__pycache__/
+*.gguf
+*.safetensors
