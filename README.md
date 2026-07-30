@@ -95,4 +95,4 @@ comparison. Run `cargo test` to check against the pages on your machine.
 
 ## License
 
-MIT
+Dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.
