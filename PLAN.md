@@ -704,19 +704,20 @@ scored for **precision and recall per field**, plus fuzz and control-character t
 
 ### P0.5 — trust hardening
 
-| Gate                                                                               | Target   |
-| ---------------------------------------------------------------------------------- | -------- |
-| No user-facing string calls a whole command "verified", "correct", or "safe"       | required |
-| Unsupported shell syntax → explicit abstention, non-zero exit                      | required |
-| Unbalanced quotes → abstention, **not** zero findings and exit 0                   | required |
-| Redirections, substitutions, heredocs, subshells → abstain or parse, never misread | required |
-| Every fact query filtered by resolved target, platform, and subcommand scope       | required |
-| Two installs of one tool resolve to distinct targets                               | required |
-| `shelliq source <citation>` prints excerpt + provenance                            | required |
-| Stale index reported as stale; refresh is atomic and reconciles removals           | required |
-| Schema migration from the P0 database, with a test                                 | required |
-| Index and WAL created `0600`; control characters stripped on ingest                | required |
-| Parser fixtures: precision and recall per field, per format                        | recorded |
+| Gate                                                                               | Target   | Measured           | Result  |
+| ----------------------------------------------------------------------------------- | -------- | ------------------ | ------- |
+| No user-facing string calls a whole command "verified", "correct", or "safe"       | required | —                   | pass    |
+| Unsupported shell syntax → explicit abstention, non-zero exit                      | required | —                   | pass    |
+| Unbalanced quotes → abstention, **not** zero findings and exit 0                   | required | —                   | pass    |
+| Redirections, substitutions, heredocs, subshells → abstain or parse, never misread | required | —                   | pass    |
+| Every fact query filtered by resolved target, platform, and subcommand scope       | required | —                   | pass    |
+| Two installs of one tool resolve to distinct targets                               | required | —                   | pass    |
+| `shelliq source <citation>` prints excerpt + provenance                            | required | —                   | pass    |
+| Stale index reported as stale; refresh is atomic and reconciles removals           | required | —                   | pass    |
+| Schema migration from the P0 database, with a test                                 | required | —                   | pass    |
+| Index and WAL created `0600`; control characters stripped on ingest                | required | —                   | pass    |
+| Parser fixtures: precision and recall per field, per format                        | recorded | not yet built       | pending |
+| Test suite                                                                          | all green | 74 passing         | pass    |
 
 ### P1A — safe Tier 0 UX
 

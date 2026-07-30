@@ -214,44 +214,51 @@ mod tests {
             description: format!("description of {short}"),
             group: None,
             source_line: line,
+            excerpt: String::new(),
         }
     }
 
     fn seeded() -> Index {
         let mut idx = Index::open_in_memory().unwrap();
-        idx.insert_command(&ParsedCommand {
-            name: "grep".into(),
-            section: "1".into(),
-            platform: "linux".into(),
-            synopsis: String::new(),
-            description: String::new(),
-            source_path: String::new(),
-            source_hash: String::new(),
-            flags: vec![
-                f("-s", "--no-messages", None, 10),
-                f("-i", "--ignore-case", None, 45),
-                f("-r", "--recursive", None, 168),
-                f("-R", "--dereference-recursive", None, 171),
-                f("-n", "--line-number", None, 101),
-                f("-A", "--after-context", Some("NUM"), 60),
-            ],
-        })
+        idx.insert_command(
+            &shelliq_harvest::resolve_target("grep", false),
+            &ParsedCommand {
+                name: "grep".into(),
+                section: "1".into(),
+                platform: "linux".into(),
+                synopsis: String::new(),
+                description: String::new(),
+                source_path: String::new(),
+                source_hash: String::new(),
+                flags: vec![
+                    f("-s", "--no-messages", None, 10),
+                    f("-i", "--ignore-case", None, 45),
+                    f("-r", "--recursive", None, 168),
+                    f("-R", "--dereference-recursive", None, 171),
+                    f("-n", "--line-number", None, 101),
+                    f("-A", "--after-context", Some("NUM"), 60),
+                ],
+            },
+        )
         .unwrap();
-        idx.insert_command(&ParsedCommand {
-            name: "tar".into(),
-            section: "1".into(),
-            platform: "linux".into(),
-            synopsis: String::new(),
-            description: String::new(),
-            source_path: String::new(),
-            source_hash: String::new(),
-            flags: vec![
-                f("-c", "--create", None, 20),
-                f("-z", "--gzip", None, 30),
-                f("-f", "--file", Some("ARCHIVE"), 40),
-                f("-x", "--extract", None, 50),
-            ],
-        })
+        idx.insert_command(
+            &shelliq_harvest::resolve_target("tar", false),
+            &ParsedCommand {
+                name: "tar".into(),
+                section: "1".into(),
+                platform: "linux".into(),
+                synopsis: String::new(),
+                description: String::new(),
+                source_path: String::new(),
+                source_hash: String::new(),
+                flags: vec![
+                    f("-c", "--create", None, 20),
+                    f("-z", "--gzip", None, 30),
+                    f("-f", "--file", Some("ARCHIVE"), 40),
+                    f("-x", "--extract", None, 50),
+                ],
+            },
+        )
         .unwrap();
         idx
     }

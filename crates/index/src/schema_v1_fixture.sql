@@ -9,34 +9,8 @@ CREATE TABLE IF NOT EXISTS meta (
     value TEXT NOT NULL
 );
 
--- One resolved executable identity: the file (or builtin) a shell would actually run for
--- `name`, right now. Two installs of the same command name never share a row, because they
--- are not the same fact source even though a bare command lookup would use the same name.
-CREATE TABLE IF NOT EXISTS targets (
-    id           INTEGER PRIMARY KEY,
-    name         TEXT NOT NULL,
-    platform     TEXT NOT NULL,
-    -- 'file' | 'builtin' | 'absent'.
-    exec_kind    TEXT NOT NULL,
-    -- Absolute path, for exec_kind = 'file'; NULL otherwise.
-    exec_path    TEXT,
-    -- sha256 of the file's contents as of the last harvest or refresh. NULL until computed.
-    exec_hash    TEXT,
-    -- Cheap identity signals, checked at lookup time without re-reading the file.
-    exec_size    INTEGER,
-    exec_mtime   INTEGER,
-    first_seen   TEXT NOT NULL,
-    last_checked TEXT NOT NULL
-);
-
--- Not a UNIQUE constraint: SQLite treats every NULL exec_path as distinct, which would let
--- duplicate builtin/absent rows slip past it silently. Index::insert_command enforces
--- identity itself with an explicit SELECT before insert or update.
-CREATE INDEX IF NOT EXISTS targets_identity ON targets (name, exec_kind, exec_path);
-
 CREATE TABLE IF NOT EXISTS commands (
     id             INTEGER PRIMARY KEY,
-    target_id      INTEGER NOT NULL REFERENCES targets (id) ON DELETE CASCADE,
     name           TEXT NOT NULL,
     platform       TEXT NOT NULL,
     section        TEXT NOT NULL,
@@ -49,7 +23,7 @@ CREATE TABLE IF NOT EXISTS commands (
     -- rows even when the source file is byte-identical.
     parser_version INTEGER NOT NULL DEFAULT 0,
     harvested_at   TEXT NOT NULL,
-    UNIQUE (target_id, section)
+    UNIQUE (name, platform, section)
 );
 
 CREATE TABLE IF NOT EXISTS subcommands (
@@ -73,8 +47,6 @@ CREATE TABLE IF NOT EXISTS flags (
     description   TEXT NOT NULL DEFAULT '',
     flag_group    TEXT,
     source_line   INTEGER NOT NULL DEFAULT 0,
-    -- The tag and body lines exactly as rendered, quoted verbatim by `shelliq source`.
-    excerpt       TEXT NOT NULL DEFAULT '',
     -- Populated from local shell history frequency; drives completion ordering only.
     rank_personal INTEGER NOT NULL DEFAULT 0,
     -- Set when the flag appears in a tldr example.
@@ -84,7 +56,6 @@ CREATE TABLE IF NOT EXISTS flags (
 CREATE INDEX IF NOT EXISTS flags_by_short ON flags (command_id, short);
 CREATE INDEX IF NOT EXISTS flags_by_long  ON flags (command_id, long);
 CREATE INDEX IF NOT EXISTS commands_by_name ON commands (name, platform);
-CREATE INDEX IF NOT EXISTS commands_by_target ON commands (target_id);
 
 CREATE TABLE IF NOT EXISTS examples (
     id          INTEGER PRIMARY KEY,

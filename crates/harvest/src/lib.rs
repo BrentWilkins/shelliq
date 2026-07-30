@@ -68,6 +68,9 @@ pub struct ParsedFlag {
     pub group: Option<String>,
     /// 1-based line in the rendered page, used for citations like `grep(1):142`.
     pub source_line: usize,
+    /// The tag and body lines exactly as rendered, for `shelliq source` to quote verbatim.
+    /// Unlike `description`, this is not reflowed onto one line.
+    pub excerpt: String,
 }
 
 impl ParsedFlag {
@@ -96,6 +99,146 @@ pub struct ParsedCommand {
 
 pub fn platform() -> &'static str {
     if cfg!(target_os = "macos") { "darwin" } else { "linux" }
+}
+
+/// Which kind of executable a name resolves to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecKind {
+    /// A regular file on `PATH`.
+    File,
+    /// A shell builtin, which shadows any same-named file on `PATH`.
+    Builtin,
+    /// Neither: the name would not run.
+    Absent,
+}
+
+impl ExecKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ExecKind::File => "file",
+            ExecKind::Builtin => "builtin",
+            ExecKind::Absent => "absent",
+        }
+    }
+}
+
+impl std::str::FromStr for ExecKind {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "file" => Ok(ExecKind::File),
+            "builtin" => Ok(ExecKind::Builtin),
+            "absent" => Ok(ExecKind::Absent),
+            other => bail!("unknown exec_kind `{other}`"),
+        }
+    }
+}
+
+/// Common builtins across bash, zsh, and POSIX sh.
+///
+/// Not exhaustive — a shell's real builtin set also depends on aliases and functions this
+/// process cannot see — but a name on this list is a builtin in every shell shelliq targets,
+/// and shadows a same-named file on `PATH` the way a real shell would.
+const SHELL_BUILTINS: &[&str] = &[
+    "cd", "echo", "export", "unset", "alias", "unalias", "source", ".", "eval", "exec", "exit", "pwd", "read", "set", "shift",
+    "test", "[", "true", "false", "type", "history", "jobs", "kill", "wait", "trap", "umask", "ulimit", "let", "local",
+    "declare", "typeset", "readonly", "return", "break", "continue", "printf", "getopts", "hash", "bg", "fg", "disown",
+    "suspend", "times", "command", "builtin", "enable", "help",
+];
+
+/// The executable identity a shell would run for this name, right now.
+///
+/// This is deliberately narrower than "does a man page exist for this name": a target is
+/// the file (or builtin) that would actually execute, resolved by `PATH` precedence exactly
+/// as a shell resolves it, so facts harvested for one installed `grep` are never served for
+/// a different `grep` found on a different machine's `PATH`.
+///
+/// `hash` controls whether the (relatively expensive) content hash is computed. Callers
+/// doing a one-off staleness check at lookup time pass `false` and compare size/mtime only;
+/// callers doing an explicit harvest or refresh pass `true` to record a verifiable identity.
+pub fn resolve_target(name: &str, hash: bool) -> Target {
+    if SHELL_BUILTINS.contains(&name) {
+        return Target {
+            name: name.to_string(),
+            platform: platform().to_string(),
+            exec_kind: ExecKind::Builtin,
+            exec_path: None,
+            exec_hash: None,
+            exec_size: None,
+            exec_mtime: None,
+        };
+    }
+
+    if let Some(path) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path) {
+            let candidate = dir.join(name);
+            let Ok(meta) = std::fs::metadata(&candidate) else {
+                continue;
+            };
+            if !meta.is_file() || !is_executable(&meta) {
+                continue;
+            }
+            let exec_hash = if hash {
+                std::fs::read(&candidate).ok().map(|bytes| hex(&Sha256::digest(&bytes)))
+            } else {
+                None
+            };
+            return Target {
+                name: name.to_string(),
+                platform: platform().to_string(),
+                exec_kind: ExecKind::File,
+                exec_path: Some(candidate.to_string_lossy().into_owned()),
+                exec_hash,
+                exec_size: Some(meta.len()),
+                exec_mtime: mtime_secs(&meta),
+            };
+        }
+    }
+
+    Target {
+        name: name.to_string(),
+        platform: platform().to_string(),
+        exec_kind: ExecKind::Absent,
+        exec_path: None,
+        exec_hash: None,
+        exec_size: None,
+        exec_mtime: None,
+    }
+}
+
+fn is_executable(meta: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    meta.permissions().mode() & 0o111 != 0
+}
+
+fn mtime_secs(meta: &std::fs::Metadata) -> Option<i64> {
+    meta.modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs() as i64)
+}
+
+/// The resolved identity of an executable, as of the moment it was resolved.
+#[derive(Debug, Clone)]
+pub struct Target {
+    pub name: String,
+    pub platform: String,
+    pub exec_kind: ExecKind,
+    /// Absolute path, for `ExecKind::File`; `None` otherwise.
+    pub exec_path: Option<String>,
+    /// sha256 of the file's contents. `None` unless explicitly requested.
+    pub exec_hash: Option<String>,
+    pub exec_size: Option<u64>,
+    pub exec_mtime: Option<i64>,
+}
+
+/// Remove control characters a rendered man page should never contain.
+///
+/// A malformed or hostile page could embed them, and every harvested string ends up on a
+/// terminal or in a citation, so they are stripped at ingest rather than trusted downstream.
+/// Tab and newline are kept: they are structural, not an injection vector.
+pub fn strip_control_chars(s: &str) -> String {
+    s.chars().filter(|c| !c.is_control() || *c == '\t' || *c == '\n').collect()
 }
 
 /// Preference order when one name has pages in several sections.
@@ -294,6 +437,7 @@ pub fn parse_rendered(name: &str, section: &str, source_path: &str, source_hash:
             let (spec, inline) = split_tag(content);
             if let Some(mut parsed) = parse_spec(spec) {
                 let mut desc_parts: Vec<String> = Vec::new();
+                let mut excerpt_lines: Vec<&str> = vec![line];
                 if !inline.trim().is_empty() {
                     desc_parts.push(inline.trim().to_string());
                 }
@@ -305,11 +449,13 @@ pub fn parse_rendered(name: &str, section: &str, source_path: &str, source_hash:
                         break;
                     }
                     desc_parts.push(b.trim().to_string());
+                    excerpt_lines.push(b);
                     j += 1;
                 }
-                parsed.description = desc_parts.join(" ");
-                parsed.group = group.clone();
+                parsed.description = strip_control_chars(&desc_parts.join(" "));
+                parsed.group = group.clone().map(|g| strip_control_chars(&g));
                 parsed.source_line = i + 1;
+                parsed.excerpt = strip_control_chars(&excerpt_lines.join("\n"));
                 push_unique(&mut flags, parsed);
                 i = j;
                 continue;
@@ -323,8 +469,8 @@ pub fn parse_rendered(name: &str, section: &str, source_path: &str, source_hash:
         name: name.to_string(),
         section: section.to_string(),
         platform: platform().to_string(),
-        synopsis,
-        description,
+        synopsis: strip_control_chars(&synopsis),
+        description: strip_control_chars(&description),
         source_path: source_path.to_string(),
         source_hash: source_hash.to_string(),
         flags,
@@ -349,6 +495,9 @@ fn push_unique(flags: &mut Vec<ParsedFlag>, incoming: ParsedFlag) {
             }
             if existing.description.is_empty() {
                 existing.description = incoming.description;
+            }
+            if existing.excerpt.is_empty() {
+                existing.excerpt = incoming.excerpt;
             }
         }
         None => flags.push(incoming),
@@ -385,6 +534,7 @@ fn parse_spec(spec: &str) -> Option<ParsedFlag> {
         description: String::new(),
         group: None,
         source_line: 0,
+        excerpt: String::new(),
     };
     let mut saw_any = false;
 

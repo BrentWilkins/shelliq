@@ -46,6 +46,8 @@ enum Command {
     },
     /// List every flag for a command.
     Flags { command: String },
+    /// Show exactly where a citation such as `grep(1):168` came from.
+    Source { citation: String },
 }
 
 #[derive(Subcommand)]
@@ -55,6 +57,9 @@ enum IndexAction {
         #[arg(required = true)]
         names: Vec<String>,
     },
+    /// Re-harvest every indexed name (or just the ones given) into a fresh index, then
+    /// atomically replace the old one.
+    Refresh { names: Vec<String> },
     /// Show index size.
     Stats,
 }
@@ -66,11 +71,13 @@ fn main() -> Result<()> {
     match cli.command {
         Command::Index { action } => match action {
             IndexAction::Build { names } => build(&path, &names),
+            IndexAction::Refresh { names } => refresh(&path, &names),
             IndexAction::Stats => stats(&path),
         },
         Command::Explain { line } => explain(&path, &line.join(" ")),
         Command::Search { command, query, limit } => search(&path, &command, &query.join(" "), limit),
         Command::Flags { command } => list_flags(&path, &command),
+        Command::Source { citation } => source(&path, &citation),
     }
 }
 
@@ -80,13 +87,14 @@ fn build(path: &std::path::Path, names: &[String]) -> Result<()> {
     let mut flags = 0usize;
 
     for name in names {
+        let target = shelliq_harvest::resolve_target(name, true);
         match shelliq_harvest::harvest_all(name) {
             Ok(commands) => {
                 for cmd in commands {
                     flags += cmd.flags.len();
                     pages += 1;
                     println!("  {}({})  {} flags", cmd.name, cmd.section, cmd.flags.len());
-                    index.insert_command(&cmd)?;
+                    index.insert_command(&target, &cmd)?;
                 }
             }
             Err(e) => eprintln!("  {name}: {e}"),
@@ -94,7 +102,109 @@ fn build(path: &std::path::Path, names: &[String]) -> Result<()> {
     }
 
     println!("\nindexed {pages} pages, {flags} flags -> {}", path.display());
+    shelliq_index::secure_permissions(path);
     Ok(())
+}
+
+/// Rebuild every harvested name into a sibling file, then swap it in atomically.
+///
+/// A refresh in place would leave a reader briefly looking at a half-rewritten index; this
+/// instead only ever replaces the whole file in one `rename`, and a name that no longer
+/// resolves to anything simply harvests nothing and drops out of the fresh index, so a
+/// removed command's stale facts do not linger.
+fn refresh(path: &std::path::Path, names: &[String]) -> Result<()> {
+    let names: Vec<String> = if names.is_empty() {
+        Index::open(path)?.all_target_names()?
+    } else {
+        names.to_vec()
+    };
+    if names.is_empty() {
+        println!("nothing to refresh");
+        return Ok(());
+    }
+
+    let tmp_path = path.with_extension("sqlite.refresh");
+    let _ = std::fs::remove_file(&tmp_path);
+    let _ = std::fs::remove_file(format!("{}-wal", tmp_path.display()));
+    let _ = std::fs::remove_file(format!("{}-shm", tmp_path.display()));
+
+    let mut fresh = Index::open(&tmp_path)?;
+    let mut pages = 0usize;
+    for name in &names {
+        let target = shelliq_harvest::resolve_target(name, true);
+        match shelliq_harvest::harvest_all(name) {
+            Ok(commands) => {
+                for cmd in commands {
+                    pages += 1;
+                    fresh.insert_command(&target, &cmd)?;
+                }
+            }
+            Err(e) => eprintln!("  {name}: {e}"),
+        }
+    }
+    fresh.checkpoint_and_close()?;
+    drop(fresh);
+    shelliq_index::secure_permissions(&tmp_path);
+
+    std::fs::rename(&tmp_path, path).context("swapping in the refreshed index")?;
+    for suffix in ["-wal", "-shm"] {
+        let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
+    }
+
+    println!(
+        "refreshed {} pages across {} name(s) -> {}",
+        pages,
+        names.len(),
+        path.display()
+    );
+    Ok(())
+}
+
+fn source(path: &std::path::Path, citation: &str) -> Result<()> {
+    let (command, section, line) = parse_citation(citation)?;
+    let index = Index::open(path)?;
+    let Some(prov) = index.provenance(&command, &section, line)? else {
+        anyhow::bail!("no citation `{citation}` in the index");
+    };
+
+    println!("source:    man page");
+    println!("path:      {}", prov.source_path);
+    println!("hash:      sha256:{}", prov.source_hash);
+    println!("exec:      {} {}", prov.exec_kind, prov.exec_path.as_deref().unwrap_or("-"));
+    if let Some(hash) = &prov.exec_hash {
+        println!("exec hash: sha256:{hash}");
+    }
+    println!("anchor:    {}({}):{}", prov.command, prov.section, prov.source_line);
+    println!();
+    println!("{}", prov.excerpt);
+    Ok(())
+}
+
+/// Print a caveat when the live executable no longer matches what was harvested.
+///
+/// A stale note is not an abstention: the facts are still shown, since they are usually
+/// still right, but the caller is told exactly what to run when they are not.
+fn warn_if_stale(index: &Index, command: &str) -> Result<()> {
+    if index.freshness(command)? == shelliq_index::Freshness::PossiblyStale {
+        println!(
+            "note: `{command}` on PATH looks different from when it was indexed; \
+             run `shelliq index refresh {command}`\n"
+        );
+    }
+    Ok(())
+}
+
+/// Parse `grep(1):168` into its command, section, and line.
+fn parse_citation(citation: &str) -> Result<(String, String, usize)> {
+    let (head, line) = citation
+        .rsplit_once(':')
+        .with_context(|| format!("`{citation}` is not a citation; expected e.g. grep(1):168"))?;
+    let line: usize = line.parse().with_context(|| format!("`{citation}` has a non-numeric line"))?;
+    let (command, section) = head
+        .strip_suffix(')')
+        .and_then(|h| h.rsplit_once('('))
+        .with_context(|| format!("`{citation}` is not a citation; expected e.g. grep(1):168"))?;
+    Ok((command.to_string(), section.to_string(), line))
 }
 
 fn stats(path: &std::path::Path) -> Result<()> {
@@ -108,6 +218,16 @@ fn stats(path: &std::path::Path) -> Result<()> {
 
 fn explain(path: &std::path::Path, line: &str) -> Result<()> {
     let index = Index::open(path)?;
+
+    if let Ok(segments) = shelliq_verify::segments(line) {
+        let mut warned = std::collections::BTreeSet::new();
+        for segment in &segments {
+            if !segment.command.opaque && warned.insert(segment.command.text.clone()) {
+                warn_if_stale(&index, &segment.command.text)?;
+            }
+        }
+    }
+
     let findings = shelliq_verify::verify(&index, line).with_context(|| format!("verifying `{line}`"))?;
 
     if findings.is_empty() {
@@ -132,6 +252,7 @@ fn explain(path: &std::path::Path, line: &str) -> Result<()> {
 
 fn search(path: &std::path::Path, command: &str, query: &str, limit: usize) -> Result<()> {
     let index = Index::open(path)?;
+    warn_if_stale(&index, command)?;
     let all = index.flags_for(command)?;
     if all.is_empty() {
         anyhow::bail!("`{command}` is not indexed; run `shelliq index build {command}`");
@@ -153,6 +274,7 @@ fn search(path: &std::path::Path, command: &str, query: &str, limit: usize) -> R
 
 fn list_flags(path: &std::path::Path, command: &str) -> Result<()> {
     let index = Index::open(path)?;
+    warn_if_stale(&index, command)?;
     let flags = index.flags_for(command)?;
     if flags.is_empty() {
         anyhow::bail!("`{command}` is not indexed; run `shelliq index build {command}`");
