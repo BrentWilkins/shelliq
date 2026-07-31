@@ -14,6 +14,8 @@ use anyhow::{Context, Result, bail};
 use sha2::{Digest, Sha256};
 use std::process::Command;
 
+pub mod tldr;
+
 /// Bumped whenever parsing behaviour changes.
 ///
 /// The index stores this alongside each row's `source_hash`. A parser fix must invalidate

@@ -9,3 +9,4 @@ description = "Man page and --help harvesting for shelliq"
 [dependencies]
 anyhow = "1.0.104"
 sha2 = "0.11.0"
+zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
