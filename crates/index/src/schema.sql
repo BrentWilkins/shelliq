@@ -94,6 +94,33 @@ CREATE TABLE IF NOT EXISTS examples (
     source      TEXT NOT NULL DEFAULT ''
 );
 
+-- Which flags an example is actually about, not merely the whole example line. A tldr
+-- example mentions several flags at once ("curl -L -D - url"), and prose matched via
+-- examples_fts cannot say by itself which flag it boosts; this join is what makes that
+-- explicit. Only populated for flags confirmed to exist on this machine's target — see
+-- Index::insert_tldr_examples.
+CREATE TABLE IF NOT EXISTS example_flags (
+    example_id INTEGER NOT NULL REFERENCES examples (id) ON DELETE CASCADE,
+    flag_id    INTEGER NOT NULL REFERENCES flags (id) ON DELETE CASCADE,
+    PRIMARY KEY (example_id, flag_id)
+);
+
+CREATE INDEX IF NOT EXISTS example_flags_by_flag ON example_flags (flag_id);
+
+-- Flag-to-flag references mined from descriptions: curl's --location-trusted reads "Like
+-- -L, --location, but...". Extraction happens once at ingestion time (see
+-- Index::insert_command / mentioned_flag_indices) rather than at query time, because prose
+-- mentions a flag for many reasons besides being related to it and the edges deserve their
+-- own precision measurement, not a live text scan. Expansion through this table is capped
+-- at one hop — see Index::search_flags_via_edges.
+CREATE TABLE IF NOT EXISTS flag_edges (
+    from_flag_id INTEGER NOT NULL REFERENCES flags (id) ON DELETE CASCADE,
+    to_flag_id   INTEGER NOT NULL REFERENCES flags (id) ON DELETE CASCADE,
+    PRIMARY KEY (from_flag_id, to_flag_id)
+);
+
+CREATE INDEX IF NOT EXISTS flag_edges_by_from ON flag_edges (from_flag_id);
+
 -- Description search is what turns "follow redirect" into `-L, --location`. Without it,
 -- a 258-flag page is only navigable by someone who already knows the flag name.
 CREATE VIRTUAL TABLE IF NOT EXISTS flags_fts USING fts5 (

@@ -17,7 +17,7 @@ mod migrate;
 
 use anyhow::{Context, Result};
 use rusqlite::{Connection, OptionalExtension, params};
-use shelliq_harvest::{ParsedCommand, Target, section_rank};
+use shelliq_harvest::{ParsedCommand, ParsedFlag, Target, section_rank};
 
 const SCHEMA: &str = include_str!("schema.sql");
 
@@ -185,6 +185,7 @@ impl Index {
         )?;
         let command_id = tx.last_insert_rowid();
 
+        let mut flag_ids = Vec::with_capacity(cmd.flags.len());
         {
             let mut stmt = tx.prepare(
                 "INSERT INTO flags
@@ -204,6 +205,18 @@ impl Index {
                     f.source_line as i64,
                     f.excerpt,
                 ])?;
+                flag_ids.push(tx.last_insert_rowid());
+            }
+        }
+
+        {
+            // Old edges are gone already: they cascade from the DELETE FROM commands above,
+            // through flags.command_id ON DELETE CASCADE, through flag_edges' own cascade.
+            let mut stmt = tx.prepare("INSERT OR IGNORE INTO flag_edges (from_flag_id, to_flag_id) VALUES (?1, ?2)")?;
+            for (i, f) in cmd.flags.iter().enumerate() {
+                for j in mentioned_flag_indices(&f.description, &cmd.flags, i) {
+                    stmt.execute(params![flag_ids[i], flag_ids[j]])?;
+                }
             }
         }
 
@@ -348,10 +361,13 @@ impl Index {
         Ok(row)
     }
 
-    /// Full-text search over flag descriptions.
+    /// Full-text search over flag descriptions, fused with a search over tldr examples and a
+    /// one-hop expansion through description cross-references.
     ///
-    /// This is the path that turns "follow redirect" into `-L, --location` without the
-    /// user knowing the flag's name.
+    /// Descriptions speak mechanism ("moved to a different location"); tldr examples speak
+    /// task ("follow redirect"). A query in task language can miss the description search
+    /// entirely, so the lists are merged by reciprocal rank rather than trusting any one
+    /// alone — this is the path that turns "follow redirect" into `-L, --location`.
     pub fn search_flags(&self, command: &str, query: &str, limit: usize) -> Result<Vec<FlagRow>> {
         let Some((target_id, section)) = self.preferred_section(command)? else {
             return Ok(Vec::new());
@@ -362,8 +378,25 @@ impl Index {
         if match_expr.is_empty() {
             return Ok(Vec::new());
         }
+        let candidates = limit.saturating_mul(4).max(20);
+        let by_description = self.search_flags_fts(target_id, &section, &match_expr, candidates)?;
+        let by_example = self.search_flags_via_examples(target_id, &section, &match_expr, candidates)?;
+        let by_edges = self.search_flags_via_edges(&by_description, target_id, &section)?;
+        Ok(rrf_merge(
+            &[(&by_description, 1.0), (&by_example, 1.0), (&by_edges, EDGE_EXPANSION_WEIGHT)],
+            limit,
+        ))
+    }
+
+    fn search_flags_fts(
+        &self,
+        target_id: i64,
+        section: &str,
+        match_expr: &str,
+        candidates: usize,
+    ) -> Result<Vec<(i64, FlagRow)>> {
         let mut stmt = self.conn.prepare(
-            "SELECT c.name, c.section, f.short, f.long, f.arg_type, f.arg_required,
+            "SELECT f.id, c.name, c.section, f.short, f.long, f.arg_type, f.arg_required,
                     f.description, f.flag_group, f.source_line, f.excerpt, f.rank_personal
              FROM flags_fts
              JOIN flags f ON f.id = flags_fts.rowid
@@ -374,9 +407,136 @@ impl Index {
              LIMIT ?4",
         )?;
         let rows = stmt
-            .query_map(params![match_expr, target_id, section, limit as i64], row_to_flag)?
+            .query_map(
+                params![match_expr, target_id, section, candidates as i64],
+                row_to_flag_with_id,
+            )?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
+    }
+
+    /// Flags reached through tldr examples: an example matches the query, and a flag it
+    /// mentions was confirmed (at ingestion time) to exist on this target — see
+    /// `insert_tldr_examples`. A flag mentioned by several matching examples keeps only its
+    /// best-ranked (first-seen) appearance; `bm25()` can only be ordered directly by FTS5,
+    /// not wrapped in an aggregate under `GROUP BY`, so deduplication happens here instead.
+    fn search_flags_via_examples(
+        &self,
+        target_id: i64,
+        section: &str,
+        match_expr: &str,
+        candidates: usize,
+    ) -> Result<Vec<(i64, FlagRow)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT f.id, c.name, c.section, f.short, f.long, f.arg_type, f.arg_required,
+                    f.description, f.flag_group, f.source_line, f.excerpt, f.rank_personal
+             FROM examples_fts
+             JOIN examples e ON e.id = examples_fts.rowid
+             JOIN example_flags ef ON ef.example_id = e.id
+             JOIN flags f ON f.id = ef.flag_id
+             JOIN commands c ON c.id = f.command_id
+             WHERE examples_fts MATCH ?1 AND c.target_id = ?2 AND c.section = ?3
+               AND f.subcommand_id IS NULL
+             ORDER BY bm25(examples_fts), f.source_line
+             LIMIT ?4",
+        )?;
+        let rows = stmt
+            .query_map(
+                params![match_expr, target_id, section, candidates as i64],
+                row_to_flag_with_id,
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut seen = std::collections::HashSet::new();
+        Ok(rows.into_iter().filter(|(id, _)| seen.insert(*id)).collect())
+    }
+
+    /// One hop through `flag_edges` from each flag `matches` found by description search:
+    /// curl's `--location-trusted` description says "Like -L, --location, but…", so a query
+    /// that only matches `--location-trusted`'s own description should still surface `-L`.
+    /// Never expands past one hop — `search_flags` weights this list down relative to a
+    /// direct match, per PLAN.md's "score penalty" design.
+    fn search_flags_via_edges(&self, matches: &[(i64, FlagRow)], target_id: i64, section: &str) -> Result<Vec<(i64, FlagRow)>> {
+        if matches.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut stmt = self.conn.prepare(
+            "SELECT f.id, c.name, c.section, f.short, f.long, f.arg_type, f.arg_required,
+                    f.description, f.flag_group, f.source_line, f.excerpt, f.rank_personal
+             FROM flag_edges fe
+             JOIN flags f ON f.id = fe.to_flag_id
+             JOIN commands c ON c.id = f.command_id
+             WHERE fe.from_flag_id = ?1 AND c.target_id = ?2 AND c.section = ?3
+               AND f.subcommand_id IS NULL",
+        )?;
+        let mut seen = std::collections::HashSet::new();
+        let mut expanded = Vec::new();
+        for (from_id, _) in matches {
+            let rows = stmt
+                .query_map(params![from_id, target_id, section], row_to_flag_with_id)?
+                .collect::<Result<Vec<_>, _>>()?;
+            for (id, row) in rows {
+                if seen.insert(id) {
+                    expanded.push((id, row));
+                }
+            }
+        }
+        Ok(expanded)
+    }
+
+    /// Ingest tldr examples for `command`, validating every mentioned flag against flags
+    /// already indexed for this target before it can boost anything. tldr pages are
+    /// generic; a flag they mention that this target does not actually have must never
+    /// become a fact, so unmatched spellings are silently dropped rather than inserted.
+    ///
+    /// Rows are replaced wholesale like `insert_command`: previously ingested tldr examples
+    /// for this command are deleted before the fresh set is inserted.
+    pub fn insert_tldr_examples(&mut self, command: &str) -> Result<usize> {
+        let Some((target_id, section)) = self.preferred_section(command)? else {
+            return Ok(0);
+        };
+        let (command_id, name, platform): (i64, String, String) = self.conn.query_row(
+            "SELECT id, name, platform FROM commands WHERE target_id = ?1 AND section = ?2",
+            params![target_id, section],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )?;
+
+        let pages = shelliq_harvest::tldr::harvest_tldr(&name, &platform)?;
+
+        let tx = self.conn.transaction()?;
+        tx.execute(
+            "DELETE FROM examples WHERE command_id = ?1 AND source = 'tldr'",
+            params![command_id],
+        )?;
+
+        let mut inserted = 0;
+        for example in &pages {
+            tx.execute(
+                "INSERT INTO examples (command_id, text, description, source) VALUES (?1, ?2, ?3, 'tldr')",
+                params![command_id, example.text, example.description],
+            )?;
+            let example_id = tx.last_insert_rowid();
+            inserted += 1;
+
+            for spelling in &example.flags {
+                let flag_id: Option<i64> = tx
+                    .query_row(
+                        "SELECT id FROM flags WHERE command_id = ?1 AND subcommand_id IS NULL
+                         AND (short = ?2 OR long = ?2)",
+                        params![command_id, spelling],
+                        |r| r.get(0),
+                    )
+                    .optional()?;
+                let Some(flag_id) = flag_id else { continue };
+                tx.execute(
+                    "INSERT OR IGNORE INTO example_flags (example_id, flag_id) VALUES (?1, ?2)",
+                    params![example_id, flag_id],
+                )?;
+                tx.execute("UPDATE flags SET rank_tldr = rank_tldr + 1 WHERE id = ?1", params![flag_id])?;
+            }
+        }
+
+        tx.commit()?;
+        Ok(inserted)
     }
 
     /// Provenance for one citation: which target, source file, and exact excerpt it came
@@ -510,6 +670,78 @@ fn row_to_flag(r: &rusqlite::Row) -> rusqlite::Result<FlagRow> {
         excerpt: r.get(9)?,
         rank_personal: r.get(10)?,
     })
+}
+
+fn row_to_flag_with_id(r: &rusqlite::Row) -> rusqlite::Result<(i64, FlagRow)> {
+    Ok((
+        r.get(0)?,
+        FlagRow {
+            command: r.get(1)?,
+            section: r.get(2)?,
+            short: r.get(3)?,
+            long: r.get(4)?,
+            arg_type: r.get(5)?,
+            arg_required: r.get::<_, i64>(6)? != 0,
+            description: r.get(7)?,
+            flag_group: r.get(8)?,
+            source_line: r.get::<_, i64>(9)? as usize,
+            excerpt: r.get(10)?,
+            rank_personal: r.get(11)?,
+        },
+    ))
+}
+
+/// Reciprocal rank fusion: merges ranked lists by `weight / (k + rank)`, so a flag that
+/// ranks well in one list outranks one that ranks moderately in several, without any list's
+/// raw score scale (BM25 here) needing to be comparable to another's. A list's weight below
+/// 1.0 is PLAN.md's "score penalty" — currently used to discount one-hop edge expansion
+/// relative to a direct match.
+const RRF_K: f64 = 60.0;
+
+/// Edge-expanded flags are reached indirectly (a neighbour's description mentioned them, not
+/// the query itself), so they are weighted down relative to a direct description or example
+/// match — see `search_flags_via_edges` and PLAN.md section 4, remedy 2.
+const EDGE_EXPANSION_WEIGHT: f64 = 0.5;
+
+fn rrf_merge(lists: &[(&[(i64, FlagRow)], f64)], limit: usize) -> Vec<FlagRow> {
+    let mut scores: std::collections::HashMap<i64, f64> = std::collections::HashMap::new();
+    let mut rows: std::collections::HashMap<i64, FlagRow> = std::collections::HashMap::new();
+    for (list, weight) in lists {
+        for (rank, (id, row)) in list.iter().enumerate() {
+            *scores.entry(*id).or_insert(0.0) += weight / (RRF_K + rank as f64 + 1.0);
+            rows.entry(*id).or_insert_with(|| row.clone());
+        }
+    }
+    let mut ranked: Vec<(i64, f64)> = scores.into_iter().collect();
+    ranked.sort_by(|x, y| y.1.partial_cmp(&x.1).unwrap().then_with(|| x.0.cmp(&y.0)));
+    ranked
+        .into_iter()
+        .take(limit)
+        .filter_map(|(id, _)| rows.remove(&id))
+        .collect()
+}
+
+/// Indices into `flags` whose short/long spelling appears as a standalone token inside
+/// `description`, excluding `flags[exclude]` itself. Token boundaries are whitespace and
+/// trailing punctuation, so "moved to a different location" never matches `-L` or
+/// `--location` — only an exact spelling like "-L, --location" does. This is deliberately
+/// stricter than a substring search: prose mentions a flag for many reasons besides being
+/// related to it, and a false edge here silently distorts search for every future query.
+fn mentioned_flag_indices(description: &str, flags: &[ParsedFlag], exclude: usize) -> Vec<usize> {
+    let tokens: std::collections::HashSet<&str> = description
+        .split_whitespace()
+        .map(|t| t.trim_matches(|c: char| matches!(c, ',' | '.' | ';' | ':' | '(' | ')')))
+        .collect();
+    flags
+        .iter()
+        .enumerate()
+        .filter(|(j, other)| {
+            *j != exclude
+                && (other.short.as_deref().is_some_and(|s| tokens.contains(s))
+                    || other.long.as_deref().is_some_and(|l| tokens.contains(l)))
+        })
+        .map(|(j, _)| j)
+        .collect()
 }
 
 #[cfg(test)]
@@ -795,6 +1027,174 @@ mod tests {
         assert_eq!(prov.source_path, "/usr/share/man/man1/grep.1.gz");
         assert_eq!(prov.source_hash, "deadbeef");
         assert!(prov.excerpt.contains("--recursive"));
+    }
+
+    fn curl_fixture() -> ParsedCommand {
+        ParsedCommand {
+            name: "curl".into(),
+            section: "1".into(),
+            platform: "linux".into(),
+            synopsis: "curl [options] [URL...]".into(),
+            description: "transfer a URL".into(),
+            source_path: "/usr/share/man/man1/curl.1.gz".into(),
+            source_hash: "deadbeef".into(),
+            flags: vec![
+                flag("-L", "--location", "If the server reports that the requested page has moved to a different location", 200),
+                flag("-D", "--dump-header", "Write the protocol headers to the specified file", 210),
+                ParsedFlag {
+                    short: None,
+                    long: Some("--location-trusted".to_string()),
+                    arg_type: None,
+                    arg_required: false,
+                    description: "Like -L, --location, but will also send the user name and password to all hosts that the site may send you onward to".to_string(),
+                    group: None,
+                    source_line: 220,
+                    excerpt: "     --location-trusted  Like -L, --location, but...".to_string(),
+                },
+            ],
+        }
+    }
+
+    /// The acceptance criterion in PLAN.md, as a test: description search alone cannot find
+    /// `-L, --location` from "follow redirect" (the phrase never appears in curl's man page
+    /// description), but tldr ingestion bridges task language to the flag.
+    #[test]
+    fn tldr_ingestion_finds_a_flag_by_task_language_a_description_search_misses() {
+        let mut idx = Index::open_in_memory().unwrap();
+        let target = shelliq_harvest::resolve_target("curl", false);
+        idx.insert_command(&target, &curl_fixture()).unwrap();
+
+        assert!(
+            idx.search_flags("curl", "follow redirect", 5).unwrap().is_empty(),
+            "description search should not yet find -L for task language"
+        );
+
+        let inserted = idx.insert_tldr_examples("curl").unwrap();
+        assert!(inserted > 0, "expected curl's vendored tldr page to yield examples");
+
+        let hits = idx.search_flags("curl", "follow redirect", 5).unwrap();
+        assert!(
+            hits.iter().any(|f| f.short.as_deref() == Some("-L")),
+            "expected -L to be found via tldr examples, got {hits:?}"
+        );
+    }
+
+    #[test]
+    fn tldr_examples_never_credit_a_flag_the_target_does_not_have() {
+        let mut idx = Index::open_in_memory().unwrap();
+        let target = shelliq_harvest::resolve_target("curl", false);
+        let mut cmd = curl_fixture();
+        // Drop -L so it is not one of this target's actual flags.
+        cmd.flags.truncate(1);
+        cmd.flags[0] = flag("-D", "--dump-header", "Write the protocol headers to the specified file", 210);
+        idx.insert_command(&target, &cmd).unwrap();
+
+        idx.insert_tldr_examples("curl").unwrap();
+
+        let example_flag_count: i64 = idx
+            .conn
+            .query_row(
+                "SELECT count(*) FROM example_flags ef
+                 JOIN flags f ON f.id = ef.flag_id
+                 WHERE f.short = '-L'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            example_flag_count, 0,
+            "-L must not be credited when it is not one of this target's flags"
+        );
+    }
+
+    /// PLAN.md's own motivating example: curl's `--location-trusted` description reads "Like
+    /// -L, --location, but...", and edge extraction must turn that into a `flag_edges` row.
+    #[test]
+    fn cross_reference_edge_extracted_from_flag_description() {
+        let idx = seeded_curl();
+        let edge_count: i64 = idx
+            .conn
+            .query_row(
+                "SELECT count(*) FROM flag_edges fe
+                 JOIN flags a ON a.id = fe.from_flag_id
+                 JOIN flags b ON b.id = fe.to_flag_id
+                 WHERE a.long = '--location-trusted' AND b.short = '-L'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(edge_count, 1, "expected --location-trusted's description to link to -L");
+    }
+
+    /// PLAN.md's own counter-example: "moved to a different location" is prose, not a mention
+    /// of `-L`/`--location` — the token "location" never matches the exact spelling
+    /// "--location", so no edge should be created from it.
+    #[test]
+    fn vague_prose_does_not_create_a_spurious_edge() {
+        let idx = seeded_curl();
+        let edge_count: i64 = idx
+            .conn
+            .query_row(
+                "SELECT count(*) FROM flag_edges fe
+                 JOIN flags a ON a.id = fe.from_flag_id
+                 JOIN flags b ON b.id = fe.to_flag_id
+                 WHERE a.short = '-L' AND b.short = '-L'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            edge_count, 0,
+            "\"moved to a different location\" must not create a self-edge for -L"
+        );
+    }
+
+    /// The end-to-end payoff: a query that only matches `--location-trusted`'s description
+    /// should still surface `-L` through one-hop edge expansion.
+    #[test]
+    fn search_expands_one_hop_through_cross_referenced_flags() {
+        let idx = seeded_curl();
+        let hits = idx.search_flags("curl", "user name and password to all hosts", 5).unwrap();
+        assert!(
+            hits.iter().any(|f| f.short.as_deref() == Some("-L")),
+            "expected -L to be surfaced via one-hop expansion from --location-trusted, got {hits:?}"
+        );
+    }
+
+    #[test]
+    fn reingesting_tldr_examples_replaces_rather_than_duplicates() {
+        let mut idx = seeded_curl();
+        idx.insert_tldr_examples("curl").unwrap();
+        let (first_count, first_links): (i64, i64) = idx
+            .conn
+            .query_row(
+                "SELECT (SELECT count(*) FROM examples WHERE source = 'tldr'),
+                        (SELECT count(*) FROM example_flags)",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+
+        idx.insert_tldr_examples("curl").unwrap();
+        let (second_count, second_links): (i64, i64) = idx
+            .conn
+            .query_row(
+                "SELECT (SELECT count(*) FROM examples WHERE source = 'tldr'),
+                        (SELECT count(*) FROM example_flags)",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+
+        assert_eq!(first_count, second_count);
+        assert_eq!(first_links, second_links);
+    }
+
+    fn seeded_curl() -> Index {
+        let mut idx = Index::open_in_memory().unwrap();
+        let target = shelliq_harvest::resolve_target("curl", false);
+        idx.insert_command(&target, &curl_fixture()).unwrap();
+        idx
     }
 
     #[test]
