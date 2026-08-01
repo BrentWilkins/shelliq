@@ -19,6 +19,7 @@ mod search_relevance;
 
 use anyhow::{Context, Result};
 use rusqlite::{Connection, OptionalExtension, params};
+use shelliq_harvest::help_crawler::HelpNode;
 use shelliq_harvest::{ParsedCommand, ParsedFlag, Target, section_rank};
 
 const SCHEMA: &str = include_str!("schema.sql");
@@ -222,6 +223,64 @@ impl Index {
             }
         }
 
+        tx.commit()?;
+        Ok(command_id)
+    }
+
+    /// Insert a `--help` crawl: the root invocation's flags as the command's own, plus every
+    /// subcommand path the crawl followed, each scoped under its own row in `subcommands`.
+    ///
+    /// Given the synthetic section `"help"`, distinct from any man page section number, so a
+    /// tool with both a man page and a `--help` crawl keeps both rows: `section_rank` ranks
+    /// an unrecognised section last, so `"help"` only wins `preferred_section` when no man
+    /// section is competing for the name. Replaced wholesale on re-crawl, the same as
+    /// `insert_command`: the old `commands` row cascades away through `subcommands` and
+    /// `flags`, so a subcommand or flag dropped upstream disappears rather than lingering.
+    pub fn insert_help_crawl(&mut self, target: &Target, name: &str, nodes: &[HelpNode]) -> Result<i64> {
+        let root = nodes
+            .iter()
+            .find(|n| n.path.is_empty())
+            .context("help crawl produced no root node")?;
+        let cmd = ParsedCommand {
+            name: name.to_string(),
+            section: "help".to_string(),
+            platform: shelliq_harvest::platform().to_string(),
+            synopsis: String::new(),
+            description: String::new(),
+            source_path: target.exec_path.clone().unwrap_or_default(),
+            source_hash: target.exec_hash.clone().unwrap_or_default(),
+            flags: root.flags.clone(),
+        };
+        let command_id = self.insert_command(target, &cmd)?;
+
+        let tx = self.conn.transaction()?;
+        {
+            let mut sub_stmt = tx.prepare("INSERT INTO subcommands (command_id, path, summary) VALUES (?1, ?2, '')")?;
+            let mut flag_stmt = tx.prepare(
+                "INSERT INTO flags
+                     (command_id, subcommand_id, short, long, arg_type, arg_required,
+                      description, flag_group, source_line, excerpt)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            )?;
+            for node in nodes.iter().filter(|n| !n.path.is_empty()) {
+                sub_stmt.execute(params![command_id, node.path.join(" ")])?;
+                let subcommand_id = tx.last_insert_rowid();
+                for f in &node.flags {
+                    flag_stmt.execute(params![
+                        command_id,
+                        subcommand_id,
+                        f.short,
+                        f.long,
+                        f.arg_type,
+                        f.arg_required as i64,
+                        f.description,
+                        f.group,
+                        f.source_line as i64,
+                        f.excerpt,
+                    ])?;
+                }
+            }
+        }
         tx.commit()?;
         Ok(command_id)
     }
@@ -1013,6 +1072,51 @@ mod tests {
                 .iter()
                 .all(|f| f.short.as_deref() != Some("-z"))
         );
+    }
+
+    fn help_crawl_nodes() -> Vec<shelliq_harvest::help_crawler::HelpNode> {
+        vec![
+            shelliq_harvest::help_crawler::HelpNode {
+                path: vec![],
+                flags: vec![flag("-h", "--help", "Show help", 1)],
+                subcommands: vec!["list".into()],
+            },
+            shelliq_harvest::help_crawler::HelpNode {
+                path: vec!["list".into()],
+                flags: vec![flag("-a", "--all", "List everything", 1)],
+                subcommands: vec![],
+            },
+        ]
+    }
+
+    #[test]
+    fn help_crawl_flags_are_scoped_to_their_subcommand_path() {
+        let mut idx = Index::open_in_memory().unwrap();
+        idx.insert_help_crawl(&grep_target(), "grep", &help_crawl_nodes()).unwrap();
+
+        assert!(matches!(idx.lookup_flag("grep", "-h").unwrap(), FlagLookup::Exact(_)));
+        assert!(matches!(idx.lookup_flag("grep", "-a").unwrap(), FlagLookup::Unknown { .. }));
+
+        let path: String = idx.conn.query_row("SELECT path FROM subcommands", [], |r| r.get(0)).unwrap();
+        assert_eq!(path, "list");
+    }
+
+    #[test]
+    fn reinserting_a_help_crawl_replaces_subcommands_rather_than_duplicating() {
+        let mut idx = Index::open_in_memory().unwrap();
+        idx.insert_help_crawl(&grep_target(), "grep", &help_crawl_nodes()).unwrap();
+        idx.insert_help_crawl(&grep_target(), "grep", &help_crawl_nodes()).unwrap();
+
+        let subcommands: i64 = idx
+            .conn
+            .query_row("SELECT count(*) FROM subcommands", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(subcommands, 1);
+        let scoped_flags: i64 = idx
+            .conn
+            .query_row("SELECT count(*) FROM flags WHERE subcommand_id IS NOT NULL", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(scoped_flags, 1);
     }
 
     #[test]

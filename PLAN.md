@@ -161,10 +161,10 @@ about the code.
 
 | Tag       | Meaning                                                  |
 | --------- | -------------------------------------------------------- |
-| `[done]`  | Implemented and measured on this machine                  |
-| `[built]` | Implemented, not yet validated against an external gate   |
-| `[plan]`  | Designed, not written                                     |
-| `[exp]`   | Exploratory — may not survive contact with a measurement  |
+| `[done]`  | Implemented and measured on this machine                 |
+| `[built]` | Implemented, not yet validated against an external gate  |
+| `[plan]`  | Designed, not written                                    |
+| `[exp]`   | Exploratory — may not survive contact with a measurement |
 
 ```text
 crates/shelliq/   [done] clap CLI: explain, search, flags, index build/stats
@@ -238,9 +238,18 @@ mandoc is **not installed here** (`apt install mandoc`; macOS ships it), so P0 s
 validated rendered-text indentation heuristic and treats mandoc as an upgrade. Both paths
 are validated against the same fixtures.
 
-**[plan] `--help` crawler** — covers the no-man-page tools. Run `TOOL --help`, parse the near
+**[built] `--help` crawler** — covers the no-man-page tools. Run `TOOL --help`, parse the near
 universal `-x, --xxx  description` shape that clap, cobra, and argparse all emit, extract
-subcommands, recurse to depth 3.
+subcommands, recurse to depth 3 (`crates/harvest/src/help_crawler.rs`). Wired into
+`shelliq index build`/`refresh` as a fallback when a name has no man page, and into the
+schema's `subcommands` table (`Index::insert_help_crawl`); a caller opts a writable directory
+into execution with `--allow-writable-path`. Validated end to end against `uv` (18 top-level
+flags, queryable via `shelliq flags`/`search`) and `kubectl` on this machine. `kubectl` is a
+real edge case worth naming: its root `--help` lists only subcommands and no top-level flags
+at all (they live under `kubectl options`), so `shelliq flags kubectl` correctly reports it
+has no top-level flags of its own rather than claiming it isn't indexed — but nothing yet
+lets a caller query flags scoped to a specific subcommand path (`shelliq flags kubectl get`),
+even though the schema and `insert_help_crawl` already store them that way.
 
 **Containment, honestly.** This executes arbitrary binaries, and the P0 answer — 5s timeout,
 setuid check, reviewed allowlist — was consent, not containment. `--help` is a convention;
@@ -249,18 +258,18 @@ before it ever looks at argv. The subcommand recursion also breaks the "only eve
 `--help`" promise, since reaching `ollama list --help` means passing `list` too. What the
 crawler must actually do:
 
-| Risk                                             | Containment                                                                                                   |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| Arbitrary startup behaviour                      | OS sandbox where available (bwrap/seccomp, `sandbox-exec`); documented as absent elsewhere                    |
-| Descendants outliving the timeout                | Own process group, kill the group, not the parent                                                             |
-| Unbounded output exhausting memory               | Hard byte cap on stdout/stderr, truncate and mark                                                             |
-| Hanging on stdin                                 | stdin closed, never a tty                                                                                     |
-| Reading the user's config or cwd                 | Minimal environment, temporary working directory                                                              |
-| Fork bombs                                       | Process-count limit (`RLIMIT_NPROC`)                                                                          |
-| Allowlisted name resolving elsewhere later       | Approve a canonical path + `exec_hash`, recheck symlink target, owner, mode, and caps immediately before exec |
-| `PATH` full of user-writable venv/npm/cargo dirs | Reject writable-by-non-root locations by default, opt in per path                                             |
-| Terminal escape injection via help text          | Strip control characters before indexing _and_ before display                                                 |
-| Privilege                                        | Never run as root, and never from a root package hook                                                         |
+| Risk                                             | Containment                                                                                                   | Status                                                |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------| ------------------------------------------------------|
+| Arbitrary startup behaviour                      | OS sandbox where available (bwrap/seccomp, `sandbox-exec`); documented as absent elsewhere                    | absent (not installed here); documented, not faked    |
+| Descendants outliving the timeout                | Own process group, kill the group, not the parent                                                             | done — `setsid` + `killpg`, unconditionally after `wait()` too, not only on timeout, so a `--help` that exits quickly while a background process it spawned lingers doesn't escape either; proved by a hostile fixture binary that forks, writes, floods stdout past the cap, and reads a closed stdin, in `crates/harvest/tests/help_crawl.rs` |
+| Unbounded output exhausting memory               | Hard byte cap on stdout/stderr, truncate and mark                                                             | done                                                   |
+| Hanging on stdin                                 | stdin closed, never a tty                                                                                     | done                                                   |
+| Reading the user's config or cwd                 | Minimal environment, temporary working directory                                                              | done — breaks `rustup`'s `cargo` proxy, which needs `$HOME`; accepted trade-off |
+| Fork bombs                                       | Process-count limit (`RLIMIT_NPROC`)                                                                          | **withdrawn** — `RLIMIT_NPROC` is per-*uid* on Linux, not per-process-tree; setting it low in the child crashed unrelated processes under the same uid. Needs a pids cgroup instead; not built. Bounded only by the timeout, same as P0. |
+| Allowlisted name resolving elsewhere later       | Approve a canonical path + `exec_hash`, recheck symlink target, owner, mode, and caps immediately before exec | done                                                   |
+| `PATH` full of user-writable venv/npm/cargo dirs | Reject writable-by-non-root locations by default, opt in per path                                             | done — `CrawlLimits.allow_paths`                       |
+| Terminal escape injection via help text          | Strip control characters before indexing _and_ before display                                                 | done on ingest; display path not yet wired            |
+| Privilege                                        | Never run as root, and never from a root package hook                                                         | not enforced by the crawler itself; caller's responsibility |
 
 **Lazy beats sweeping.** Harvest a command the first time it is asked about, not by walking
 `PATH`. It serves the actual use case, avoids executing hundreds of irrelevant binaries,
@@ -706,20 +715,20 @@ scored for **precision and recall per field**, plus fuzz and control-character t
 
 ### P0.5 — trust hardening
 
-| Gate                                                                               | Target   | Measured           | Result  |
-| ----------------------------------------------------------------------------------- | -------- | ------------------ | ------- |
-| No user-facing string calls a whole command "verified", "correct", or "safe"       | required | —                   | pass    |
-| Unsupported shell syntax → explicit abstention, non-zero exit                      | required | —                   | pass    |
-| Unbalanced quotes → abstention, **not** zero findings and exit 0                   | required | —                   | pass    |
-| Redirections, substitutions, heredocs, subshells → abstain or parse, never misread | required | —                   | pass    |
-| Every fact query filtered by resolved target, platform, and subcommand scope       | required | —                   | pass    |
-| Two installs of one tool resolve to distinct targets                               | required | —                   | pass    |
-| `shelliq source <citation>` prints excerpt + provenance                            | required | —                   | pass    |
-| Stale index reported as stale; refresh is atomic and reconciles removals           | required | —                   | pass    |
-| Schema migration from the P0 database, with a test                                 | required | —                   | pass    |
-| Index and WAL created `0600`; control characters stripped on ingest                | required | —                   | pass    |
-| Parser fixtures: precision and recall per field, per format                        | recorded | not yet built       | pending |
-| Test suite                                                                          | all green | 74 passing         | pass    |
+| Gate                                                                               | Target    | Measured      | Result  |
+| ---------------------------------------------------------------------------------- | --------- | ------------- | ------- |
+| No user-facing string calls a whole command "verified", "correct", or "safe"       | required  | —             | pass    |
+| Unsupported shell syntax → explicit abstention, non-zero exit                      | required  | —             | pass    |
+| Unbalanced quotes → abstention, **not** zero findings and exit 0                   | required  | —             | pass    |
+| Redirections, substitutions, heredocs, subshells → abstain or parse, never misread | required  | —             | pass    |
+| Every fact query filtered by resolved target, platform, and subcommand scope       | required  | —             | pass    |
+| Two installs of one tool resolve to distinct targets                               | required  | —             | pass    |
+| `shelliq source <citation>` prints excerpt + provenance                            | required  | —             | pass    |
+| Stale index reported as stale; refresh is atomic and reconciles removals           | required  | —             | pass    |
+| Schema migration from the P0 database, with a test                                 | required  | —             | pass    |
+| Index and WAL created `0600`; control characters stripped on ingest                | required  | —             | pass    |
+| Parser fixtures: precision and recall per field, per format                        | recorded  | not yet built | pending |
+| Test suite                                                                         | all green | 74 passing    | pass    |
 
 ### P1A — safe Tier 0 UX
 
@@ -738,10 +747,21 @@ scored for **precision and recall per field**, plus fuzz and control-character t
 - Latency re-measured with tldr, nucleo, expansion, and RRF all in the path. Measured on
   this machine, full pipeline, 460 samples: p50 1.1ms, p95 1.6ms — well under the <10ms
   target.
-- `ollama`, `kubectl`, `cargo`, `uv` indexed lazily via the `--help` crawler, subcommands
-  included, each under the containment table in section 2.
-- Containment proved, not assumed: a deliberately hostile test binary that forks, writes,
-  emits escape sequences, floods stdout, and hangs on stdin is harvested without effect.
+- `uv`, `kubectl`, and `ollama` indexed lazily via the `--help` crawler and verified end to
+  end through `shelliq flags`/`search`/`explain` on this machine; `ollama` correctly yields
+  4 root flags plus 53 more scoped across its 16 subcommands, and `explain` catches a
+  fabricated flag against it. `cargo` is a known, accepted gap (rustup's proxy needs `$HOME`,
+  denied by the crawler's stripped environment). Subcommand paths are stored
+  (`Index::insert_help_crawl`) but nothing yet queries flags scoped to one
+  (`shelliq flags kubectl get`) — `kubectl`'s own root `--help` has no top-level flags at
+  all, which surfaced this gap.
+- **[done]** Containment proved, not assumed: a hostile fixture binary that forks a
+  background process, writes outside the crawl's scratch cwd, floods stdout past the byte
+  cap, and reads a closed stdin is harvested without effect
+  (`crates/harvest/tests/help_crawl.rs`). Found and fixed a real gap this way: the process
+  group was only swept on timeout, so a `--help` that exited quickly while a background
+  process it had spawned kept running escaped cleanup entirely; the sweep now also runs
+  unconditionally after `wait()`.
 - No binary outside the approved set is executed; approval is by path **and** hash.
 - No-fight check: with `shelliq.zsh` sourced, `git che<TAB>`, `docker run --rm<TAB>`, and
   autosuggestions behave exactly as before.
@@ -869,7 +889,7 @@ as a supplement to tldr; not a P0 index input, and never a flag source.
 3.14, dependencies added with `uv add` so constraints come from real resolution rather than
 guessed floors. Resolves clean: jax 0.11.0, flax 0.12.8, optax 0.2.8, orbax-checkpoint
 0.12.1, grain 0.2.18, transformers 5.14.1, datasets 5.0.1, numpy 2.5.1. `uv sync` is
-deferred to P2 because `jax[cuda12]` pulls ~3GB of wheels that P0 has no use for. Ruff is
+deferred to P2 because `jax[cuda13]` pulls ~3GB of wheels that P0 has no use for. Ruff is
 configured for single quotes to match the house style.
 
 ## Privacy of local data
