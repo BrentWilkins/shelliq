@@ -45,7 +45,14 @@ enum Command {
         limit: usize,
     },
     /// List every flag for a command.
-    Flags { command: String },
+    Flags {
+        command: String,
+        /// One flag spelling per line, no colour or citation — for shell completion, not
+        /// people. Silent (exit 0, no output) rather than an explanatory error when the
+        /// command isn't indexed, since a completer should fall through quietly.
+        #[arg(long)]
+        raw: bool,
+    },
     /// Show exactly where a citation such as `grep(1):168` came from.
     Source { citation: String },
 }
@@ -92,7 +99,7 @@ fn main() -> Result<()> {
         },
         Command::Explain { line } => explain(&path, &line.join(" ")),
         Command::Search { command, query, limit } => search(&path, &command, &query.join(" "), limit),
-        Command::Flags { command } => list_flags(&path, &command),
+        Command::Flags { command, raw } => list_flags(&path, &command, raw),
         Command::Source { citation } => source(&path, &citation),
     }
 }
@@ -320,10 +327,23 @@ fn search(path: &std::path::Path, command: &str, query: &str, limit: usize) -> R
     Ok(())
 }
 
-fn list_flags(path: &std::path::Path, command: &str) -> Result<()> {
+fn list_flags(path: &std::path::Path, command: &str, raw: bool) -> Result<()> {
     let index = Index::open(path)?;
-    warn_if_stale(&index, command)?;
     let flags = index.flags_for(command)?;
+
+    if raw {
+        for flag in &flags {
+            if let Some(s) = &flag.short {
+                println!("{s}");
+            }
+            if let Some(l) = &flag.long {
+                println!("{l}");
+            }
+        }
+        return Ok(());
+    }
+
+    warn_if_stale(&index, command)?;
     if flags.is_empty() {
         bail_not_indexed(&index, command)?;
     }

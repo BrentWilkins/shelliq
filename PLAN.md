@@ -171,7 +171,7 @@ crates/shelliq/   [done] clap CLI: explain, search, flags, index build/stats
 crates/harvest/   [done] man parser   · [plan] --help crawler
 crates/index/     [done] schema, FTS5 · [plan] fuzzy ranking, RRF, refresh, target identity
 crates/verify/    [done] bundle splitter, flag checker · [plan] shell-syntax abstention
-shell/            [plan] shelliq.zsh, shelliq.bash — directory does not exist yet
+shell/            [built] shelliq.zsh (explain widget, fallback Tab completer) · [plan] shelliq.bash
 training/         [plan] nnx Qwen, HF loader, data gen, train (uv project scaffolded only)
 ```
 
@@ -570,17 +570,34 @@ still only ~500MB.
 
 Designed not to fight oh-my-zsh, zsh-autosuggestions, or zsh-syntax-highlighting:
 
+- **[built]** `C-x C-h` — explain the current buffer against the local index, printed below
+  the prompt. Never touches `$BUFFER`, so there is nothing to undo (`shell/shelliq.zsh`).
+  Index-only, no model.
 - `C-x C-n` — ZLE widget: buffer treated as English, replaced with the verified command.
-  Never touches Tab.
-- `C-x C-h` — explain/fuzzy-search flags for the current buffer. Index-only, no model.
-- Tab, safely — a **fallback** completer, never a replacement:
+  Needs a model, so this is P1B, not here — see "never pull a model from inside a shell
+  widget." Never touches Tab.
+- **[built]** Tab, safely — a **fallback** completer, never a replacement. `shelliq.zsh`
+  reads the existing `:completion:*` `completer` style (whatever the user's own `.zshrc`
+  already set, oh-my-zsh's included) and inserts `_shelliq` before `_approximate` rather
+  than overwriting the list, e.g.:
 
   ```zsh
   zstyle ':completion:*' completer _complete _shelliq _approximate
   ```
 
-  `_shelliq` runs only when `_complete` produces nothing, so `_git`, `_docker`, and every
-  tool-provided completer keep priority. Inherits the existing `menu select` dropdown UI.
+  `_shelliq` is placed **first** in the `completer` list rather than last: `_complete`
+  (the standard completer) provides its own default filename-completion fallback for any
+  command with no dedicated completion function, which counts as "success" and would starve
+  a later completer entirely. So `_shelliq` runs first and self-guards instead, declining
+  immediately if a native completion function is already registered for the command
+  (`${+_comps[$cmd]}`), leaving `git`, `docker`, and every tool-provided completer untouched.
+  Candidate logic (`shelliq flags <command> --raw`, a plain one-spelling-per-line mode added
+  for this, since the decorated, truncated, colour-coded output people read is not something
+  a completer should have to parse) resolves correctly for a `--help`-crawled command like
+  `ollama`. **[verified]** interactive keystroke-level proof, done by hand in a real
+  terminal: `ollama --help<TAB>` offers real flag candidates while `git chec<TAB>` still
+  completes to `checkout` via `_git`, untouched. Inherits the existing `menu select` dropdown
+  UI.
 
 **bash:** `bind -x '"\C-x\C-n": _shelliq_widget'`, plus `complete -D`, which likewise fires
 only where nothing else is registered.
@@ -764,7 +781,10 @@ scored for **precision and recall per field**, plus fuzz and control-character t
   unconditionally after `wait()`.
 - No binary outside the approved set is executed; approval is by path **and** hash.
 - No-fight check: with `shelliq.zsh` sourced, `git che<TAB>`, `docker run --rm<TAB>`, and
-  autosuggestions behave exactly as before.
+  autosuggestions behave exactly as before. **[verified]** by hand in a real terminal:
+  `git chec<TAB>` still completes to `checkout` via `_git` with `_shelliq` sourced and
+  placed first in the `completer` list; `_shelliq`'s self-guard on `${+_comps[$cmd]}` is
+  what keeps it out of `_git`/`_docker`'s way, not list position.
 
 ### P1B — optional generation on an existing model
 
@@ -856,7 +876,8 @@ scored for **precision and recall per field**, plus fuzz and control-character t
 - **Leanness** — Tier 0 binary under 10MB; assert the default build links no inference
   library and opens no socket.
 - **No-fight check** — with `shelliq.zsh` sourced, confirm `git che<TAB>`, `docker run
---rm<TAB>`, and autosuggestions behave exactly as before.
+  --rm<TAB>`, and autosuggestions behave exactly as before. **[verified]** end to end; see
+  section 8.
 
 ## Decisions taken during P0
 
