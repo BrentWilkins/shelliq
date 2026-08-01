@@ -14,6 +14,8 @@
 //! answers "not indexed" rather than serving a stale or unrelated install's facts.
 
 mod migrate;
+#[cfg(test)]
+mod search_relevance;
 
 use anyhow::{Context, Result};
 use rusqlite::{Connection, OptionalExtension, params};
@@ -386,6 +388,21 @@ impl Index {
             &[(&by_description, 1.0), (&by_example, 1.0), (&by_edges, EDGE_EXPANSION_WEIGHT)],
             limit,
         ))
+    }
+
+    /// Description-only search, with no tldr or cross-reference fusion — the "before" side
+    /// of the `search_relevance` Recall@5/MRR measurement. Never called outside tests.
+    #[cfg(test)]
+    fn search_flags_description_only(&self, command: &str, query: &str, limit: usize) -> Result<Vec<FlagRow>> {
+        let Some((target_id, section)) = self.preferred_section(command)? else {
+            return Ok(Vec::new());
+        };
+        let match_expr = fts_query(query);
+        if match_expr.is_empty() {
+            return Ok(Vec::new());
+        }
+        let rows = self.search_flags_fts(target_id, &section, &match_expr, limit)?;
+        Ok(rows.into_iter().map(|(_, f)| f).collect())
     }
 
     fn search_flags_fts(
