@@ -3,7 +3,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from shelliq_training.corpus_audit import audit_distributable_corpus
+from shelliq_training.corpus_audit import audit_distributable_corpus, preflight_records
 from shelliq_training.data import Corpus, Platform, SFTRecord, write_jsonl
 
 AUDIT_SCRIPT = Path(__file__).parents[1] / 'scripts' / 'audit_corpus.py'
@@ -90,3 +90,12 @@ def test_audit_cli_writes_report_and_refuses_overwrite(tmp_path):
     repeated = subprocess.run(command, capture_output=True, text=True)
     assert repeated.returncode != 0
     assert 'output already exists' in repeated.stderr
+
+
+def test_preflight_distinguishes_fd_literal_braces_from_tldr_placeholders():
+    literal = record('fd:literal', 'fd', 'fd --format "\\{\\{{}\\}\\}"')
+    placeholder = record('fd:placeholder', 'fd', 'fd {{path}}')
+    accepted, rejected = preflight_records([literal, placeholder])
+
+    assert accepted == [literal]
+    assert rejected == {'fd:placeholder': 'unresolved tldr placeholder'}

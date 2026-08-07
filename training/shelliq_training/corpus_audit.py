@@ -96,7 +96,7 @@ def preflight_records(records: Sequence[SFTRecord]) -> tuple[list[SFTRecord], di
     accepted: list[SFTRecord] = []
     rejected: dict[str, str] = {}
     for record in records:
-        if '{{' in record.response or '}}' in record.response:
+        if _contains_unresolved_placeholder(record.response):
             rejected[record.record_id] = 'unresolved tldr placeholder'
             continue
         try:
@@ -106,6 +106,24 @@ def preflight_records(records: Sequence[SFTRecord]) -> tuple[list[SFTRecord], di
             continue
         accepted.append(record)
     return accepted, rejected
+
+
+def _contains_unresolved_placeholder(value: str) -> bool:
+    """Recognize unescaped ``{{...}}`` without rejecting literal brace formats."""
+    openings = [index for index in range(len(value) - 1) if value[index : index + 2] == '{{' and _is_unescaped(value, index)]
+    for opening in openings:
+        if any(value[index : index + 2] == '}}' and _is_unescaped(value, index) for index in range(opening + 2, len(value) - 1)):
+            return True
+    return False
+
+
+def _is_unescaped(value: str, index: int) -> bool:
+    backslashes = 0
+    index -= 1
+    while index >= 0 and value[index] == '\\':
+        backslashes += 1
+        index -= 1
+    return backslashes % 2 == 0
 
 
 def _duplicate_summary(records: Sequence[SFTRecord], key: Callable[[SFTRecord], object]) -> dict[str, object]:

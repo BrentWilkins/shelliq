@@ -179,6 +179,14 @@ groups, field lengths, lexical option coverage, and split distributions. It
 refuses to overwrite an existing report so a reviewed audit cannot change in
 place.
 
+For the pinned TLDR v2.3 artifact, five rows are intentionally rejected for
+unmatched shell quotes inherited from their upstream pages:
+`tldr:linux:common/exo:5`, `tldr:linux:common/lwp-request:3`,
+`tldr:linux:common/mu:6`, `tldr:linux:linux/logwatch:1`, and
+`tldr:darwin:osx/rargs:3`. The escaped-brace `fd-format:5` row is valid and has
+regression coverage so it cannot again be mistaken for an unresolved
+`{{placeholder}}`.
+
 Personal builders require canaries and always pass through `PrivateDataGate`.
 They write the corpus, a canary-probe manifest, a deterministic 20-row scrubbed
 audit sample, and a report containing counts and IDs but no rejected text:
