@@ -61,6 +61,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--learning-rate', type=float, default=1e-3)
     parser.add_argument('--seed', type=int, default=2026)
     parser.add_argument('--checkpoint', type=Path)
+    parser.add_argument('--report', type=Path)
+    parser.add_argument('--heldout-probe', action='store_true')
     return parser.parse_args()
 
 
@@ -208,8 +210,25 @@ def _print_generation(label: str, record: SFTRecord, generated: str) -> None:
     )
 
 
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open('rb') as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _record_id_sha256(records: Sequence[SFTRecord]) -> str:
+    payload = '\n'.join(record.record_id for record in records).encode()
+    return hashlib.sha256(payload).hexdigest()
+
+
 def main() -> None:
     args = parse_args()
+    if args.report is not None and args.report.exists():
+        raise SystemExit(f'report already exists: {args.report}')
+    if args.report is not None and not args.report.parent.is_dir():
+        raise SystemExit(f'report parent does not exist: {args.report.parent}')
     if jax.default_backend() != 'gpu':
         raise SystemExit('smoke_finetune.py requires a JAX GPU backend')
     if args.sequence_length < GENERATION_TOKENS + 2:
@@ -277,8 +296,18 @@ def main() -> None:
         tokenizer,
         sequence_length=args.sequence_length,
     )
+    baseline_heldout_generation = None
+    if args.heldout_probe:
+        baseline_heldout_generation = greedy_completion(
+            model,
+            eval_examples[0],
+            tokenizer,
+            sequence_length=args.sequence_length,
+        )
     print(f'initial loss: train={initial_train_loss:.4f}, heldout={initial_eval_loss:.4f}')
     _print_generation('before', train_records[0], baseline_generation)
+    if baseline_heldout_generation is not None:
+        _print_generation('heldout-before', eval_records[0], baseline_heldout_generation)
 
     report_every = max(args.steps // 4, 1)
     for step in range(args.steps):
@@ -294,14 +323,25 @@ def main() -> None:
         tokenizer,
         sequence_length=args.sequence_length,
     )
+    trained_heldout_generation = None
+    if args.heldout_probe:
+        trained_heldout_generation = greedy_completion(
+            model,
+            eval_examples[0],
+            tokenizer,
+            sequence_length=args.sequence_length,
+        )
     elapsed = time.perf_counter() - started
     print(f'final loss: train={final_train_loss:.4f}, heldout={final_eval_loss:.4f}')
     _print_generation('after', train_records[0], trained_generation)
+    if trained_heldout_generation is not None:
+        _print_generation('heldout-after', eval_records[0], trained_heldout_generation)
     print(f'elapsed: {elapsed:.2f}s')
 
+    failure_message = None
     if not math.isfinite(final_train_loss) or final_train_loss >= initial_train_loss * 0.9:
-        raise SystemExit(f'smoke failed: train loss did not fall by 10% ({initial_train_loss:.4f} -> {final_train_loss:.4f})')
-    if args.checkpoint is not None:
+        failure_message = f'smoke failed: train loss did not fall by 10% ({initial_train_loss:.4f} -> {final_train_loss:.4f})'
+    if args.checkpoint is not None and failure_message is None:
         metadata = save_checkpoint(
             args.checkpoint,
             model,
@@ -310,6 +350,57 @@ def main() -> None:
             corpus=Corpus.DISTRIBUTABLE,
         )
         print(f'checkpoint: {args.checkpoint} at step {metadata.step}')
+    if args.report is not None:
+        report = {
+            'report_schema_version': 1,
+            'model_id': MODEL_ID,
+            'dataset': {
+                'path': str(args.dataset),
+                'sha256': _file_sha256(args.dataset),
+                'accepted_records': len(clean_records),
+                'rejected_record_ids': sorted(rejected),
+            },
+            'selection': {
+                'seed': args.seed,
+                'train_examples': len(train_records),
+                'train_record_ids_sha256': _record_id_sha256(train_records),
+                'eval_examples': len(eval_records),
+                'eval_record_ids_sha256': _record_id_sha256(eval_records),
+            },
+            'training': {
+                'device': str(jax.devices()[0]),
+                'sequence_length': args.sequence_length,
+                'batch_size': args.batch_size,
+                'steps': args.steps,
+                'learning_rate': args.learning_rate,
+                'initial_train_loss': initial_train_loss,
+                'final_train_loss': final_train_loss,
+                'initial_heldout_loss': initial_eval_loss,
+                'final_heldout_loss': final_eval_loss,
+                'elapsed_seconds': elapsed,
+                'passed_loss_gate': failure_message is None,
+            },
+            'probe': {
+                'record_id': train_records[0].record_id,
+                'expected': train_records[0].response,
+                'before': baseline_generation,
+                'after': trained_generation,
+                'exact_match_before': baseline_generation == train_records[0].response,
+                'exact_match_after': trained_generation == train_records[0].response,
+            },
+            'heldout_probe': {
+                'record_id': eval_records[0].record_id,
+                'expected': eval_records[0].response,
+                'before': baseline_heldout_generation,
+                'after': trained_heldout_generation,
+                'exact_match_before': baseline_heldout_generation == eval_records[0].response,
+                'exact_match_after': trained_heldout_generation == eval_records[0].response,
+            },
+        }
+        args.report.write_text(json.dumps(report, indent=2, sort_keys=True) + '\n')
+        print(f'report: {args.report}')
+    if failure_message is not None:
+        raise SystemExit(failure_message)
     print('SMOKE PASS: real-corpus LoRA training reduced tiny-set loss by at least 10%')
 
 
