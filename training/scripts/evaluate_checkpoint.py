@@ -22,14 +22,13 @@ from transformers import AutoTokenizer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from smoke_finetune import (  # noqa: E402
+from scripts.smoke_finetune import (  # noqa: E402
     GENERATION_TOKENS,
     MODEL_ID,
     automatic_preflight,
     greedy_completion,
     select_examples,
 )
-
 from shelliq_training.checkpoint import restore_checkpoint  # noqa: E402
 from shelliq_training.config import Qwen2Config  # noqa: E402
 from shelliq_training.data import (  # noqa: E402
@@ -62,6 +61,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--sequence-length', type=int, default=256)
     parser.add_argument('--seed', type=int, default=2026)
     parser.add_argument('--priority-source', default='shelliq-curated')
+    parser.add_argument('--option-arities', type=Path)
     return parser.parse_args()
 
 
@@ -75,6 +75,46 @@ def _sha256(path: Path) -> str:
 
 def _short_completion(example: TokenizedExample) -> bool:
     return sum(label != IGNORE_INDEX for label in example.labels) <= GENERATION_TOKENS
+
+
+def _load_option_arities(path: Path | None) -> dict[str, dict[str, int]]:
+    if path is None:
+        return {}
+    raw = json.loads(path.read_text())
+    if not isinstance(raw, dict) or set(raw) != {'schema_version', 'records'}:
+        raise ValueError('option arity file must contain only schema_version and records')
+    if raw['schema_version'] != 1 or not isinstance(raw['records'], dict):
+        raise ValueError('unsupported option arity schema')
+    result = {}
+    for record_id, arities in raw['records'].items():
+        if not isinstance(record_id, str) or not isinstance(arities, dict):
+            raise ValueError('option arity records must map record IDs to objects')
+        if not all(
+            isinstance(flag, str) and flag.startswith('-') and not isinstance(arity, bool) and arity in {0, 1}
+            for flag, arity in arities.items()
+        ):
+            raise ValueError(f'{record_id}: option arities must be 0 or 1 for flag keys')
+        result[record_id] = arities
+    return result
+
+
+def _validate_option_arities(records: Sequence[SFTRecord], option_arities: dict[str, dict[str, int]]) -> None:
+    records_by_id = {record.record_id: record for record in records}
+    unknown = sorted(option_arities.keys() - records_by_id.keys())
+    if unknown:
+        raise ValueError(f'option arity records are absent from dataset: {unknown[:3]!r}')
+    for record_id, arities in option_arities.items():
+        parsed = parse_command(records_by_id[record_id].response, arities)
+        if parsed is None:
+            continue
+        expected_flags = set(parsed.flags)
+        annotated_flags = set(arities)
+        if annotated_flags != expected_flags:
+            raise ValueError(
+                f'{record_id}: option arity flags differ from expected command; '
+                f'missing={sorted(expected_flags - annotated_flags)!r}, '
+                f'extra={sorted(annotated_flags - expected_flags)!r}'
+            )
 
 
 def _select_heldout(
@@ -141,7 +181,11 @@ def _native_zsh_valid(source: str) -> bool:
     return result.returncode == 0
 
 
-def _metrics(records: Sequence[SFTRecord], predictions: Sequence[ModelPrediction]) -> dict[str, object]:
+def _metrics(
+    records: Sequence[SFTRecord],
+    predictions: Sequence[ModelPrediction],
+    option_arities: dict[str, dict[str, int]],
+) -> dict[str, object]:
     pairs = [
         (record, prediction)
         for record, prediction in zip(records, predictions, strict=True)
@@ -153,6 +197,17 @@ def _metrics(records: Sequence[SFTRecord], predictions: Sequence[ModelPrediction
     metrics = asdict(evaluate_predictions(examples, basic_predictions))
     metrics['operand_exact_match_zero_arity'] = metrics.pop('operand_exact_match')
     metrics['option_argument_accuracy'] = None
+    annotated_pairs = [(record, prediction) for record, prediction in pairs if record.record_id in option_arities]
+    metrics['arity_annotated_examples'] = len(annotated_pairs)
+    if annotated_pairs:
+        annotated_metrics = evaluate_predictions(
+            [EvaluationExample(record, option_arities[record.record_id]) for record, _ in annotated_pairs],
+            [prediction for _, prediction in annotated_pairs],
+        )
+        metrics['option_argument_accuracy'] = annotated_metrics.option_argument_accuracy
+        metrics['operand_exact_match'] = annotated_metrics.operand_exact_match
+    else:
+        metrics['operand_exact_match'] = None
     metrics['total_examples'] = len(records)
     metrics['basic_grammar_examples'] = len(basic_records)
     metrics['exact_match_all'] = sum(
@@ -162,12 +217,17 @@ def _metrics(records: Sequence[SFTRecord], predictions: Sequence[ModelPrediction
     return metrics
 
 
-def _source_metrics(records: Sequence[SFTRecord], predictions: Sequence[ModelPrediction]) -> dict[str, dict[str, object]]:
+def _source_metrics(
+    records: Sequence[SFTRecord],
+    predictions: Sequence[ModelPrediction],
+    option_arities: dict[str, dict[str, int]],
+) -> dict[str, dict[str, object]]:
     prediction_by_id = {prediction.record_id: prediction for prediction in predictions}
     return {
         source: _metrics(
             source_records,
             [prediction_by_id[record.record_id] for record in source_records],
+            option_arities,
         )
         for source in sorted({record.source for record in records})
         if (source_records := [record for record in records if record.source == source])
@@ -186,6 +246,8 @@ def main() -> None:
         raise SystemExit('evaluate_checkpoint.py requires a JAX GPU backend')
 
     records = load_jsonl(args.dataset, corpus=Corpus.DISTRIBUTABLE)
+    option_arities = _load_option_arities(args.option_arities)
+    _validate_option_arities(records, option_arities)
     clean_records, rejected = automatic_preflight(records)
     splits = split_records(clean_records, corpus=Corpus.DISTRIBUTABLE, seed=args.seed)
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, local_files_only=True)
@@ -248,16 +310,23 @@ def main() -> None:
         },
         'metric_notes': {
             'basic_grammar': 'Command, flag, and operand metrics exclude compound expected commands.',
-            'option_arguments': 'Not scored because this dataset does not yet carry option arity.',
-            'operands': 'Zero-arity lexical floor; option arguments are counted as operands.',
+            'option_arguments': 'Scored only on explicitly arity-annotated simple commands.',
+            'operands': 'Semantic score uses annotations; zero-arity lexical floor is also retained.',
+        },
+        'option_arities': None
+        if args.option_arities is None
+        else {
+            'path': str(args.option_arities),
+            'sha256': _sha256(args.option_arities),
+            'records': len(option_arities),
         },
         'baseline': {
-            'overall': _metrics(eval_records, baseline_predictions),
-            'by_source': _source_metrics(eval_records, baseline_predictions),
+            'overall': _metrics(eval_records, baseline_predictions, option_arities),
+            'by_source': _source_metrics(eval_records, baseline_predictions, option_arities),
         },
         'trained': {
-            'overall': _metrics(eval_records, trained_predictions),
-            'by_source': _source_metrics(eval_records, trained_predictions),
+            'overall': _metrics(eval_records, trained_predictions, option_arities),
+            'by_source': _source_metrics(eval_records, trained_predictions, option_arities),
         },
         'examples': [
             {
