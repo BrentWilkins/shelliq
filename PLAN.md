@@ -172,7 +172,7 @@ crates/harvest/   [done] man parser   · [plan] --help crawler
 crates/index/     [done] schema, FTS5 · [plan] fuzzy ranking, RRF, refresh, target identity
 crates/verify/    [done] bundle splitter, flag checker · [plan] shell-syntax abstention
 shell/            [built] shelliq.zsh (explain widget, fallback Tab completer) · [plan] shelliq.bash
-training/         [built] nnx Qwen, HF loader, masked SFT loss, LoRA step, provenance SFT schema, grouped splits, Qwen batching, Orbax resume · [plan] source builders, scrubber, evaluation, export
+training/         [built] nnx Qwen, HF loader, LoRA step, source builders, privacy/canary gates, held-out evaluation, Orbax resume, PEFT/HF/GGUF export · [plan] real fine-tune and benchmark
 ```
 
 **Language split: Rust ships, Python trains.** A Rust static binary starts in ~2ms, so
@@ -814,7 +814,7 @@ scored for **precision and recall per field**, plus fuzz and control-character t
 - Same prompt through HF `transformers` and the nnx port agree within **1e-3** on logits.
   Hard gate; nothing downstream starts until it passes.
 - Step memory measured at a stated batch/sequence/rematerialisation config, not estimated.
-- Held-out splits are **command-level and source-level**, never a random pair split — a
+- **[built]** Held-out splits are **command-level, source-level, and platform-level**, never a random pair split — a
   random split leaks `tar` from train into test and reports memorisation as skill. Include
   unseen commands and an unseen platform.
 - Beats base 0.5B _and_ base-plus-structured-prompting; the second baseline is the honest
@@ -823,17 +823,17 @@ scored for **precision and recall per field**, plus fuzz and control-character t
   a differently-worded command can be right, and a command with all-valid flags can be
   dangerously wrong. Options-known rate is reported as a floor, never as accuracy.
 - Operand and argument correctness scored separately from flag correctness.
-- **Scrubber gate, blocking.** The scrubber's test suite includes a planted secret of every
+- **[built; real-corpus audit pending] Scrubber gate, blocking.** The scrubber's test suite includes a planted secret of every
   class in the privacy table and catches all of them. An audited random sample of the
   scrubbed set shows zero surviving secrets. Training does not start until both pass.
-- **Canary gate.** Planted canaries are inserted into any private training set and tested
+- **[built; trained-adapter probe pending] Canary gate.** Planted canaries are inserted into any private training set and tested
   for extraction afterwards. A recoverable canary means the adapter is not even locally
   acceptable.
 - No `.zsh_history` command text appears anywhere in the dataset — only its derived
   frequency counts, and only in the index.
 - Distributable weights trace to reviewed licensed data only; the transcript-derived adapter
   is marked non-exportable and never uploaded.
-- GGUF loads in `llama-server` and answers correctly at Q6_K or Q8_0, benchmarked against
+- **[zero-adapter Q8_0 load passed; trained artifact benchmark pending]** GGUF loads in `llama-server` and answers correctly at Q6_K or Q8_0, benchmarked against
   the P1B placeholder on the same held-out set, reusing harness patterns from
   `~/code/local-llm/benchmarks/`.
 

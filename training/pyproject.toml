@@ -13,6 +13,7 @@ dependencies = [
     "optax>=0.2.8",
     "orbax-checkpoint>=0.12.1",
     "safetensors>=0.8.0",
+    "sentencepiece>=0.2.2",
     "transformers>=5.14.1",
 ]
 
