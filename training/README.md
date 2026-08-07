@@ -199,8 +199,8 @@ cargo run -p shelliq-syntax --bin convert-semantic-corpus -- \
 
 The converter preserves prompt and provenance fields, keeps the original shell
 response beside the structured target, validates semantic render/re-lowering,
-and enforces both exemption files as ratchets. The current result is 620 of 626
-rows converted, with six CST exemptions, no semantic exemptions, and 19
+and enforces both exemption files as ratchets. The current result is 626 of 626
+rows converted, with no CST exemptions, no semantic exemptions, and 19
 explicitly reported rows whose semantic rendering normalizes whitespace.
 
 Personal builders require canaries and always pass through `PrivateDataGate`.
