@@ -102,6 +102,32 @@ uv run python scripts/build_dataset.py tldr \
   --output data/tldr.jsonl
 ```
 
+For an unattended plumbing check, build that corpus in the project-local,
+gitignored `artifacts/` directory and overfit four deterministic real rows on a
+GPU:
+
+```sh
+uv run python scripts/build_dataset.py tldr \
+  --archive ../crates/harvest/vendor/tldr-pages.en.zip \
+  --revision v2.3 \
+  --output artifacts/tldr-v2.3.jsonl
+
+uv run python scripts/smoke_finetune.py \
+  --dataset artifacts/tldr-v2.3.jsonl \
+  --checkpoint artifacts/tldr-smoke/checkpoint
+```
+
+`smoke_finetune.py` uses command-grouped splits, rejects unresolved templates
+and invalid shell quoting, evaluates four command-disjoint rows, and requires
+the four-row training loss to fall by at least 10 percent. It does not read
+NL2Bash or personal sources. On the 2026-08-06 RTX 4090 run, automated preflight
+accepted 30,345 of 30,351 rows, training loss moved from 2.8963 to 0.0000 in 80
+steps, and the selected completion changed from prose to the exact expected
+`az tag create -n tag_name`. Held-out loss worsened from 3.2943 to 5.5581, as
+expected for deliberate four-example memorization. This proves the real-corpus
+training/checkpoint path works; it is not a quality result or a substitute for
+the later corpus audit.
+
 NL2Bash ingestion requires a file of reviewed 1-based line numbers, an audited
 license identifier, and a revision. It cannot bulk-accept the upstream files:
 

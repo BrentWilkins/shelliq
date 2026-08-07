@@ -522,6 +522,12 @@ on the list explicitly as a **learning objective**, which is a legitimate reason
 efficiency one. Reuse `grain` and `orbax` from the course; `optax.adamw`, cosine schedule,
 warmup.
 
+**[smoke passed; quality run pending]** A deterministic four-row overfit on the
+real pinned tldr corpus reduced training loss from 2.8963 to 0.0000 in 80 steps
+and changed the selected completion from prose to the exact target command. The
+command-disjoint held-out loss worsened, so this establishes only the
+data→GPU→checkpoint→adapter/GGUF plumbing, not generalization.
+
 **[plan] The model should emit a constrained structure, not shell text.** Have it produce a
 command AST — command, subcommand, flags with arguments, operands — which shelliq renders
 deterministically with correct quoting. Unconstrained shell text hands the model the job of

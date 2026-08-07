@@ -5,7 +5,7 @@ from flax import nnx
 from shelliq_training.config import Qwen2Config
 from shelliq_training.lora import LoRALinear, inject_lora, parameter_count
 from shelliq_training.model import Qwen2ForCausalLM
-from shelliq_training.training import create_lora_optimizer, next_token_loss, train_step
+from shelliq_training.training import create_lora_optimizer, eval_step, next_token_loss, train_step
 
 
 def tiny_model() -> Qwen2ForCausalLM:
@@ -67,3 +67,20 @@ def test_lora_starts_as_identity_and_only_adapters_update():
         )
     ]
     assert any(changed)
+
+
+def test_eval_step_does_not_update_lora_parameters():
+    model = tiny_model()
+    inject_lora(model, rank=4, alpha=8, rngs=nnx.Rngs(1))
+    batch = {
+        'input_ids': jnp.array([[1, 2, 3, 4]]),
+        'attention_mask': jnp.ones((1, 4), dtype=jnp.int32),
+        'labels': jnp.array([[-100, -100, 3, 4]]),
+    }
+    before = nnx.to_pure_dict(nnx.state(model, nnx.LoRAParam))
+
+    loss = eval_step(model, batch)
+
+    after = nnx.to_pure_dict(nnx.state(model, nnx.LoRAParam))
+    assert bool(jnp.isfinite(loss))
+    assert all(jnp.array_equal(old, new) for old, new in zip(jax.tree.leaves(before), jax.tree.leaves(after), strict=True))

@@ -35,6 +35,10 @@ def write_tldr_archive(path):
     with zipfile.ZipFile(path, 'w') as bundle:
         bundle.writestr('common/find.md', common)
         bundle.writestr('osx/caffeinate.md', osx)
+        bundle.writestr(
+            'linux/az-tag.md',
+            '# az tag\n\n- Create a tag:\n\n`az tag create {{[-n|--name]}} {{tag_name}}`\n',
+        )
         bundle.writestr('windows/dir.md', '# dir\n')
 
 
@@ -48,13 +52,14 @@ def test_tldr_builder_tracks_license_revision_platform_and_placeholders(tmp_path
         common_platforms=(Platform.LINUX, Platform.DARWIN),
     )
 
-    assert len(records) == 5
+    assert len(records) == 6
     assert {record.corpus for record in records} == {Corpus.DISTRIBUTABLE}
     assert {record.license for record in records} == {'CC-BY-4.0'}
     assert records[0].provenance.endswith('@v2.3:example-1')
     linux_find = next(record for record in records if record.command == 'find' and record.platform is Platform.LINUX)
     assert linux_find.response == "find path/to/directory -name '*.ext'"
     assert 'More information' not in linux_find.context
+    assert any(record.response == 'az tag create -n tag_name' for record in records)
     assert any(record.platform is Platform.DARWIN and record.command == 'caffeinate' for record in records)
 
 
