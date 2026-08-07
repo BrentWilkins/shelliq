@@ -148,14 +148,16 @@ uv run python scripts/smoke_finetune.py \
   --batch-size 4 \
   --steps 1000 \
   --learning-rate 2e-4 \
+  --priority-source shelliq-curated \
   --heldout-probe \
   --checkpoint artifacts/distributable-pilot-v1/checkpoint \
   --report artifacts/distributable-pilot-v1.report.json
 ```
 
-This makes one pass over 4,000 deterministically selected, command-distinct
-training examples and evaluates 256 examples from command-disjoint held-out
-groups. The report pins the dataset and selected record IDs by SHA-256 and
+This retains every usable curated row in each split, then fills the 4,000-row
+training and 256-row evaluation selections with deterministic, command-distinct
+TLDR examples. Train and evaluation remain command-disjoint. The report pins the
+dataset and selected record IDs by SHA-256 and
 records initial/final train and held-out losses plus train and held-out
 generation probes. A useful first signal is falling held-out loss and a held-out
 probe that becomes more command-like without merely copying the training probe.
@@ -163,6 +165,17 @@ probe that becomes more command-like without merely copying the training probe.
 This is deliberately a raw-shell baseline. It can tell us whether the data and
 LoRA recipe carry useful NL-to-command signal, but it is not the final
 Semantic-AST training target or a task-success evaluation.
+
+The 2026-08-07 RTX 4090 curated-priority run selected 493 curated plus 3,507
+TLDR training rows and 35 curated plus 221 TLDR held-out rows. In 1,000 steps
+(226 seconds), train loss moved from 3.1927 to 0.7205 and held-out loss from
+3.3188 to 1.5158. The curated training probe became the exact expected
+`just deploy staging`. The unseen curated probe became a plausible command but
+missed the required preservation semantics: it produced
+`cp -r path/to/source_directory path/to/destination_directory` instead of
+`cp -a src/ dest/`. This is positive evidence for instruction-to-command
+generalization, but also concrete evidence that held-out flag and semantic
+accuracy need broader evaluation and further training work.
 
 NL2Bash ingestion requires a file of reviewed 1-based line numbers, an audited
 license identifier, and a revision. It cannot bulk-accept the upstream files:
