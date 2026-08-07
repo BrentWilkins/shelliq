@@ -12,6 +12,7 @@ import json
 import math
 import sys
 import time
+from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -63,6 +64,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--checkpoint', type=Path)
     parser.add_argument('--report', type=Path)
     parser.add_argument('--heldout-probe', action='store_true')
+    parser.add_argument('--priority-source')
     return parser.parse_args()
 
 
@@ -85,24 +87,37 @@ def select_examples(
     count: int,
     max_length: int,
     seed: int,
+    priority_source: str | None = None,
 ) -> tuple[list[SFTRecord], list[TokenizedExample]]:
-    """Choose one short deterministic row per command."""
+    """Choose deterministic rows, optionally retaining every priority-source row."""
     selected_records: list[SFTRecord] = []
     examples: list[TokenizedExample] = []
     seen_commands: set[str] = set()
-    for record in _ordered_records(records, seed):
-        if record.command in seen_commands:
-            continue
+    ordered = _ordered_records(records, seed)
+    prioritized = [record for record in ordered if record.source == priority_source]
+    remaining = [record for record in ordered if record.source != priority_source]
+
+    def add_record(record: SFTRecord, *, require_new_command: bool) -> bool:
+        if require_new_command and record.command in seen_commands:
+            return False
         try:
             example = tokenize_record(record, tokenizer, max_length=max_length)  # type: ignore[arg-type]
         except SequenceTooLongError:
-            continue
+            return False
         prompt_length = next(index for index, label in enumerate(example.labels) if label != IGNORE_INDEX)
         if prompt_length + GENERATION_TOKENS > max_length:
-            continue
+            return False
         selected_records.append(record)
         examples.append(example)
         seen_commands.add(record.command)
+        return True
+
+    for record in prioritized:
+        add_record(record, require_new_command=False)
+        if len(examples) == count:
+            break
+    for record in remaining:
+        add_record(record, require_new_command=True)
         if len(examples) == count:
             break
     if len(examples) != count:
@@ -246,6 +261,7 @@ def main() -> None:
         count=args.train_examples,
         max_length=args.sequence_length,
         seed=args.seed,
+        priority_source=args.priority_source,
     )
     eval_records, eval_examples = select_examples(
         splits[Split.TEST],
@@ -253,6 +269,7 @@ def main() -> None:
         count=args.eval_examples,
         max_length=args.sequence_length,
         seed=args.seed + 1,
+        priority_source=args.priority_source,
     )
     pad_id = tokenizer_pad_id(tokenizer)
     train_batches = make_batches(
@@ -277,8 +294,8 @@ def main() -> None:
     if rejected:
         print(f'preflight rejections: {json.dumps(rejected, sort_keys=True)}')
     print(f'device: {jax.devices()[0]}')
-    print(f'train IDs: {[record.record_id for record in train_records]}')
-    print(f'eval IDs: {[record.record_id for record in eval_records]}')
+    print(f'train selection: {len(train_records):,} rows, sources={dict(Counter(record.source for record in train_records))}')
+    print(f'eval selection: {len(eval_records):,} rows, sources={dict(Counter(record.source for record in eval_records))}')
 
     model = Qwen2ForCausalLM(Qwen2Config(), param_dtype=jnp.bfloat16, rngs=nnx.Rngs(0))
     weights_path = hf_hub_download(MODEL_ID, 'model.safetensors', local_files_only=True)
@@ -362,10 +379,13 @@ def main() -> None:
             },
             'selection': {
                 'seed': args.seed,
+                'priority_source': args.priority_source,
                 'train_examples': len(train_records),
                 'train_record_ids_sha256': _record_id_sha256(train_records),
+                'train_source_counts': dict(Counter(record.source for record in train_records)),
                 'eval_examples': len(eval_records),
                 'eval_record_ids_sha256': _record_id_sha256(eval_records),
+                'eval_source_counts': dict(Counter(record.source for record in eval_records)),
             },
             'training': {
                 'device': str(jax.devices()[0]),
