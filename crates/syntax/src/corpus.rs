@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::SyntaxDocumentV1;
-use crate::semantic::{SEMANTIC_SCHEMA_VERSION, SemanticDocumentV1};
+use crate::semantic::{SEMANTIC_SCHEMA_VERSION_V2, SemanticDocumentV2};
 
 /// Version of the semantic-corpus row and manifest envelopes.
 pub const CONVERSION_SCHEMA_VERSION: u8 = 1;
@@ -29,7 +29,7 @@ pub struct SemanticCorpusRecord {
     pub instruction: String,
     pub shell_response: String,
     pub context: String,
-    pub semantic_target: SemanticDocumentV1,
+    pub semantic_target: SemanticDocumentV2,
 }
 
 /// Coverage facts that make every omitted row explicit.
@@ -121,7 +121,7 @@ pub fn convert_curated_corpus(directory: &Path) -> Result<SemanticConversion, Bo
                 return Err(invalid(format!("stale cst-exempt.txt entry now parses: {}", source.record_id)).into());
             }
 
-            let semantic = match SemanticDocumentV1::lower(&syntax).and_then(|semantic| {
+            let semantic = match SemanticDocumentV2::lower(&syntax).and_then(|semantic| {
                 semantic.validate()?;
                 Ok(semantic)
             }) {
@@ -162,7 +162,7 @@ pub fn convert_curated_corpus(directory: &Path) -> Result<SemanticConversion, Bo
     require_all_exemptions_seen(&semantic_exemptions, &semantic_exempt_record_ids, "semantic-exempt.txt")?;
     let manifest = SemanticConversionManifest {
         conversion_schema_version: CONVERSION_SCHEMA_VERSION,
-        semantic_schema_version: SEMANTIC_SCHEMA_VERSION,
+        semantic_schema_version: SEMANTIC_SCHEMA_VERSION_V2,
         input_files,
         total_records,
         converted_records: records.len(),

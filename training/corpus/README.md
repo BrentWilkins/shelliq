@@ -39,19 +39,14 @@ Every response must pass, in order:
 2. `SyntaxDocumentV1::parse` — lossless CST parse, render equals input
 3. `SyntaxDocumentV1::validate`
 
-Rows also pass `SemanticDocumentV1::lower` + semantic round-trip **unless** they
+Rows also pass `SemanticDocumentV2::lower` + semantic round-trip **unless** they
 are listed in [`semantic-exempt.txt`](semantic-exempt.txt).
 
-The current semantic slice lowers only `command`, `redirected_statement`, and
-`pipeline` (`crates/syntax/src/semantic.rs:299`). Compound shapes — `&&`, `||`,
-subshells, loops, process substitution — cannot lower yet, but they are a large
-part of why this corpus exists, so they are exempted by `record_id` rather than
-excluded.
-
-The exemption list is a **ratchet, not an escape hatch**: the Rust test asserts
+Semantic AST v2 covers every curated row that clears the CST boundary, including
+here-string redirects and `typeset` scalar and array declarations. The semantic
+exemption list remains a **ratchet, not an escape hatch**: the Rust test asserts
 every exempt row _fails_ to lower. When the semantic slice grows to cover a
-shape, its exemptions go stale and the test fails until they are deleted. An
-exemption can never silently outlive the limitation that justified it.
+shape, its exemptions go stale and the test fails until they are deleted.
 
 ## Shell dialect
 

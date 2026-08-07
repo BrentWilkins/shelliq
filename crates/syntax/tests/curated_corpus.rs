@@ -22,7 +22,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
-use shelliq_syntax::{SyntaxDocumentV1, semantic::SemanticDocumentV1};
+use shelliq_syntax::{SyntaxDocumentV1, semantic::SemanticDocumentV2};
 
 #[derive(Deserialize)]
 struct CuratedRecord {
@@ -134,7 +134,7 @@ fn semantic_exemptions_are_a_ratchet() {
         let Ok(syntax) = SyntaxDocumentV1::parse(&record.response) else {
             continue;
         };
-        let lowered = SemanticDocumentV1::lower(&syntax).and_then(|semantic| semantic.validate());
+        let lowered = SemanticDocumentV2::lower(&syntax).and_then(|semantic| semantic.validate());
         match (lowered.is_ok(), exemptions.contains(&record.record_id)) {
             (true, false) | (false, true) => {}
             (false, false) => missing_exemption.push(format!("{} :: {}", record.record_id, record.response)),

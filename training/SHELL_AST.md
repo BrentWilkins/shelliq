@@ -75,8 +75,8 @@ coverage manifest:
 ```sh
 cargo run -p shelliq-syntax --bin convert-semantic-corpus -- \
   training/corpus \
-  training/artifacts/curated-semantic-v1.jsonl \
-  training/artifacts/curated-semantic-v1.manifest.json
+  training/artifacts/curated-semantic-v2.jsonl \
+  training/artifacts/curated-semantic-v2.manifest.json
 ```
 
 The manifest makes CST failures, semantic failures, and normalized semantic
