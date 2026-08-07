@@ -29,6 +29,397 @@ pub struct SemanticDocumentV1 {
     statements: Vec<StatementV1>,
 }
 
+/// Semantic-AST v2 adds declarations and here-string redirects while leaving
+/// the v1 wire contract available for existing consumers.
+pub const SEMANTIC_SCHEMA_VERSION_V2: u8 = 2;
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SemanticDocumentV2 {
+    #[serde(rename = "v")]
+    version: u8,
+    #[serde(rename = "d")]
+    dialect: ShellDialect,
+    #[serde(rename = "s")]
+    statements: Vec<StatementV2>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "t", deny_unknown_fields)]
+pub enum StatementV2 {
+    #[serde(rename = "p")]
+    Pipeline {
+        #[serde(rename = "c")]
+        stages: Vec<CommandV2>,
+        #[serde(rename = "o", default, skip_serializing_if = "Vec::is_empty")]
+        operators: Vec<PipelineOperatorV1>,
+    },
+    #[serde(rename = "d")]
+    Declaration {
+        #[serde(rename = "u")]
+        utility: WordV1,
+        #[serde(rename = "o", default, skip_serializing_if = "Vec::is_empty")]
+        options: Vec<WordV1>,
+        #[serde(rename = "a")]
+        assignments: Vec<AssignmentV2>,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AssignmentV2 {
+    #[serde(rename = "n")]
+    name: String,
+    #[serde(rename = "v", default, skip_serializing_if = "Option::is_none")]
+    value: Option<WordV1>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CommandV2 {
+    #[serde(rename = "n")]
+    name: WordV1,
+    #[serde(rename = "a", default, skip_serializing_if = "Vec::is_empty")]
+    arguments: Vec<WordV1>,
+    #[serde(rename = "r", default, skip_serializing_if = "Vec::is_empty")]
+    redirects: Vec<RedirectV2>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RedirectV2 {
+    #[serde(rename = "f", default, skip_serializing_if = "Option::is_none")]
+    descriptor: Option<String>,
+    #[serde(rename = "o")]
+    operator: RedirectOperatorV2,
+    #[serde(rename = "t")]
+    target: WordV1,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RedirectOperatorV2 {
+    #[serde(rename = "<")]
+    Read,
+    #[serde(rename = ">")]
+    Write,
+    #[serde(rename = ">>")]
+    Append,
+    #[serde(rename = ">|")]
+    Clobber,
+    #[serde(rename = "<>")]
+    ReadWrite,
+    #[serde(rename = "<&")]
+    DuplicateInput,
+    #[serde(rename = ">&")]
+    DuplicateOutput,
+    #[serde(rename = "<<<")]
+    HereString,
+}
+
+impl SemanticDocumentV2 {
+    pub fn lower(document: &SyntaxDocumentV1) -> Result<Self, SemanticError> {
+        document.validate()?;
+        Self::lower_source(&document.render())
+    }
+
+    pub const fn version(&self) -> u8 {
+        self.version
+    }
+
+    pub fn statements(&self) -> &[StatementV2] {
+        &self.statements
+    }
+
+    pub fn render(&self) -> String {
+        self.statements.iter().map(StatementV2::render).collect::<Vec<_>>().join("\n")
+    }
+
+    pub fn validate(&self) -> Result<(), SemanticError> {
+        if self.version != SEMANTIC_SCHEMA_VERSION_V2 {
+            return Err(SemanticError::UnsupportedVersion(self.version));
+        }
+        let lowered = Self::lower_source(&self.render())?;
+        if lowered == *self {
+            Ok(())
+        } else {
+            Err(SemanticError::StructureMismatch)
+        }
+    }
+
+    fn lower_source(source: &str) -> Result<Self, SemanticError> {
+        let tree = parse_zsh(source)?;
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+        let statements = root
+            .named_children(&mut cursor)
+            .map(|child| lower_statement_v2(child, source))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self {
+            version: SEMANTIC_SCHEMA_VERSION_V2,
+            dialect: ShellDialect::Zsh,
+            statements,
+        })
+    }
+}
+
+impl StatementV2 {
+    fn render(&self) -> String {
+        match self {
+            Self::Pipeline { stages, operators } => {
+                let mut rendered = String::new();
+                for (index, stage) in stages.iter().enumerate() {
+                    if let Some(operator) = index.checked_sub(1).and_then(|i| operators.get(i)) {
+                        rendered.push(' ');
+                        rendered.push_str(operator.source());
+                        rendered.push(' ');
+                    }
+                    stage.render_into(&mut rendered);
+                }
+                rendered
+            }
+            Self::Declaration {
+                utility,
+                options,
+                assignments,
+            } => {
+                let mut rendered = utility.source().to_owned();
+                for option in options {
+                    rendered.push(' ');
+                    rendered.push_str(option.source());
+                }
+                for assignment in assignments {
+                    rendered.push(' ');
+                    rendered.push_str(&assignment.name);
+                    if let Some(value) = &assignment.value {
+                        rendered.push('=');
+                        rendered.push_str(value.source());
+                    }
+                }
+                rendered
+            }
+        }
+    }
+}
+
+impl AssignmentV2 {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub const fn value(&self) -> Option<&WordV1> {
+        self.value.as_ref()
+    }
+}
+
+impl CommandV2 {
+    pub const fn name(&self) -> &WordV1 {
+        &self.name
+    }
+
+    pub fn arguments(&self) -> &[WordV1] {
+        &self.arguments
+    }
+
+    pub fn redirects(&self) -> &[RedirectV2] {
+        &self.redirects
+    }
+
+    fn render_into(&self, rendered: &mut String) {
+        rendered.push_str(self.name.source());
+        for argument in &self.arguments {
+            rendered.push(' ');
+            rendered.push_str(argument.source());
+        }
+        for redirect in &self.redirects {
+            rendered.push(' ');
+            if let Some(descriptor) = &redirect.descriptor {
+                rendered.push_str(descriptor);
+            }
+            rendered.push_str(redirect.operator.source());
+            rendered.push_str(redirect.target.source());
+        }
+    }
+}
+
+impl RedirectV2 {
+    pub fn descriptor(&self) -> Option<&str> {
+        self.descriptor.as_deref()
+    }
+
+    pub const fn operator(&self) -> RedirectOperatorV2 {
+        self.operator
+    }
+
+    pub const fn target(&self) -> &WordV1 {
+        &self.target
+    }
+}
+
+impl RedirectOperatorV2 {
+    const fn source(self) -> &'static str {
+        match self {
+            Self::Read => "<",
+            Self::Write => ">",
+            Self::Append => ">>",
+            Self::Clobber => ">|",
+            Self::ReadWrite => "<>",
+            Self::DuplicateInput => "<&",
+            Self::DuplicateOutput => ">&",
+            Self::HereString => "<<<",
+        }
+    }
+}
+
+fn lower_statement_v2(node: Node<'_>, source: &str) -> Result<StatementV2, SemanticError> {
+    match node.kind() {
+        "command" => Ok(StatementV2::Pipeline {
+            stages: vec![lower_stage_v2(node, source)?],
+            operators: Vec::new(),
+        }),
+        "redirected_statement" => lower_redirected_statement_v2(node, source),
+        "pipeline" => lower_pipeline_v2(node, source),
+        "declaration_command" => lower_declaration_v2(node, source),
+        _ => Err(unsupported(node)),
+    }
+}
+
+fn lower_redirected_statement_v2(node: Node<'_>, source: &str) -> Result<StatementV2, SemanticError> {
+    let body = node.child_by_field_name("body").ok_or_else(|| unsupported(node))?;
+    let mut statement = lower_statement_v2(body, source)?;
+    let StatementV2::Pipeline { stages, .. } = &mut statement else {
+        return Err(unsupported(body));
+    };
+    let last_stage = stages.last_mut().ok_or_else(|| unsupported(node))?;
+    let mut cursor = node.walk();
+    for redirect in node.children_by_field_name("redirect", &mut cursor) {
+        last_stage.redirects.push(lower_redirect_v2(redirect, source)?);
+    }
+    Ok(statement)
+}
+
+fn lower_pipeline_v2(node: Node<'_>, source: &str) -> Result<StatementV2, SemanticError> {
+    let mut stages = Vec::new();
+    let mut operators = Vec::new();
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        match child.kind() {
+            "command" | "redirected_statement" => stages.push(lower_stage_v2(child, source)?),
+            "|" => operators.push(PipelineOperatorV1::Stdout),
+            "|&" => operators.push(PipelineOperatorV1::StdoutAndStderr),
+            _ if !child.is_named() => return Err(unsupported(child)),
+            _ => return Err(unsupported(child)),
+        }
+    }
+    if stages.is_empty() || operators.len() + 1 != stages.len() {
+        return Err(unsupported(node));
+    }
+    Ok(StatementV2::Pipeline { stages, operators })
+}
+
+fn lower_stage_v2(node: Node<'_>, source: &str) -> Result<CommandV2, SemanticError> {
+    if node.kind() == "command" {
+        return lower_command_v2(node, source);
+    }
+    let body = node.child_by_field_name("body").ok_or_else(|| unsupported(node))?;
+    if body.kind() == "pipeline" {
+        return Err(unsupported(body));
+    }
+    let mut command = lower_stage_v2(body, source)?;
+    let mut cursor = node.walk();
+    for redirect in node.children_by_field_name("redirect", &mut cursor) {
+        command.redirects.push(lower_redirect_v2(redirect, source)?);
+    }
+    Ok(command)
+}
+
+fn lower_command_v2(node: Node<'_>, source: &str) -> Result<CommandV2, SemanticError> {
+    let name = node.child_by_field_name("name").ok_or_else(|| unsupported(node))?;
+    let mut cursor = node.walk();
+    let arguments = node
+        .children_by_field_name("argument", &mut cursor)
+        .map(|argument| word(argument, source))
+        .collect::<Vec<_>>();
+    if node.named_child_count() != 1 + arguments.len() {
+        return Err(unsupported(node));
+    }
+    Ok(CommandV2 {
+        name: word(name, source),
+        arguments,
+        redirects: Vec::new(),
+    })
+}
+
+fn lower_redirect_v2(node: Node<'_>, source: &str) -> Result<RedirectV2, SemanticError> {
+    if node.kind() == "herestring_redirect" {
+        let operator = node.child(0).ok_or_else(|| unsupported(node))?;
+        let target = node.named_child(0).ok_or_else(|| unsupported(node))?;
+        if operator.kind() != "<<<" {
+            return Err(unsupported(node));
+        }
+        return Ok(RedirectV2 {
+            descriptor: None,
+            operator: RedirectOperatorV2::HereString,
+            target: word(target, source),
+        });
+    }
+    if node.kind() != "file_redirect" {
+        return Err(unsupported(node));
+    }
+    let descriptor = node
+        .child_by_field_name("descriptor")
+        .map(|child| text(child, source).to_owned());
+    let target = node.child_by_field_name("destination").ok_or_else(|| unsupported(node))?;
+    let mut operator = None;
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        operator = match child.kind() {
+            "<" => Some(RedirectOperatorV2::Read),
+            ">" => Some(RedirectOperatorV2::Write),
+            ">>" => Some(RedirectOperatorV2::Append),
+            ">|" => Some(RedirectOperatorV2::Clobber),
+            "<>" => Some(RedirectOperatorV2::ReadWrite),
+            "<&" => Some(RedirectOperatorV2::DuplicateInput),
+            ">&" => Some(RedirectOperatorV2::DuplicateOutput),
+            _ => operator,
+        };
+    }
+    Ok(RedirectV2 {
+        descriptor,
+        operator: operator.ok_or_else(|| unsupported(node))?,
+        target: word(target, source),
+    })
+}
+
+fn lower_declaration_v2(node: Node<'_>, source: &str) -> Result<StatementV2, SemanticError> {
+    let utility_node = node.child(0).ok_or_else(|| unsupported(node))?;
+    let mut argument_cursor = node.walk();
+    let options = node
+        .children_by_field_name("argument", &mut argument_cursor)
+        .map(|argument| word(argument, source))
+        .collect::<Vec<_>>();
+    let mut assignments = Vec::new();
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        if child.kind() != "variable_assignment" {
+            continue;
+        }
+        let name = child.child_by_field_name("name").ok_or_else(|| unsupported(child))?;
+        let value = child.child_by_field_name("value").map(|value| word(value, source));
+        assignments.push(AssignmentV2 {
+            name: text(name, source).to_owned(),
+            value,
+        });
+    }
+    if node.named_child_count() != options.len() + assignments.len() || assignments.is_empty() {
+        return Err(unsupported(node));
+    }
+    Ok(StatementV2::Declaration {
+        utility: word(utility_node, source),
+        options,
+        assignments,
+    })
+}
+
 /// A pipeline. A simple command is represented by one stage.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]

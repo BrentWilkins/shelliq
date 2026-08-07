@@ -193,14 +193,14 @@ the repository root:
 ```sh
 cargo run -p shelliq-syntax --bin convert-semantic-corpus -- \
   training/corpus \
-  training/artifacts/curated-semantic-v1.jsonl \
-  training/artifacts/curated-semantic-v1.manifest.json
+  training/artifacts/curated-semantic-v2.jsonl \
+  training/artifacts/curated-semantic-v2.manifest.json
 ```
 
 The converter preserves prompt and provenance fields, keeps the original shell
 response beside the structured target, validates semantic render/re-lowering,
-and enforces both exemption files as ratchets. The current result is 617 of 626
-rows converted, with six CST exemptions, three semantic exemptions, and 18
+and enforces both exemption files as ratchets. The current result is 620 of 626
+rows converted, with six CST exemptions, no semantic exemptions, and 19
 explicitly reported rows whose semantic rendering normalizes whitespace.
 
 Personal builders require canaries and always pass through `PrivateDataGate`.

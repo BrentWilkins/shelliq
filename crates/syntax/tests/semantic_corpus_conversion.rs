@@ -16,9 +16,10 @@ fn real_curated_conversion_is_deterministic_and_lossless() {
 
     assert_eq!(first, second);
     assert_eq!(first.manifest.total_records, 626);
-    assert_eq!(first.manifest.converted_records, 617);
+    assert_eq!(first.manifest.converted_records, 620);
     assert_eq!(first.manifest.cst_exempt_record_ids.len(), 6);
-    assert_eq!(first.manifest.semantic_exempt_record_ids.len(), 3);
+    assert!(first.manifest.semantic_exempt_record_ids.is_empty());
+    assert_eq!(first.manifest.normalized_render_record_ids.len(), 19);
     assert_eq!(first.manifest.input_files.len(), 13);
     assert!(
         first
@@ -41,18 +42,18 @@ fn conversion_rejects_unexplained_and_stale_exemptions() {
     fixture.write_exemptions("", "");
     fixture.write_records(&[
         source_record("fixture:valid", "print ok"),
-        source_record("fixture:declaration", "typeset -i count=0"),
+        source_record("fixture:unsupported", "if true; then print ok; fi"),
     ]);
 
     let error = convert_curated_corpus(&fixture.path).unwrap_err();
-    assert!(error.to_string().contains("unexplained semantic failure"));
+    assert!(error.to_string().contains("unexplained semantic failure"), "{error}");
 
-    fixture.write_exemptions("", "fixture:declaration\n");
-    let conversion = convert_curated_corpus(&fixture.path).expect("explained failure converts");
+    fixture.write_exemptions("", "fixture:unsupported\n");
+    let conversion = convert_curated_corpus(&fixture.path).expect("explained omission converts");
     assert_eq!(conversion.manifest.converted_records, 1);
-    assert_eq!(conversion.manifest.semantic_exempt_record_ids, ["fixture:declaration"]);
+    assert_eq!(conversion.manifest.semantic_exempt_record_ids, ["fixture:unsupported"]);
 
-    fixture.write_exemptions("", "fixture:valid\nfixture:declaration\n");
+    fixture.write_exemptions("", "fixture:valid\nfixture:unsupported\n");
     let error = convert_curated_corpus(&fixture.path).unwrap_err();
     assert!(error.to_string().contains("stale semantic-exempt.txt entry"));
 }

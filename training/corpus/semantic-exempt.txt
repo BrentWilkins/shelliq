@@ -1,18 +1,5 @@
-# Curated rows that cannot lower into the current semantic AST.
+# Curated rows that cannot lower into Semantic AST v2.
 #
-# The semantic slice lowers only `command`, `redirected_statement`, and
-# `pipeline` (crates/syntax/src/semantic.rs:299). Compound shapes are exempt
-# here rather than excluded from the corpus, because teaching them is a large
-# part of why the curated corpus exists.
-#
-# This list is a ratchet. `crates/syntax/tests/curated_corpus.rs` asserts every
-# entry actually fails to lower, so an exemption cannot outlive the limitation
-# that justified it.
-
-# Here-string redirection (<<<) is not among the supported redirect forms.
-curated:pipelines:linux:cat-here-string
-
-# Declaration commands such as `typeset` lower as a declaration node rather
-# than a plain `command`.
-curated:zsh-native:linux:read-into-array
-curated:zsh-native:linux:associative-array
+# Keep this file even when empty: conversion and corpus tests treat it as a
+# ratchet. Any future unsupported row must be listed explicitly, and every
+# listed row must still fail lowering.
