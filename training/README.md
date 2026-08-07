@@ -164,6 +164,21 @@ rejects record IDs repeated across any input, and refuses to overwrite existing
 outputs. It also writes `distributable-v1.jsonl.manifest.json` with per-input
 SHA-256 hashes and record, command, source, platform, and curated-family counts.
 
+Freeze the candidate's quality and split facts in a separate reproducible audit:
+
+```sh
+uv run python scripts/audit_corpus.py \
+  --dataset artifacts/distributable-v1.jsonl \
+  --output artifacts/distributable-v1.audit.json \
+  --seed 2026
+```
+
+The audit fingerprints the dataset, applies the same preflight used by the GPU
+smoke run, validates command-disjoint splits, and reports composition, duplicate
+groups, field lengths, lexical option coverage, and split distributions. It
+refuses to overwrite an existing report so a reviewed audit cannot change in
+place.
+
 Personal builders require canaries and always pass through `PrivateDataGate`.
 They write the corpus, a canary-probe manifest, a deterministic 20-row scrubbed
 audit sample, and a report containing counts and IDs but no rejected text:
