@@ -178,7 +178,15 @@ uv run python scripts/build_dataset.py local-index --database path/to/shelliq.sq
   --output private/index.jsonl
 ```
 
-Claude ingestion keeps only `Bash` calls with a linked non-error tool result.
+Claude ingestion accepts individual JSONL files or directories, expands
+directories recursively in deterministic path order, and keeps only `Bash`
+calls with a linked non-error tool result. It fails closed if any transcript is
+unreadable or malformed. `--allow-partial` permits valid sibling files to
+continue, but prints every skipped path to stderr and records its hashed
+transcript ID and sanitized reason in the scrub report. Privacy-dropped record
+IDs and finding counts are always reported as well; rejected command text is
+never copied into the report.
+
 Local-index ingestion reads `examples`; `.zsh_history` command text has no
 builder and never enters a training corpus.
 
