@@ -186,7 +186,8 @@ uv run python scripts/evaluate_checkpoint.py \
   --output artifacts/distributable-pilot-curated-v1.eval-64.json \
   --examples 64 \
   --sequence-length 256 \
-  --priority-source shelliq-curated
+  --priority-source shelliq-curated \
+  --option-arities evaluation/curated-option-arities-v1.json
 ```
 
 The first 64-example comparison contained 35 curated and 29 TLDR rows. From
@@ -194,9 +195,12 @@ base model to trained adapter, primary-command accuracy moved from 0% to 88.5%,
 native-Zsh validity from 53.1% to 96.9%, simple-command parse rate from 62.3%
 to 98.4%, and exact match from 0% to 7.8%. Curated flag F1 reached 0.542. Two
 trained outputs were invalid: one truncated an unmatched quote and one emitted
-`<m>`. Option-argument accuracy is not yet reported because schema-v1 corpus
-rows do not carry option arity; the evaluator labels its operand score as a
-zero-arity lexical floor rather than presenting it as semantic accuracy.
+`<m>`. The versioned sidecar annotates all 35 curated held-out rows and covers
+34 simple-command examples after the compound-command exclusion. On that
+annotated subset, trained option-argument accuracy was 30.0% and operand exact
+match was 26.5%, confirming that argument binding and operand selection are the
+next quality bottlenecks. The evaluator also retains its zero-arity lexical
+floor separately so annotated and unannotated scores cannot be confused.
 
 NL2Bash ingestion requires a file of reviewed 1-based line numbers, an audited
 license identifier, and a revision. It cannot bulk-accept the upstream files:
