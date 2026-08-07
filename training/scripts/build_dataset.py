@@ -21,7 +21,8 @@ from shelliq_training.privacy import (  # noqa: E402
     plant_training_canaries,
 )
 from shelliq_training.private_sources import (  # noqa: E402
-    build_claude_transcript_records,
+    ClaudeTranscriptBuild,
+    build_claude_transcript_corpus,
     build_local_index_records,
 )
 from shelliq_training.sources import build_nl2bash_records, build_tldr_records  # noqa: E402
@@ -49,6 +50,11 @@ def parse_args() -> argparse.Namespace:
     claude = subparsers.add_parser('claude')
     claude.add_argument('transcripts', type=Path, nargs='+')
     claude.add_argument('--platform', type=Platform, required=True)
+    claude.add_argument(
+        '--allow-partial',
+        action='store_true',
+        help='skip malformed transcript files and record every skip in the scrub report',
+    )
     _private_arguments(claude)
 
     index = subparsers.add_parser('local-index')
@@ -81,11 +87,26 @@ def main() -> None:
         return
 
     gate = PrivateDataGate(_policy(args))
+    transcript_build = None
     if args.source == 'claude':
-        scrubbed = build_claude_transcript_records(args.transcripts, gate=gate, platform=args.platform)
+        transcript_build = build_claude_transcript_corpus(
+            args.transcripts,
+            gate=gate,
+            platform=args.platform,
+            allow_partial=args.allow_partial,
+        )
+        for failure in transcript_build.skipped:
+            print(f'skipped transcript {failure.path}: {failure.error}', file=sys.stderr)
+        scrubbed = transcript_build.scrubbed
     else:
         scrubbed = build_local_index_records(args.database, gate=gate)
-    _write_private_outputs(args.output, scrubbed, args.canary_count, args.canary_seed)
+    _write_private_outputs(
+        args.output,
+        scrubbed,
+        args.canary_count,
+        args.canary_seed,
+        transcript_build=transcript_build,
+    )
 
 
 def _private_arguments(parser: argparse.ArgumentParser) -> None:
@@ -118,7 +139,14 @@ def _read_reviewed_lines(path: Path) -> frozenset[int]:
     return frozenset(values)
 
 
-def _write_private_outputs(output: Path, scrubbed: ScrubbedCorpus, canary_count: int, canary_seed: int) -> None:
+def _write_private_outputs(
+    output: Path,
+    scrubbed: ScrubbedCorpus,
+    canary_count: int,
+    canary_seed: int,
+    *,
+    transcript_build: ClaudeTranscriptBuild | None = None,
+) -> None:
     if not scrubbed.records:
         raise SystemExit('privacy gate accepted no records; no artifact written')
     canaries = plant_training_canaries(scrubbed.records, count=canary_count, seed=canary_seed)
@@ -139,20 +167,19 @@ def _write_private_outputs(output: Path, scrubbed: ScrubbedCorpus, canary_count:
         encoding='utf-8',
     )
     counts = Counter(finding.kind for finding in scrubbed.findings)
-    report_path.write_text(
-        json.dumps(
-            {
-                'accepted': len(scrubbed.records),
-                'dropped': len(scrubbed.dropped),
-                'finding_counts': dict(sorted(counts.items())),
-                'audit_record_ids': [record.record_id for record in audit_sample],
-            },
-            indent=2,
-            sort_keys=True,
-        )
-        + '\n',
-        encoding='utf-8',
-    )
+    report = {
+        'accepted': len(scrubbed.records),
+        'dropped': len(scrubbed.dropped),
+        'dropped_record_ids': sorted({finding.record_id for result in scrubbed.dropped for finding in result.findings}),
+        'finding_counts': dict(sorted(counts.items())),
+        'audit_record_ids': [record.record_id for record in audit_sample],
+    }
+    if transcript_build is not None:
+        report['processed_transcript_ids'] = list(transcript_build.processed_ids)
+        report['skipped_transcripts'] = [
+            {'transcript_id': failure.transcript_id, 'error': failure.error} for failure in transcript_build.skipped
+        ]
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + '\n', encoding='utf-8')
     write_jsonl(audit_path, audit_sample, corpus=Corpus.PERSONAL)
     write_jsonl(output, canaries.records, corpus=Corpus.PERSONAL)
     print(

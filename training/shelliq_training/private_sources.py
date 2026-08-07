@@ -27,18 +27,65 @@ class _ClaudeBashCall:
     description: str
 
 
+@dataclass(frozen=True, slots=True)
+class ClaudeTranscriptFailure:
+    """One transcript omitted only when partial ingestion is explicit."""
+
+    path: Path
+    transcript_id: str
+    error: str
+
+
+@dataclass(frozen=True, slots=True)
+class ClaudeTranscriptBuild:
+    """Scrubbed rows plus a complete file-level ingestion audit."""
+
+    scrubbed: ScrubbedCorpus
+    processed_paths: tuple[Path, ...]
+    skipped: tuple[ClaudeTranscriptFailure, ...]
+
+    @property
+    def processed_ids(self) -> tuple[str, ...]:
+        return tuple(_claude_transcript_id(path) for path in self.processed_paths)
+
+
 def build_claude_transcript_records(
     paths: Iterable[str | Path],
     *,
     gate: PrivateDataGate,
     platform: Platform,
 ) -> ScrubbedCorpus:
-    """Extract successful Claude Code Bash calls and return only scrubbed rows."""
+    """Extract successful calls from files or directories, failing closed."""
+    return build_claude_transcript_corpus(paths, gate=gate, platform=platform).scrubbed
+
+
+def build_claude_transcript_corpus(
+    paths: Iterable[str | Path],
+    *,
+    gate: PrivateDataGate,
+    platform: Platform,
+    allow_partial: bool = False,
+) -> ClaudeTranscriptBuild:
+    """Extract and scrub rows while auditing every expanded transcript file."""
     raw_records: list[SFTRecord] = []
-    for path_value in paths:
-        path = Path(path_value)
-        calls, outcomes = _read_claude_transcript(path)
-        transcript_id = hashlib.sha256(str(path.resolve()).encode()).hexdigest()[:16]
+    processed_paths: list[Path] = []
+    skipped: list[ClaudeTranscriptFailure] = []
+    for path in expand_claude_transcript_paths(paths):
+        try:
+            calls, outcomes = _read_claude_transcript(path)
+        except DatasetFormatError as error:
+            if not allow_partial:
+                raise
+            skipped.append(
+                ClaudeTranscriptFailure(
+                    path=path,
+                    transcript_id=_claude_transcript_id(path),
+                    error=str(error).replace(str(path), '<TRANSCRIPT>'),
+                )
+            )
+            continue
+        processed_paths.append(path)
+        transcript_id = _claude_transcript_id(path)
         for call in calls:
             if outcomes.get(call.tool_use_id) is not True:
                 continue
@@ -61,7 +108,33 @@ def build_claude_transcript_records(
                     context=f'{command_name}: command completed successfully in a local Claude Code session.',
                 )
             )
-    return gate.scrub(raw_records)
+    return ClaudeTranscriptBuild(gate.scrub(raw_records), tuple(processed_paths), tuple(skipped))
+
+
+def expand_claude_transcript_paths(paths: Iterable[str | Path]) -> tuple[Path, ...]:
+    """Expand directories recursively and return unique resolved paths in stable order."""
+    expanded: dict[Path, None] = {}
+    for path_value in paths:
+        path = Path(path_value)
+        if path.is_dir():
+            try:
+                matches = sorted(path.rglob('*.jsonl'))
+            except OSError as error:
+                raise DatasetFormatError(f'cannot enumerate transcript directory {path}: {error}') from error
+            if not matches:
+                raise DatasetFormatError(f'{path}: transcript directory contains no JSONL files')
+            candidates = matches
+        else:
+            candidates = [path]
+        for candidate in candidates:
+            expanded[candidate.resolve()] = None
+    if not expanded:
+        raise DatasetFormatError('no transcript paths provided')
+    return tuple(sorted(expanded, key=lambda path: path.as_posix()))
+
+
+def _claude_transcript_id(path: Path) -> str:
+    return hashlib.sha256(str(path.resolve()).encode()).hexdigest()[:16]
 
 
 def build_local_index_records(
