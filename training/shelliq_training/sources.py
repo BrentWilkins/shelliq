@@ -119,6 +119,10 @@ def shell_command_name(command_line: str) -> str:
         position += 1
     if position < len(tokens) and tokens[position] == 'command':
         position += 1
+        while position < len(tokens) and tokens[position] in {'-p', '--'}:
+            position += 1
+        if position >= len(tokens) or tokens[position].startswith('-'):
+            return 'command'
     elif position < len(tokens) and tokens[position] in {'env', 'sudo'}:
         wrapper = tokens[position]
         position += 1
@@ -127,6 +131,8 @@ def shell_command_name(command_line: str) -> str:
         ]
         while position < len(tokens) and tokens[position].startswith('-'):
             option = tokens[position].split('=', maxsplit=1)[0]
+            if wrapper == 'sudo' and option in {'-l', '--list', '-v', '--validate', '-V', '--version'}:
+                return 'sudo'
             position += 1
             if option in options_with_values and '=' not in tokens[position - 1]:
                 position += 1
