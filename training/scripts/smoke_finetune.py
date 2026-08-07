@@ -10,7 +10,6 @@ import argparse
 import hashlib
 import json
 import math
-import shlex
 import sys
 import time
 from collections.abc import Sequence
@@ -28,6 +27,7 @@ from transformers import AutoTokenizer
 
 from shelliq_training.checkpoint import save_checkpoint
 from shelliq_training.config import Qwen2Config
+from shelliq_training.corpus_audit import preflight_records
 from shelliq_training.data import (
     IGNORE_INDEX,
     Corpus,
@@ -73,19 +73,7 @@ def _ordered_records(records: Sequence[SFTRecord], seed: int) -> list[SFTRecord]
 
 def automatic_preflight(records: Sequence[SFTRecord]) -> tuple[list[SFTRecord], dict[str, str]]:
     """Exclude obvious template and quoting defects from the unaudited smoke set."""
-    accepted: list[SFTRecord] = []
-    rejected: dict[str, str] = {}
-    for record in records:
-        if '{{' in record.response or '}}' in record.response:
-            rejected[record.record_id] = 'unresolved tldr placeholder'
-            continue
-        try:
-            shlex.split(record.response)
-        except ValueError as error:
-            rejected[record.record_id] = f'invalid shell quoting: {error}'
-            continue
-        accepted.append(record)
-    return accepted, rejected
+    return preflight_records(records)
 
 
 def select_examples(
