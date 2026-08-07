@@ -20,7 +20,8 @@ Rust binary.
 - Orbax checkpoints containing LoRA weights, optimizer moments, step, and
   compatibility metadata.
 - Source builders for the pinned tldr ZIP, reviewed NL2Bash rows, successful
-  Claude Code Bash calls, and local-index examples.
+  Claude Code Bash calls, and local-index examples, plus a project-owned
+  reviewed corpus for compositional commands.
 - Mandatory self-testing privacy gate for personal builders, synthetic training
   canaries, and a post-training extraction gate.
 - Held-out evaluation with functional-equivalence hooks and separate flag,
@@ -142,6 +143,12 @@ uv run python scripts/build_dataset.py nl2bash \
   --reviewed-lines reviewed-lines.txt --revision COMMIT --license LICENSE-ID \
   --output data/nl2bash.jsonl
 ```
+
+The checked-in [`corpus/`](corpus/) contains first-party schema-v1 JSONL rows
+that `load_jsonl` reads directly. It is separate from generated `artifacts/`
+and is guarded by cross-file schema, provenance, command-label, native Zsh,
+portable-shell, lossless CST, and semantic-lowering tests. See the corpus README
+for its row conventions and explicit syntax/dialect exemption ratchets.
 
 Personal builders require canaries and always pass through `PrivateDataGate`.
 They write the corpus, a canary-probe manifest, a deterministic 20-row scrubbed

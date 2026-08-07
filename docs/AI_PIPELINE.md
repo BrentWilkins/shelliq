@@ -46,6 +46,7 @@ flowchart TD
     subgraph Public
         TLDR[TLDR]
         NL[Reviewed natural-language/command rows]
+        CURATED[Versioned curated compositional rows]
     end
 
     subgraph Private[Private local sources]
@@ -55,6 +56,7 @@ flowchart TD
 
     TLDR --> LICENSE[License allow-list]
     NL --> LICENSE
+    CURATED --> LICENSE
     TRANSCRIPT --> SCRUB[Secret and identifier scrubber]
     INDEX --> SCRUB
     SCRUB --> CANARY[Scrubber self-test and canary gate]
@@ -111,9 +113,9 @@ the model cannot earn high reward by emitting trivial valid commands.
 
 ## Current implementation boundary
 
-- Implemented: strict dataset records, provenance and privacy gates, grouped
-  splits, training/evaluation/export foundations, lossless Zsh CST parsing, and
-  the first semantic lowering slice.
+- Implemented: strict dataset records, provenance and privacy gates, a reviewed
+  curated compositional corpus, grouped splits, training/evaluation/export
+  foundations, lossless Zsh CST parsing, and the first semantic lowering slice.
 - The first semantic slice supports sequential simple commands, ordered words,
   `|` and `|&` pipelines, and common file redirects. Words remain validated
   lexical units for now.
