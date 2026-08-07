@@ -134,6 +134,36 @@ expected for deliberate four-example memorization. This proves the real-corpus
 training/checkpoint path works; it is not a quality result or a substitute for
 the later corpus audit.
 
+### One-pass baseline pilot
+
+After building and auditing `artifacts/distributable-v1.jsonl` as described
+below, an RTX 4090-class GPU can run a first signal-finding pilot:
+
+```sh
+uv run python scripts/smoke_finetune.py \
+  --dataset artifacts/distributable-v1.jsonl \
+  --sequence-length 256 \
+  --train-examples 4000 \
+  --eval-examples 256 \
+  --batch-size 4 \
+  --steps 1000 \
+  --learning-rate 2e-4 \
+  --heldout-probe \
+  --checkpoint artifacts/distributable-pilot-v1/checkpoint \
+  --report artifacts/distributable-pilot-v1.report.json
+```
+
+This makes one pass over 4,000 deterministically selected, command-distinct
+training examples and evaluates 256 examples from command-disjoint held-out
+groups. The report pins the dataset and selected record IDs by SHA-256 and
+records initial/final train and held-out losses plus train and held-out
+generation probes. A useful first signal is falling held-out loss and a held-out
+probe that becomes more command-like without merely copying the training probe.
+
+This is deliberately a raw-shell baseline. It can tell us whether the data and
+LoRA recipe carry useful NL-to-command signal, but it is not the final
+Semantic-AST training target or a task-success evaluation.
+
 NL2Bash ingestion requires a file of reviewed 1-based line numbers, an audited
 license identifier, and a revision. It cannot bulk-accept the upstream files:
 
