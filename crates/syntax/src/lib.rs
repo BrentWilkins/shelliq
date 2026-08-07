@@ -6,6 +6,7 @@
 //! without pretending that `command + flags + operands` is the whole shell
 //! language.
 
+use std::borrow::Cow;
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
@@ -173,16 +174,125 @@ fn parser() -> Parser {
 }
 
 fn parse_zsh(source: &str) -> Result<Tree, SyntaxError> {
-    let tree = parser()
+    let mut parser = parser();
+    let tree = parser
         .parse(source, None)
         .expect("parsing without a cancellation callback cannot be cancelled");
-    if let Some(error) = first_error(tree.root_node()) {
-        return Err(SyntaxError::InvalidZsh {
-            byte: error.start_byte(),
-            kind: error.kind().to_owned(),
-        });
+    let Some(original_error) = first_error(tree.root_node()) else {
+        return Ok(tree);
+    };
+
+    let parser_source = normalize_zsh_extended_globs(source);
+    if matches!(parser_source, Cow::Borrowed(_)) {
+        return Err(invalid_zsh(original_error));
     }
-    Ok(tree)
+    let recovered = parser
+        .parse(parser_source.as_ref(), None)
+        .expect("parsing without a cancellation callback cannot be cancelled");
+    if first_error(recovered.root_node()).is_none() {
+        Ok(recovered)
+    } else {
+        Err(invalid_zsh(original_error))
+    }
+}
+
+fn invalid_zsh(error: Node<'_>) -> SyntaxError {
+    SyntaxError::InvalidZsh {
+        byte: error.start_byte(),
+        kind: error.kind().to_owned(),
+    }
+}
+
+/// Mask native Zsh extended-glob affixes that the upstream grammar tokenizes
+/// ambiguously. Replacing only recognized affixes with ASCII letters preserves
+/// every byte offset, so the project CST is still built from the original text.
+fn normalize_zsh_extended_globs(source: &str) -> Cow<'_, str> {
+    let bytes = source.as_bytes();
+    let mut masked = None;
+    let mut start = 0;
+
+    while start < bytes.len() {
+        while start < bytes.len() && is_shell_word_boundary(bytes[start]) {
+            start += 1;
+        }
+        if start == bytes.len() {
+            break;
+        }
+        let mut end = start;
+        while end < bytes.len() && !is_shell_word_boundary(bytes[end]) {
+            end += 1;
+        }
+        let word = &source[start..end];
+        if is_safe_extended_glob_word(word) {
+            let output = masked.get_or_insert_with(|| bytes.to_vec());
+            mask_extended_glob_affixes(word, &mut output[start..end]);
+        }
+        start = end;
+    }
+
+    match masked {
+        Some(value) => Cow::Owned(String::from_utf8(value).expect("masking preserves UTF-8")),
+        None => Cow::Borrowed(source),
+    }
+}
+
+fn is_shell_word_boundary(byte: u8) -> bool {
+    byte.is_ascii_whitespace() || matches!(byte, b';' | b'|' | b'&' | b'<' | b'>')
+}
+
+fn is_safe_extended_glob_word(word: &str) -> bool {
+    word.is_ascii()
+        && !word.bytes().any(|byte| matches!(byte, b'\'' | b'"' | b'\\'))
+        && (extended_glob_prefix_len(word).is_some() || glob_qualifier_start(word).is_some())
+}
+
+fn mask_extended_glob_affixes(word: &str, output: &mut [u8]) {
+    if let Some(length) = extended_glob_prefix_len(word) {
+        output[..length].fill(b'g');
+    }
+    if let Some(start) = glob_qualifier_start(word) {
+        output[start..].fill(b'g');
+    }
+}
+
+fn extended_glob_prefix_len(word: &str) -> Option<usize> {
+    let close = word.strip_prefix("(#")?.find(')')? + 2;
+    let flags = &word[2..close];
+    let pattern = &word[close + 1..];
+    (flags == "i" && pattern.bytes().any(|byte| matches!(byte, b'*' | b'?'))).then_some(close + 1)
+}
+
+fn glob_qualifier_start(word: &str) -> Option<usize> {
+    if !word.ends_with(')') {
+        return None;
+    }
+    let start = word.rfind('(')?;
+    let pattern = &word[..start];
+    let qualifier = &word[start + 1..word.len() - 1];
+    (pattern.bytes().any(|byte| matches!(byte, b'*' | b'?')) && valid_glob_qualifier(qualifier)).then_some(start)
+}
+
+fn valid_glob_qualifier(qualifier: &str) -> bool {
+    let (qualifiers, subscript) = match qualifier.find('[') {
+        Some(start) if qualifier.ends_with(']') => (&qualifier[..start], Some(&qualifier[start + 1..qualifier.len() - 1])),
+        Some(_) => return false,
+        None => (qualifier, None),
+    };
+    const QUALIFIER_CHARS: &str = "./*@=p%-^rwxWugoaLkamcFNDMsShHbBfFdcaAtImCYoOnPqUGzZ+";
+    !qualifiers.is_empty()
+        && qualifiers
+            .chars()
+            .all(|character| character.is_ascii_digit() || QUALIFIER_CHARS.contains(character))
+        && subscript.is_none_or(|value| {
+            let mut fields = value.split(',');
+            fields
+                .next()
+                .is_some_and(|field| !field.is_empty() && field.chars().all(|c| c.is_ascii_digit()))
+                && fields
+                    .next()
+                    .is_none_or(|field| !field.is_empty() && field.chars().all(|c| c.is_ascii_digit()))
+                && fields.next().is_none()
+        })
 }
 
 fn first_error(node: Node<'_>) -> Option<Node<'_>> {

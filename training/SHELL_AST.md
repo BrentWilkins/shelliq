@@ -16,6 +16,14 @@ development and corpus validity oracle. The two checks serve different jobs:
 - Native Zsh decides whether Zsh itself accepts the source without executing it
   or loading user startup files.
 
+The parser boundary includes a strict, byte-preserving fallback layer for
+native Zsh extended-glob affixes that `tree-sitter-zsh` 0.63.4 tokenizes
+ambiguously: leading glob flags such as `(#i)`, qualifier subscripts such as
+`(om[1])`, and permission qualifiers such as `(.W)`. After the original parse
+fails, only recognized affixes are masked for a second Tree-sitter pass; CST text
+and byte offsets always come from the original source, and malformed subscript
+forms remain parser errors.
+
 `crates/syntax` contains schema-version-1 `SyntaxDocumentV1`. It is a lossless,
 Serde-compatible concrete syntax tree (CST), not yet the compact semantic AST
 the model should learn. It preserves every accepted source byte, renders it

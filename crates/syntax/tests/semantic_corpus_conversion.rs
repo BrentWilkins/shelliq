@@ -16,8 +16,8 @@ fn real_curated_conversion_is_deterministic_and_lossless() {
 
     assert_eq!(first, second);
     assert_eq!(first.manifest.total_records, 626);
-    assert_eq!(first.manifest.converted_records, 620);
-    assert_eq!(first.manifest.cst_exempt_record_ids.len(), 6);
+    assert_eq!(first.manifest.converted_records, 626);
+    assert!(first.manifest.cst_exempt_record_ids.is_empty());
     assert!(first.manifest.semantic_exempt_record_ids.is_empty());
     assert_eq!(first.manifest.normalized_render_record_ids.len(), 19);
     assert_eq!(first.manifest.input_files.len(), 13);
