@@ -69,6 +69,19 @@ cargo run --release -p shelliq-syntax --bin audit-zsh-corpus -- \
   training/artifacts/tldr-v2.3.jsonl
 ```
 
+Convert the checked-in curated corpus into validated semantic targets and a
+coverage manifest:
+
+```sh
+cargo run -p shelliq-syntax --bin convert-semantic-corpus -- \
+  training/corpus \
+  training/artifacts/curated-semantic-v1.jsonl \
+  training/artifacts/curated-semantic-v1.manifest.json
+```
+
+The manifest makes CST failures, semantic failures, and normalized semantic
+renders explicit. Unknown failures and stale exemptions abort conversion.
+
 The JSON report contains counts and at most 20 record IDs per disagreement
 class. It never writes response text, so the same audit shape can safely be used
 for a personal corpus.

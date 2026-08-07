@@ -11,6 +11,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use tree_sitter::{Node, Parser, Tree};
 
+pub mod corpus;
 pub mod semantic;
 
 /// Serialized syntax contract currently emitted and accepted by shelliq.

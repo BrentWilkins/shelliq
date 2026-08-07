@@ -187,6 +187,22 @@ unmatched shell quotes inherited from their upstream pages:
 regression coverage so it cannot again be mistaken for an unresolved
 `{{placeholder}}`.
 
+Convert the curated source rows into versioned semantic training targets from
+the repository root:
+
+```sh
+cargo run -p shelliq-syntax --bin convert-semantic-corpus -- \
+  training/corpus \
+  training/artifacts/curated-semantic-v1.jsonl \
+  training/artifacts/curated-semantic-v1.manifest.json
+```
+
+The converter preserves prompt and provenance fields, keeps the original shell
+response beside the structured target, validates semantic render/re-lowering,
+and enforces both exemption files as ratchets. The current result is 617 of 626
+rows converted, with six CST exemptions, three semantic exemptions, and 18
+explicitly reported rows whose semantic rendering normalizes whitespace.
+
 Personal builders require canaries and always pass through `PrivateDataGate`.
 They write the corpus, a canary-probe manifest, a deterministic 20-row scrubbed
 audit sample, and a report containing counts and IDs but no rejected text:
