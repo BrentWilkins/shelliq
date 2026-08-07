@@ -25,6 +25,9 @@ Rust binary.
   canaries, and a post-training extraction gate.
 - Held-out evaluation with functional-equivalence hooks and separate flag,
   option-argument, operand, exact-match, and option-known metrics.
+- Zsh-first lossless syntax contract, native-Zsh corpus audit, and measured
+  parser bake-off. See [`SHELL_AST.md`](SHELL_AST.md) and the
+  [AI pipeline architecture](../docs/AI_PIPELINE.md).
 - PEFT adapter and merged Hugging Face safetensors export, plus guarded llama.cpp
   adapter/GGUF conversion at Q6_K or Q8_0.
 
@@ -42,6 +45,8 @@ uv run pytest -q
 uv run ruff check .
 uv run python scripts/check_parity.py
 uv run python scripts/smoke_train.py
+cargo run --release -p shelliq-syntax --bin audit-zsh-corpus -- \
+  artifacts/tldr-v2.3.jsonl
 ```
 
 The parity script requests highest-precision float32 JAX matrix multiplication.
