@@ -150,6 +150,20 @@ and is guarded by cross-file schema, provenance, command-label, native Zsh,
 portable-shell, lossless CST, and semantic-lowering tests. See the corpus README
 for its row conventions and explicit syntax/dialect exemption ratchets.
 
+Merge the pinned TLDR artifact with every curated family into a new training
+candidate without editing either source:
+
+```sh
+uv run python scripts/merge_corpus.py \
+  --tldr artifacts/tldr-v2.3.jsonl \
+  --output artifacts/distributable-v1.jsonl
+```
+
+The merge preserves TLDR row order, appends curated files in filename order,
+rejects record IDs repeated across any input, and refuses to overwrite existing
+outputs. It also writes `distributable-v1.jsonl.manifest.json` with per-input
+SHA-256 hashes and record, command, source, platform, and curated-family counts.
+
 Personal builders require canaries and always pass through `PrivateDataGate`.
 They write the corpus, a canary-probe manifest, a deterministic 20-row scrubbed
 audit sample, and a report containing counts and IDs but no rejected text:
