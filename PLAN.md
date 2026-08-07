@@ -172,7 +172,7 @@ crates/harvest/   [done] man parser   · [plan] --help crawler
 crates/index/     [done] schema, FTS5 · [plan] fuzzy ranking, RRF, refresh, target identity
 crates/verify/    [done] bundle splitter, flag checker · [plan] shell-syntax abstention
 shell/            [built] shelliq.zsh (explain widget, fallback Tab completer) · [plan] shelliq.bash
-training/         [plan] nnx Qwen, HF loader, data gen, train (uv project scaffolded only)
+training/         [built] nnx Qwen, HF loader, masked SFT loss, LoRA step, provenance SFT schema, grouped splits, Qwen batching, Orbax resume · [plan] source builders, scrubber, evaluation, export
 ```
 
 **Language split: Rust ships, Python trains.** A Rust static binary starts in ~2ms, so
@@ -501,17 +501,22 @@ Hand-write the HF→nnx weight loader. Two trip hazards: HF stores linears `[out
 nnx `Linear` wants `[in, out]` (transpose), and Qwen2 has attention biases on q/k/v but
 _not_ o.
 
-**Hard gate before training:** same prompt through HF `transformers` and the nnx port,
-logits within 1e-3. Most ports fail silently; this catches it.
+**Hard gate before training:** [done] the same prompt through HF `transformers` and the nnx
+port on the RTX 4090 produced a 0.000018 maximum logit difference with highest-precision
+float32 matmuls, below the 1e-3 gate. Most ports fail silently; this catches it.
 
-**Memory: 6GB was arithmetic, not a measurement.** 0.5B bf16 weights + grads + fp32 Adam
+**Memory: LoRA measured; full fine-tune still arithmetic.** [done] The RTX 4090 smoke test
+used a bf16 base, rank-16 adapters, batch 1 × sequence 128, and peaked at 2.75 GiB of JAX
+device memory. The earlier 6GB estimate for 0.5B bf16 weights + grads + fp32 Adam
 moments does come to roughly 6GB, but that figure ignores activations, XLA scratch buffers,
 the fp32 master copy, sequence length, batch size, and compilation overhead — the terms that
 actually decide whether a step fits. It gets measured at a stated
 batch/sequence/rematerialisation configuration before it is quoted again.
 
-**LoRA first, full fine-tune second.** The previous order was backwards for engineering and
-right only for learning. LoRA (r=16, q/k/v/o/gate/up/down) is cheaper, iterates faster, and
+**LoRA first, full fine-tune second.** [built] Rank-16 adapters on
+q/k/v/o/gate/up/down use a distinct nnx parameter type, and a tested compiled step updates
+only those 8,798,208 parameters. The previous order was backwards for engineering and right
+only for learning. LoRA is cheaper, iterates faster, and
 `convert_lora_to_gguf.py` is already in the local llama.cpp checkout; full fine-tuning stays
 on the list explicitly as a **learning objective**, which is a legitimate reason but not an
 efficiency one. Reuse `grain` and `orbax` from the course; `optax.adamw`, cosine schedule,

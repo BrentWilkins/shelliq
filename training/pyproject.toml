@@ -19,9 +19,17 @@ dependencies = [
 # Style lives in the repo root so there is one copy of it.
 [tool.ruff]
 extend = "../pyproject.toml"
+exclude = [
+    "shelliq_training/modeling_qwen2_jax.py",
+    "shelliq_training/modeling_qwen2_orig.py",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
 
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
     "ruff>=0.16.0",
+    "torch>=2.13.0",
 ]
