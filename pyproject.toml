@@ -16,6 +16,10 @@ dev = [
 # than restating it, so the two cannot drift apart.
 [tool.ruff]
 line-length = 130
+extend-exclude = [
+    "training/shelliq_training/modeling_qwen2_jax.py",
+    "training/shelliq_training/modeling_qwen2_orig.py",
+]
 
 [tool.ruff.format]
 quote-style = "single"
