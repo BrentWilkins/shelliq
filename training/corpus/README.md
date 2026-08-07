@@ -4,6 +4,8 @@ First-party, hand-authored schema-version-1 rows. Unlike `artifacts/`, this
 directory is **git-tracked**: every row is reviewable, diffable, and editable by
 hand.
 
+The corpus currently contains 626 rows across 13 command-family files.
+
 These rows exist to cover what tldr structurally cannot teach. tldr examples are
 single-clause, placeholder-stripped, and overwhelmingly GNU-flavored. The gaps
 this corpus targets are the ones `PLAN.md` names: flag-case traps (`-r` vs
@@ -61,11 +63,11 @@ is drawn at the **file** level, not row by row:
 | | rows | zsh | bash | sh |
 | ------------------- | ---: | ---: | ---: | ---: |
 | `zsh-native.jsonl`  |   47 |   47 |   26 |   25 |
-| everything else     |  534 |  534 |  534 |  529 |
+| everything else     |  579 |  579 |  579 |  574 |
 
 `zsh-native.jsonl` is dialect-locked by design: glob qualifiers, globbing flags,
 and `print -N` have no Bash or `sh` equivalent, and teaching them is the point.
-A future `sh` profile skips that file wholesale. The remaining 336 rows are
+A future `sh` profile skips that file wholesale. The remaining 579 rows are
 ordinary command usage that already parses in all three shells, apart from five
 `pipelines` rows using process substitution or a here-string — Zsh and Bash, but
 not POSIX `sh`.
