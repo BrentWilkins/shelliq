@@ -1,0 +1,21 @@
+# Curated rows that native `zsh -n` accepts but the structural parser rejects.
+#
+# These are the `native_only` rows in audit-zsh-corpus terms. They stay in the
+# corpus because the shapes they teach — chiefly Zsh glob qualifiers — are a
+# large part of why a Zsh-first assistant needs a first-party corpus at all.
+#
+# This list is a ratchet. `crates/syntax/tests/curated_corpus.rs` asserts every
+# entry still fails to parse losslessly, so an exemption cannot outlive the
+# parser gap that justified it. It doubles as the parser's to-do list.
+
+# Glob qualifiers carrying a subscript, e.g. *(om[1]) and *(.OL[1,5]).
+curated:zsh-native:linux:glob-newest-file
+curated:zsh-native:darwin:glob-newest-file
+curated:zsh-native:linux:glob-oldest-files
+curated:zsh-native:linux:glob-sort-size
+
+# Permission-testing glob qualifier, e.g. **/*(.W).
+curated:zsh-native:linux:glob-writable-by-others
+
+# Globbing flag prefix, e.g. (#i) for case-insensitive matching.
+curated:zsh-native:linux:glob-case-insensitive
