@@ -44,6 +44,12 @@ def causal_lm_loss(model: Qwen2ForCausalLM, batch: CausalLMBatch) -> jax.Array:
     return next_token_loss(logits, batch['labels'], batch['attention_mask'])
 
 
+@nnx.jit
+def eval_step(model: Qwen2ForCausalLM, batch: CausalLMBatch) -> jax.Array:
+    """Evaluate a fixed-shape batch without constructing optimizer gradients."""
+    return causal_lm_loss(model, batch)
+
+
 def create_lora_optimizer(
     model: Qwen2ForCausalLM,
     *,

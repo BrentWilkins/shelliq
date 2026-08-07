@@ -199,6 +199,8 @@ def _tldr_platforms(member: str, common_platforms: Sequence[Platform]) -> tuple[
 def _render_tldr_command(command: str) -> str:
     def replace(match: re.Match[str]) -> str:
         value = match.group(1)
+        if value.startswith('[') and value.endswith(']'):
+            value = value[1:-1]
         return value.split('|', maxsplit=1)[0]
 
     return _TLDR_PLACEHOLDER.sub(replace, command).strip()
