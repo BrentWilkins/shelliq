@@ -81,6 +81,7 @@ migration input.
 
 ## What does not belong here
 
-Derived and merged datasets go in gitignored `artifacts/`. Never commit a merge
-output to this directory. Personal rows never appear here at all — this corpus
-is `distributable` only.
+Derived and merged datasets go in gitignored `artifacts/`. Build one with
+`scripts/merge_corpus.py`; its manifest records the exact input hashes and
+corpus composition. Never commit a merge output to this directory. Personal
+rows never appear here at all — this corpus is `distributable` only.
