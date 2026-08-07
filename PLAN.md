@@ -528,12 +528,24 @@ and changed the selected completion from prose to the exact target command. The
 command-disjoint held-out loss worsened, so this establishes only the
 data→GPU→checkpoint→adapter/GGUF plumbing, not generalization.
 
-**[plan] The model should emit a constrained structure, not shell text.** Have it produce a
-command AST — command, subcommand, flags with arguments, operands — which shelliq renders
-deterministically with correct quoting. Unconstrained shell text hands the model the job of
-being a shell escaper, which is both the easiest thing to get wrong and the worst thing to
-get wrong. A structured boundary also makes option checking exact instead of a re-parse of
-text the model already had structured in its head.
+**[built: lossless Zsh syntax boundary and initial semantic lowerer; plan: semantic coverage]
+The model should emit a constrained structure, not shell text.** `crates/syntax` now pins
+`tree-sitter-zsh`, provides
+a versioned lossless CST with exact rendering and structural render/reparse validation, and
+compares it with native `zsh -f -n -c` through a corpus audit. On the pinned 30,351-row tldr
+corpus, native Zsh accepts 29,988 rows; the structural parser accepts 30,002; their safe
+intersection is 29,967 (99.93% of native-valid rows). Both reject 328 rows, many interactive
+keystrokes rather than commands; 56 disagreements remain explicit audit results.
+`training/SHELL_AST.md` records the bake-off and gate. The first project-owned semantic schema
+now lowers sequential simple commands, ordered word units, pipelines, and common file
+redirects, with deterministic render/reparse/re-lower equality. Word internals and the
+remaining statement families are still required before this becomes a training target. The
+CST is deliberately not mislabeled as the final learned AST: the semantic layer must cover
+full Zsh program structure with no raw-shell escape hatch. Unconstrained shell text hands the
+model the job of being a shell escaper, which is
+both the easiest thing to get wrong and the worst thing to get wrong. A structured boundary
+also makes option checking exact instead of a re-parse of text the model already had
+structured in its head.
 
 **Dataset** (~30–50k pairs), each formatted with a `<context>` block of retrieved index
 entries so training matches retrieval-augmented inference, tagged `# platform: linux|darwin`:

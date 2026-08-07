@@ -5,6 +5,7 @@ members = [
     "crates/harvest",
     "crates/index",
     "crates/verify",
+    "crates/syntax",
 ]
 
 [workspace.package]
