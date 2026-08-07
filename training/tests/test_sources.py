@@ -132,6 +132,10 @@ def test_nl2bash_builder_requires_review_and_alignment(tmp_path):
         ('sudo -u root /usr/bin/find .', 'find'),
         ('env -i bash -lc true', 'bash'),
         ('env -i LC_ALL=C rg needle .', 'rg'),
+        ('command -p /usr/bin/find .', 'find'),
+        ('command -v rg', 'command'),
+        ('sudo -l', 'sudo'),
+        ('sudo --list /usr/bin/find', 'sudo'),
     ],
 )
 def test_shell_command_name(command_line, expected):
