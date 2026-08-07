@@ -185,10 +185,11 @@ def assign_split(
     validation_fraction: float = 0.1,
     test_fraction: float = 0.1,
     heldout_sources: frozenset[str] = frozenset(),
+    heldout_platforms: frozenset[Platform] = frozenset(),
 ) -> Split:
     """Hash by command, so paraphrases and sources cannot leak across splits."""
     _validate_fractions(validation_fraction, test_fraction)
-    if record.source in heldout_sources:
+    if record.source in heldout_sources or record.platform in heldout_platforms:
         return Split.TEST
     digest = hashlib.sha256(f'{seed}\0{record.command}'.encode()).digest()
     unit_interval = int.from_bytes(digest[:8], 'big') / 2**64
@@ -207,18 +208,26 @@ def split_records(
     validation_fraction: float = 0.1,
     test_fraction: float = 0.1,
     heldout_sources: frozenset[str] = frozenset(),
+    heldout_platforms: frozenset[Platform] = frozenset(),
 ) -> dict[Split, list[SFTRecord]]:
     materialized = list(records)
     _require_corpus(materialized, corpus)
+    forced_test_commands = {
+        record.command for record in materialized if record.source in heldout_sources or record.platform in heldout_platforms
+    }
     result = {split: [] for split in Split}
     for record in materialized:
-        split = assign_split(
-            record,
-            seed=seed,
-            validation_fraction=validation_fraction,
-            test_fraction=test_fraction,
-            heldout_sources=heldout_sources,
-        )
+        if record.command in forced_test_commands:
+            split = Split.TEST
+        else:
+            split = assign_split(
+                record,
+                seed=seed,
+                validation_fraction=validation_fraction,
+                test_fraction=test_fraction,
+                heldout_sources=heldout_sources,
+                heldout_platforms=heldout_platforms,
+            )
         result[split].append(record)
     return result
 
