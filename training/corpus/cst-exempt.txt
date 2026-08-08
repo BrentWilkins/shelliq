@@ -1,0 +1,5 @@
+# Curated rows accepted by native `zsh -n` but rejected by the structural parser.
+#
+# Keep this file even when empty: conversion and corpus tests treat it as a
+# ratchet. Any future parser gap must be listed explicitly, and every listed
+# row must still fail lossless parsing.

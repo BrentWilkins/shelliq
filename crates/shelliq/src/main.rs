@@ -45,21 +45,38 @@ enum Command {
         limit: usize,
     },
     /// List every flag for a command.
-    Flags { command: String },
+    Flags {
+        command: String,
+        /// One flag spelling per line, no colour or citation — for shell completion, not
+        /// people. Silent (exit 0, no output) rather than an explanatory error when the
+        /// command isn't indexed, since a completer should fall through quietly.
+        #[arg(long)]
+        raw: bool,
+    },
     /// Show exactly where a citation such as `grep(1):168` came from.
     Source { citation: String },
 }
 
 #[derive(Subcommand)]
 enum IndexAction {
-    /// Harvest the named commands. Every man section for a name is indexed.
+    /// Harvest the named commands. Every man section for a name is indexed; a name with no
+    /// man page falls back to crawling `--help` and its subcommands' `--help`.
     Build {
         #[arg(required = true)]
         names: Vec<String>,
+        /// Let the `--help` crawler execute binaries under this directory even though it is
+        /// writable by someone other than root, e.g. `~/.cargo/bin`. Repeatable. Empty by
+        /// default, so nothing outside a root-owned, locked-down directory runs unopted-in.
+        #[arg(long = "allow-writable-path")]
+        allow_writable_path: Vec<std::path::PathBuf>,
     },
     /// Re-harvest every indexed name (or just the ones given) into a fresh index, then
     /// atomically replace the old one.
-    Refresh { names: Vec<String> },
+    Refresh {
+        names: Vec<String>,
+        #[arg(long = "allow-writable-path")]
+        allow_writable_path: Vec<std::path::PathBuf>,
+    },
     /// Show index size.
     Stats,
 }
@@ -70,18 +87,24 @@ fn main() -> Result<()> {
 
     match cli.command {
         Command::Index { action } => match action {
-            IndexAction::Build { names } => build(&path, &names),
-            IndexAction::Refresh { names } => refresh(&path, &names),
+            IndexAction::Build {
+                names,
+                allow_writable_path,
+            } => build(&path, &names, &allow_writable_path),
+            IndexAction::Refresh {
+                names,
+                allow_writable_path,
+            } => refresh(&path, &names, &allow_writable_path),
             IndexAction::Stats => stats(&path),
         },
         Command::Explain { line } => explain(&path, &line.join(" ")),
         Command::Search { command, query, limit } => search(&path, &command, &query.join(" "), limit),
-        Command::Flags { command } => list_flags(&path, &command),
+        Command::Flags { command, raw } => list_flags(&path, &command, raw),
         Command::Source { citation } => source(&path, &citation),
     }
 }
 
-fn build(path: &std::path::Path, names: &[String]) -> Result<()> {
+fn build(path: &std::path::Path, names: &[String], allow_writable_paths: &[std::path::PathBuf]) -> Result<()> {
     let mut index = Index::open(path)?;
     let mut pages = 0usize;
     let mut flags = 0usize;
@@ -97,7 +120,14 @@ fn build(path: &std::path::Path, names: &[String]) -> Result<()> {
                     index.insert_command(&target, &cmd)?;
                 }
             }
-            Err(e) => eprintln!("  {name}: {e}"),
+            Err(man_err) => match harvest_via_help(&mut index, &target, name, allow_writable_paths) {
+                Ok(flag_count) => {
+                    pages += 1;
+                    flags += flag_count;
+                    println!("  {name}(--help)  {flag_count} flags");
+                }
+                Err(help_err) => eprintln!("  {name}: no man page ({man_err}); --help crawl failed too: {help_err}"),
+            },
         }
     }
 
@@ -106,13 +136,35 @@ fn build(path: &std::path::Path, names: &[String]) -> Result<()> {
     Ok(())
 }
 
+/// Fall back to crawling `--help` when a name has no man page, for tools like `ollama`,
+/// `kubectl`, `cargo`, and `uv` that document themselves that way instead.
+fn harvest_via_help(
+    index: &mut Index,
+    target: &shelliq_harvest::Target,
+    name: &str,
+    allow_writable_paths: &[std::path::PathBuf],
+) -> Result<usize> {
+    let exec_path = target
+        .exec_path
+        .as_deref()
+        .context("no executable file to crawl via --help")?;
+    let limits = shelliq_harvest::help_crawler::CrawlLimits {
+        allow_paths: allow_writable_paths.to_vec(),
+        ..Default::default()
+    };
+    let nodes = shelliq_harvest::help_crawler::crawl_help(std::path::Path::new(exec_path), target.exec_hash.as_deref(), &limits)?;
+    let flag_count: usize = nodes.iter().map(|n| n.flags.len()).sum();
+    index.insert_help_crawl(target, name, &nodes)?;
+    Ok(flag_count)
+}
+
 /// Rebuild every harvested name into a sibling file, then swap it in atomically.
 ///
 /// A refresh in place would leave a reader briefly looking at a half-rewritten index; this
 /// instead only ever replaces the whole file in one `rename`, and a name that no longer
 /// resolves to anything simply harvests nothing and drops out of the fresh index, so a
 /// removed command's stale facts do not linger.
-fn refresh(path: &std::path::Path, names: &[String]) -> Result<()> {
+fn refresh(path: &std::path::Path, names: &[String], allow_writable_paths: &[std::path::PathBuf]) -> Result<()> {
     let names: Vec<String> = if names.is_empty() {
         Index::open(path)?.all_target_names()?
     } else {
@@ -139,7 +191,10 @@ fn refresh(path: &std::path::Path, names: &[String]) -> Result<()> {
                     fresh.insert_command(&target, &cmd)?;
                 }
             }
-            Err(e) => eprintln!("  {name}: {e}"),
+            Err(man_err) => match harvest_via_help(&mut fresh, &target, name, allow_writable_paths) {
+                Ok(_) => pages += 1,
+                Err(help_err) => eprintln!("  {name}: no man page ({man_err}); --help crawl failed too: {help_err}"),
+            },
         }
     }
     fresh.checkpoint_and_close()?;
@@ -255,7 +310,7 @@ fn search(path: &std::path::Path, command: &str, query: &str, limit: usize) -> R
     warn_if_stale(&index, command)?;
     let all = index.flags_for(command)?;
     if all.is_empty() {
-        anyhow::bail!("`{command}` is not indexed; run `shelliq index build {command}`");
+        bail_not_indexed(&index, command)?;
     }
 
     let hits = index.search_flags(command, query, limit)?;
@@ -272,18 +327,45 @@ fn search(path: &std::path::Path, command: &str, query: &str, limit: usize) -> R
     Ok(())
 }
 
-fn list_flags(path: &std::path::Path, command: &str) -> Result<()> {
+fn list_flags(path: &std::path::Path, command: &str, raw: bool) -> Result<()> {
     let index = Index::open(path)?;
-    warn_if_stale(&index, command)?;
     let flags = index.flags_for(command)?;
+
+    if raw {
+        for flag in &flags {
+            if let Some(s) = &flag.short {
+                println!("{s}");
+            }
+            if let Some(l) = &flag.long {
+                println!("{l}");
+            }
+        }
+        return Ok(());
+    }
+
+    warn_if_stale(&index, command)?;
     if flags.is_empty() {
-        anyhow::bail!("`{command}` is not indexed; run `shelliq index build {command}`");
+        bail_not_indexed(&index, command)?;
     }
     for flag in &flags {
         println!("{}", render::flag_line(flag));
     }
     println!("\n{} flags", flags.len());
     Ok(())
+}
+
+/// `flags_for` returns nothing both when a name was never harvested and when it was
+/// harvested but has no top-level flags of its own — real for tools like `kubectl`, whose
+/// `--help` lists only subcommands, with flags living entirely under them. Telling those
+/// apart matters: the first case is fixed by `index build`, the second is not.
+fn bail_not_indexed(index: &Index, command: &str) -> Result<()> {
+    if index.command_exists(command)? {
+        anyhow::bail!(
+            "`{command}` is indexed but has no top-level flags of its own; \
+             they live under its subcommands, which `shelliq flags`/`search` cannot query yet"
+        );
+    }
+    anyhow::bail!("`{command}` is not indexed; run `shelliq index build {command}`");
 }
 
 /// Terminal output.

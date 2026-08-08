@@ -14,6 +14,9 @@ use anyhow::{Context, Result, bail};
 use sha2::{Digest, Sha256};
 use std::process::Command;
 
+pub mod help_crawler;
+pub mod tldr;
+
 /// Bumped whenever parsing behaviour changes.
 ///
 /// The index stores this alongside each row's `source_hash`. A parser fix must invalidate
@@ -371,7 +374,7 @@ fn harvest_path(name: &str, path: &str) -> Result<ParsedCommand> {
     Ok(parse_rendered(name, &section, path, &source_hash, &rendered))
 }
 
-fn hex(bytes: &[u8]) -> String {
+pub(crate) fn hex(bytes: &[u8]) -> String {
     use std::fmt::Write;
     bytes.iter().fold(String::new(), |mut s, b| {
         let _ = write!(s, "{b:02x}");
@@ -481,7 +484,7 @@ pub fn parse_rendered(name: &str, section: &str, source_path: &str, source_hash:
 ///
 /// A page may document `-r` and `--recursive` on separate lines; keeping both as one
 /// record means a lookup for either spelling finds the same facts.
-fn push_unique(flags: &mut Vec<ParsedFlag>, incoming: ParsedFlag) {
+pub(crate) fn push_unique(flags: &mut Vec<ParsedFlag>, incoming: ParsedFlag) {
     let clash = flags
         .iter_mut()
         .find(|f| (f.short.is_some() && f.short == incoming.short) || (f.long.is_some() && f.long == incoming.long));
@@ -512,7 +515,7 @@ fn indent_of(line: &str) -> usize {
 ///
 /// A run of two or more spaces separates them. Justification is disabled during rendering
 /// precisely so that such a run is never an artifact of padding.
-fn split_tag(content: &str) -> (&str, &str) {
+pub(crate) fn split_tag(content: &str) -> (&str, &str) {
     match content.find("  ") {
         Some(i) => (&content[..i], &content[i..]),
         None => (content, ""),
@@ -520,7 +523,7 @@ fn split_tag(content: &str) -> (&str, &str) {
 }
 
 /// Parse `-A NUM, --after-context=NUM` into one flag record.
-fn parse_spec(spec: &str) -> Option<ParsedFlag> {
+pub(crate) fn parse_spec(spec: &str) -> Option<ParsedFlag> {
     let spec = spec.trim();
     if !spec.starts_with('-') {
         return None;

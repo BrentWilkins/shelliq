@@ -5,12 +5,13 @@ members = [
     "crates/harvest",
     "crates/index",
     "crates/verify",
+    "crates/syntax",
 ]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/brentwilkins/shelliq"
 
 [workspace.dependencies]

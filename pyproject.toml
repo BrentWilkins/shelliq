@@ -3,6 +3,7 @@ name = "shelliq-dev"
 version = "0.1.0"
 description = "Development tooling for shelliq. Holds the linters; ships nothing."
 requires-python = ">=3.14"
+license = "MIT OR Apache-2.0"
 dependencies = []
 
 [dependency-groups]
@@ -15,6 +16,10 @@ dev = [
 # than restating it, so the two cannot drift apart.
 [tool.ruff]
 line-length = 130
+extend-exclude = [
+    "training/shelliq_training/modeling_qwen2_jax.py",
+    "training/shelliq_training/modeling_qwen2_orig.py",
+]
 
 [tool.ruff.format]
 quote-style = "single"
