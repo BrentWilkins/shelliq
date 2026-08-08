@@ -305,6 +305,7 @@ def main() -> None:
         'selection': {
             'seed': args.seed,
             'examples': len(eval_records),
+            'generation_tokens': GENERATION_TOKENS,
             'priority_source': args.priority_source,
             'source_counts': dict(Counter(record.source for record in eval_records)),
         },
