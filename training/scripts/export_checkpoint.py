@@ -13,7 +13,7 @@ from safetensors.flax import load_file
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from shelliq_training.checkpoint import restore_checkpoint  # noqa: E402
+from shelliq_training.checkpoint import TargetFormat, restore_checkpoint  # noqa: E402
 from shelliq_training.config import Qwen2Config  # noqa: E402
 from shelliq_training.data import Corpus  # noqa: E402
 from shelliq_training.export import (  # noqa: E402
@@ -39,6 +39,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--kind', choices=('adapter', 'merged'), required=True)
     parser.add_argument('--model-id', default=DEFAULT_MODEL_ID)
     parser.add_argument('--corpus', type=Corpus, required=True)
+    parser.add_argument('--target-format', type=TargetFormat, choices=TargetFormat, required=True)
     parser.add_argument('--rank', type=int, default=16)
     parser.add_argument('--alpha', type=float, default=32.0)
     parser.add_argument('--targets', default=','.join(DEFAULT_TARGETS))
@@ -64,6 +65,7 @@ def main() -> None:
         optimizer,
         model_id=args.model_id,
         corpus=args.corpus,
+        target_format=args.target_format,
     )
     if args.kind == 'adapter':
         metadata = export_peft_adapter(model, args.output, model_id=args.model_id, corpus=args.corpus)
