@@ -3,7 +3,13 @@ import jax.numpy as jnp
 import pytest
 from flax import nnx
 
-from shelliq_training.checkpoint import CheckpointError, restore_checkpoint, save_checkpoint
+from shelliq_training.checkpoint import (
+    CheckpointError,
+    CheckpointMetadata,
+    TargetFormat,
+    restore_checkpoint,
+    save_checkpoint,
+)
 from shelliq_training.config import Qwen2Config
 from shelliq_training.data import Corpus
 from shelliq_training.lora import inject_lora
@@ -53,6 +59,7 @@ def test_checkpoint_restores_adapters_optimizer_and_next_step(tmp_path):
         optimizer,
         model_id='tiny-qwen',
         corpus=Corpus.DISTRIBUTABLE,
+        target_format=TargetFormat.RAW_SHELL,
     )
 
     resumed_model, resumed_optimizer = training_pair()
@@ -62,6 +69,7 @@ def test_checkpoint_restores_adapters_optimizer_and_next_step(tmp_path):
         resumed_optimizer,
         model_id='tiny-qwen',
         corpus=Corpus.DISTRIBUTABLE,
+        target_format=TargetFormat.RAW_SHELL,
     )
     assert restored == metadata
     assert int(resumed_optimizer.step[...]) == 1
@@ -83,6 +91,7 @@ def test_checkpoint_refuses_pipeline_mismatch(tmp_path):
         optimizer,
         model_id='tiny-qwen',
         corpus=Corpus.DISTRIBUTABLE,
+        target_format=TargetFormat.RAW_SHELL,
     )
 
     with pytest.raises(CheckpointError, match="corpus 'distributable' != 'personal'"):
@@ -92,7 +101,48 @@ def test_checkpoint_refuses_pipeline_mismatch(tmp_path):
             optimizer,
             model_id='tiny-qwen',
             corpus=Corpus.PERSONAL,
+            target_format=TargetFormat.RAW_SHELL,
         )
+
+
+def test_checkpoint_refuses_target_format_mismatch(tmp_path):
+    model, optimizer = training_pair()
+    checkpoint_path = tmp_path / 'semantic-step-0'
+    save_checkpoint(
+        checkpoint_path,
+        model,
+        optimizer,
+        model_id='tiny-qwen',
+        corpus=Corpus.DISTRIBUTABLE,
+        target_format=TargetFormat.SEMANTIC_DOCUMENT_V2,
+    )
+
+    with pytest.raises(CheckpointError, match='target format'):
+        restore_checkpoint(
+            checkpoint_path,
+            model,
+            optimizer,
+            model_id='tiny-qwen',
+            corpus=Corpus.DISTRIBUTABLE,
+            target_format=TargetFormat.RAW_SHELL,
+        )
+
+
+def test_schema_v1_metadata_is_read_as_raw_shell():
+    metadata = CheckpointMetadata.from_dict(
+        {
+            'schema_version': 1,
+            'step': 4,
+            'model_id': 'tiny-qwen',
+            'corpus': 'distributable',
+            'rank': 4,
+            'alpha': 8.0,
+            'targets': ['q_proj'],
+        }
+    )
+
+    assert metadata.target_format is TargetFormat.RAW_SHELL
+    assert metadata.to_dict()['schema_version'] == 2
 
 
 def test_checkpoint_never_overwrites_existing_directory(tmp_path):
@@ -107,4 +157,5 @@ def test_checkpoint_never_overwrites_existing_directory(tmp_path):
             optimizer,
             model_id='tiny-qwen',
             corpus=Corpus.DISTRIBUTABLE,
+            target_format=TargetFormat.RAW_SHELL,
         )

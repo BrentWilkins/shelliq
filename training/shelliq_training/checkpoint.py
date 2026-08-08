@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import cast
 
@@ -16,7 +17,12 @@ from shelliq_training.data import Corpus
 from shelliq_training.lora import DEFAULT_TARGETS, LoRALinear
 from shelliq_training.model import Qwen2ForCausalLM
 
-CHECKPOINT_SCHEMA_VERSION = 1
+CHECKPOINT_SCHEMA_VERSION = 2
+
+
+class TargetFormat(StrEnum):
+    RAW_SHELL = 'raw-shell'
+    SEMANTIC_DOCUMENT_V2 = 'semantic-document-v2-json'
 
 
 class CheckpointError(ValueError):
@@ -28,6 +34,7 @@ class CheckpointMetadata:
     step: int
     model_id: str
     corpus: Corpus
+    target_format: TargetFormat
     rank: int
     alpha: float
     targets: tuple[str, ...]
@@ -38,6 +45,7 @@ class CheckpointMetadata:
             'step': self.step,
             'model_id': self.model_id,
             'corpus': self.corpus.value,
+            'target_format': self.target_format.value,
             'rank': self.rank,
             'alpha': self.alpha,
             'targets': list(self.targets),
@@ -45,7 +53,10 @@ class CheckpointMetadata:
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, object]) -> CheckpointMetadata:
+        schema_version = raw.get('schema_version')
         expected = {'schema_version', 'step', 'model_id', 'corpus', 'rank', 'alpha', 'targets'}
+        if schema_version == CHECKPOINT_SCHEMA_VERSION:
+            expected.add('target_format')
         if raw.keys() != expected:
             missing = expected - raw.keys()
             unknown = raw.keys() - expected
@@ -55,7 +66,7 @@ class CheckpointMetadata:
             if unknown:
                 details.append(f'unknown {", ".join(sorted(unknown))}')
             raise CheckpointError(f'invalid checkpoint metadata: {"; ".join(details)}')
-        if raw['schema_version'] != CHECKPOINT_SCHEMA_VERSION:
+        if schema_version not in {1, CHECKPOINT_SCHEMA_VERSION}:
             raise CheckpointError(f'unsupported checkpoint schema: {raw["schema_version"]!r}')
         try:
             step = int(cast(int, raw['step']))
@@ -63,6 +74,7 @@ class CheckpointMetadata:
             alpha = float(cast(float, raw['alpha']))
             model_id = cast(str, raw['model_id'])
             corpus = Corpus(cast(str, raw['corpus']))
+            target_format = TargetFormat.RAW_SHELL if schema_version == 1 else TargetFormat(cast(str, raw['target_format']))
             raw_targets = cast(list[object], raw['targets'])
             targets = tuple(cast(str, target) for target in raw_targets)
         except (TypeError, ValueError) as error:
@@ -73,7 +85,15 @@ class CheckpointMetadata:
             raise CheckpointError('checkpoint model_id must be a non-empty string')
         if not isinstance(raw_targets, list) or not targets or any(not isinstance(target, str) for target in raw_targets):
             raise CheckpointError('checkpoint targets must be a non-empty string list')
-        return cls(step=step, model_id=model_id, corpus=corpus, rank=rank, alpha=alpha, targets=targets)
+        return cls(
+            step=step,
+            model_id=model_id,
+            corpus=corpus,
+            target_format=target_format,
+            rank=rank,
+            alpha=alpha,
+            targets=targets,
+        )
 
 
 def save_checkpoint(
@@ -83,6 +103,7 @@ def save_checkpoint(
     *,
     model_id: str,
     corpus: Corpus,
+    target_format: TargetFormat,
 ) -> CheckpointMetadata:
     """Atomically save adapters, optimizer moments, step, and compatibility data."""
     path = Path(directory).resolve()
@@ -94,6 +115,7 @@ def save_checkpoint(
         step=step,
         model_id=model_id,
         corpus=corpus,
+        target_format=target_format,
         rank=rank,
         alpha=alpha,
         targets=targets,
@@ -120,6 +142,7 @@ def restore_checkpoint(
     *,
     model_id: str,
     corpus: Corpus,
+    target_format: TargetFormat,
 ) -> CheckpointMetadata:
     """Restore only after model, corpus, and LoRA configuration agree."""
     path = Path(directory).resolve()
@@ -138,7 +161,13 @@ def restore_checkpoint(
             ),
         )
     metadata = CheckpointMetadata.from_dict(restored.metadata)
-    _validate_compatibility(metadata, model, model_id=model_id, corpus=corpus)
+    _validate_compatibility(
+        metadata,
+        model,
+        model_id=model_id,
+        corpus=corpus,
+        target_format=target_format,
+    )
 
     adapter_state = nnx.state(model, nnx.LoRAParam)
     optimizer_state = nnx.state(optimizer)
@@ -190,6 +219,7 @@ def _validate_compatibility(
     *,
     model_id: str,
     corpus: Corpus,
+    target_format: TargetFormat,
 ) -> None:
     rank, alpha, targets = lora_signature(model)
     mismatches = []
@@ -197,6 +227,8 @@ def _validate_compatibility(
         mismatches.append(f'model {metadata.model_id!r} != {model_id!r}')
     if metadata.corpus is not corpus:
         mismatches.append(f'corpus {metadata.corpus.value!r} != {corpus.value!r}')
+    if metadata.target_format is not target_format:
+        mismatches.append(f'target format {metadata.target_format.value!r} != {target_format.value!r}')
     if metadata.rank != rank:
         mismatches.append(f'rank {metadata.rank} != {rank}')
     if not math.isclose(metadata.alpha, alpha):

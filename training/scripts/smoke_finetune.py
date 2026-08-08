@@ -26,7 +26,7 @@ from huggingface_hub import hf_hub_download
 from safetensors.flax import load_file
 from transformers import AutoTokenizer
 
-from shelliq_training.checkpoint import save_checkpoint
+from shelliq_training.checkpoint import TargetFormat, save_checkpoint
 from shelliq_training.config import Qwen2Config
 from shelliq_training.corpus_audit import preflight_records
 from shelliq_training.data import (
@@ -258,11 +258,11 @@ def main() -> None:
         dataset_path = args.semantic_dataset
         clean_records = load_semantic_jsonl(dataset_path)
         rejected = {}
-        target_format = 'semantic-document-v2-json'
+        target_format = TargetFormat.SEMANTIC_DOCUMENT_V2
     else:
         dataset_path = args.dataset
         clean_records, rejected = automatic_preflight(load_jsonl(dataset_path, corpus=Corpus.DISTRIBUTABLE))
-        target_format = 'raw-shell'
+        target_format = TargetFormat.RAW_SHELL
     total_records = len(clean_records) + len(rejected)
     splits = split_records(clean_records, corpus=Corpus.DISTRIBUTABLE, seed=args.seed)
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, local_files_only=True)
@@ -376,6 +376,7 @@ def main() -> None:
             optimizer,
             model_id=MODEL_ID,
             corpus=Corpus.DISTRIBUTABLE,
+            target_format=target_format,
         )
         print(f'checkpoint: {args.checkpoint} at step {metadata.step}')
     if args.report is not None:
@@ -387,7 +388,7 @@ def main() -> None:
                 'sha256': _file_sha256(dataset_path),
                 'accepted_records': len(clean_records),
                 'rejected_record_ids': sorted(rejected),
-                'target_format': target_format,
+                'target_format': target_format.value,
             },
             'selection': {
                 'seed': args.seed,

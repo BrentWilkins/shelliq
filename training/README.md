@@ -353,6 +353,7 @@ metadata = save_checkpoint(
     optimizer,
     model_id='Qwen/Qwen2.5-Coder-0.5B-Instruct',
     corpus=Corpus.DISTRIBUTABLE,
+    target_format=TargetFormat.RAW_SHELL,
 )
 metadata = restore_checkpoint(
     'checkpoints/step-00001000',
@@ -360,11 +361,14 @@ metadata = restore_checkpoint(
     optimizer,
     model_id='Qwen/Qwen2.5-Coder-0.5B-Instruct',
     corpus=Corpus.DISTRIBUTABLE,
+    target_format=TargetFormat.RAW_SHELL,
 )
 ```
 
-Checkpoint directories are immutable. Restore refuses model ID, corpus, rank,
-alpha, and target-module mismatches. Base weights are not duplicated.
+Checkpoint directories are immutable. Restore refuses model ID, corpus, target
+format, rank, alpha, and target-module mismatches. Schema-v1 checkpoints remain
+readable as raw-shell checkpoints; semantic targets require schema v2. Base
+weights are not duplicated.
 
 ## Evaluation
 
@@ -393,12 +397,14 @@ uv run python scripts/export_checkpoint.py \
   --checkpoint checkpoints/step-00001000 \
   --base path/to/Qwen2.5-Coder-0.5B-Instruct \
   --output exports/adapter --kind adapter --corpus personal \
+  --target-format raw-shell \
   --gguf-output exports/adapter-f16.gguf --llama-cpp ../../llama.cpp
 
 uv run python scripts/export_checkpoint.py \
   --checkpoint checkpoints/step-00001000 \
   --base path/to/Qwen2.5-Coder-0.5B-Instruct \
   --output exports/merged --kind merged --corpus distributable \
+  --target-format semantic-document-v2-json \
   --gguf-output exports/model-q8.gguf --llama-cpp ../../llama.cpp \
   --quantization Q8_0
 ```
