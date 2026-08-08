@@ -1,10 +1,10 @@
-# shelliq
+# ShellIQ
 
 A local CLI assistant. It answers "is it `-r` or `-R`?" from the man pages installed on
 *this* machine, and cites the line it got the answer from.
 
-Status: **P0**. The index, man-page harvester, and option checker work. There is no model
-yet, and most of the point is that the common cases never need one.
+Status: P0 is shipped. Trust hardening and the separate custom-model experiment are
+active; the shipping CLI remains model-free.
 
 ## Try it
 
@@ -50,7 +50,7 @@ Facts and fluency are kept apart:
 | English → command shape              | A small model (later phases) |
 | Whether each option spelling exists  | Option checker, index-backed |
 
-A local small model on its own is *less* reliable than a cloud one. What makes shelliq
+A local small model on its own is *less* reliable than a cloud one. What makes ShellIQ
 useful is not that it runs locally — it is that every option it reports is looked up in the
 man page on your disk and carries a citation. Running locally is the privacy story, not the
 accuracy story.
@@ -70,11 +70,11 @@ after an upgrade is what keeps it honest.
 The default build links no inference library, opens no socket, and needs no GPU. A model is
 optional, downloaded on demand, and reached over HTTP through whatever you already run
 (`ollama` or `llama-server`) — which is also how Metal, Vulkan, and CUDA support arrive
-without shelliq containing any backend code.
+without ShellIQ containing any backend code.
 
 ## Layout
 
-```
+```text
 crates/shelliq/   CLI entrypoint
 crates/harvest/   man page parser, --help crawler
 crates/index/     schema, FTS5, ranking

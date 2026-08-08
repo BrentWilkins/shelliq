@@ -1,4 +1,4 @@
-# shelliq training
+# ShellIQ training
 
 Development-only JAX/Flax NNX code adapting
 `Qwen/Qwen2.5-Coder-0.5B-Instruct`. Nothing in this directory ships in the
