@@ -1,0 +1,29 @@
+# Curated rows that are not valid in every target shell.
+#
+# The long-term target is Zsh plus POSIX `sh` plus Bash. Today the corpus is
+# Zsh-first, so this file records exactly where that shows, rather than leaving
+# portability as an unverifiable claim in prose.
+#
+# Two entry forms are accepted:
+#   * a bare filename  — the whole family is Zsh-dialect by design
+#   * a `record_id`    — a single row inside an otherwise portable family
+#
+# This list is a ratchet. `tests/test_corpus.py` asserts every entry really is
+# rejected by `bash -n` or `sh -n`, and that every row NOT listed here parses
+# cleanly in all three shells. Rewriting a row portably means deleting its line;
+# adding a non-portable row to a portable family fails the test until it is
+# either fixed or recorded here with a reason.
+
+# Zsh glob qualifiers, globbing flags, and `print -N` have no Bash or POSIX sh
+# equivalent. This family exists to teach exactly that syntax, so the whole file
+# is dialect-locked and a future `sh` profile should skip it wholesale.
+zsh-native.jsonl
+
+# Process substitution is Zsh and Bash but not POSIX sh, which has no <(...).
+curated:pipelines:linux:process-substitution-diff
+curated:pipelines:darwin:process-substitution-diff
+curated:pipelines:linux:process-substitution-comm
+curated:pipelines:linux:process-substitution-tee
+
+# Here-strings (<<<) are Zsh and Bash but not POSIX sh.
+curated:pipelines:linux:cat-here-string

@@ -1,0 +1,5 @@
+# Curated rows that cannot lower into Semantic AST v2.
+#
+# Keep this file even when empty: conversion and corpus tests treat it as a
+# ratchet. Any future unsupported row must be listed explicitly, and every
+# listed row must still fail lowering.

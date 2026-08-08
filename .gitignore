@@ -5,5 +5,8 @@
 *.sqlite-shm
 .venv/
 __pycache__/
+.ruff_cache/
+.tokensave/
+training/artifacts/
 *.gguf
 *.safetensors

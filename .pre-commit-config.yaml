@@ -19,6 +19,9 @@ repos:
       - id: mixed-line-ending
       - id: check-merge-conflict
       - id: check-added-large-files
+        # Vendored tldr-pages content (crates/harvest/vendor/) — see NOTICE.md. A deliberate,
+        # one-time addition, not the kind of accidental large binary this hook guards against.
+        exclude: '^crates/harvest/vendor/'
       - id: check-toml
       - id: check-yaml
 
@@ -44,12 +47,14 @@ repos:
       - id: ruff-check
         name: ruff check
         entry: uv run ruff check --fix
+        exclude: '^training/shelliq_training/modeling_qwen2_(jax|orig)\.py$'
         language: system
         types: [python]
 
       - id: ruff-format
         name: ruff format
         entry: uv run ruff format
+        exclude: '^training/shelliq_training/modeling_qwen2_(jax|orig)\.py$'
         language: system
         types: [python]
 
@@ -61,6 +66,7 @@ repos:
       # would make this comment fail its own hook.
       - id: no-emoji
         name: no emoji
+        exclude: '^training/shelliq_training/modeling_qwen2_orig\.py$'
         entry: >-
           sh -c 'if rg -n "[\p{Emoji_Presentation}\x{FE0F}]" "$@"; then echo "emoji found; use a text tag such as [done] or a functional glyph such as ✓" >&2; exit 1; fi' --
         language: system

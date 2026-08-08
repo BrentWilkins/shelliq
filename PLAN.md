@@ -161,18 +161,18 @@ about the code.
 
 | Tag       | Meaning                                                  |
 | --------- | -------------------------------------------------------- |
-| `[done]`  | Implemented and measured on this machine                  |
-| `[built]` | Implemented, not yet validated against an external gate   |
-| `[plan]`  | Designed, not written                                     |
-| `[exp]`   | Exploratory — may not survive contact with a measurement  |
+| `[done]`  | Implemented and measured on this machine                 |
+| `[built]` | Implemented, not yet validated against an external gate  |
+| `[plan]`  | Designed, not written                                    |
+| `[exp]`   | Exploratory — may not survive contact with a measurement |
 
 ```text
 crates/shelliq/   [done] clap CLI: explain, search, flags, index build/stats
 crates/harvest/   [done] man parser   · [plan] --help crawler
 crates/index/     [done] schema, FTS5 · [plan] fuzzy ranking, RRF, refresh, target identity
 crates/verify/    [done] bundle splitter, flag checker · [plan] shell-syntax abstention
-shell/            [plan] shelliq.zsh, shelliq.bash — directory does not exist yet
-training/         [plan] nnx Qwen, HF loader, data gen, train (uv project scaffolded only)
+shell/            [built] shelliq.zsh (explain widget, fallback Tab completer) · [plan] shelliq.bash
+training/         [built] nnx Qwen, HF loader, LoRA step, source builders, privacy/canary gates, held-out evaluation, Orbax resume, PEFT/HF/GGUF export · [plan] real fine-tune and benchmark
 ```
 
 **Language split: Rust ships, Python trains.** A Rust static binary starts in ~2ms, so
@@ -238,9 +238,18 @@ mandoc is **not installed here** (`apt install mandoc`; macOS ships it), so P0 s
 validated rendered-text indentation heuristic and treats mandoc as an upgrade. Both paths
 are validated against the same fixtures.
 
-**[plan] `--help` crawler** — covers the no-man-page tools. Run `TOOL --help`, parse the near
+**[built] `--help` crawler** — covers the no-man-page tools. Run `TOOL --help`, parse the near
 universal `-x, --xxx  description` shape that clap, cobra, and argparse all emit, extract
-subcommands, recurse to depth 3.
+subcommands, recurse to depth 3 (`crates/harvest/src/help_crawler.rs`). Wired into
+`shelliq index build`/`refresh` as a fallback when a name has no man page, and into the
+schema's `subcommands` table (`Index::insert_help_crawl`); a caller opts a writable directory
+into execution with `--allow-writable-path`. Validated end to end against `uv` (18 top-level
+flags, queryable via `shelliq flags`/`search`) and `kubectl` on this machine. `kubectl` is a
+real edge case worth naming: its root `--help` lists only subcommands and no top-level flags
+at all (they live under `kubectl options`), so `shelliq flags kubectl` correctly reports it
+has no top-level flags of its own rather than claiming it isn't indexed — but nothing yet
+lets a caller query flags scoped to a specific subcommand path (`shelliq flags kubectl get`),
+even though the schema and `insert_help_crawl` already store them that way.
 
 **Containment, honestly.** This executes arbitrary binaries, and the P0 answer — 5s timeout,
 setuid check, reviewed allowlist — was consent, not containment. `--help` is a convention;
@@ -249,18 +258,18 @@ before it ever looks at argv. The subcommand recursion also breaks the "only eve
 `--help`" promise, since reaching `ollama list --help` means passing `list` too. What the
 crawler must actually do:
 
-| Risk                                             | Containment                                                                                                   |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| Arbitrary startup behaviour                      | OS sandbox where available (bwrap/seccomp, `sandbox-exec`); documented as absent elsewhere                    |
-| Descendants outliving the timeout                | Own process group, kill the group, not the parent                                                             |
-| Unbounded output exhausting memory               | Hard byte cap on stdout/stderr, truncate and mark                                                             |
-| Hanging on stdin                                 | stdin closed, never a tty                                                                                     |
-| Reading the user's config or cwd                 | Minimal environment, temporary working directory                                                              |
-| Fork bombs                                       | Process-count limit (`RLIMIT_NPROC`)                                                                          |
-| Allowlisted name resolving elsewhere later       | Approve a canonical path + `exec_hash`, recheck symlink target, owner, mode, and caps immediately before exec |
-| `PATH` full of user-writable venv/npm/cargo dirs | Reject writable-by-non-root locations by default, opt in per path                                             |
-| Terminal escape injection via help text          | Strip control characters before indexing _and_ before display                                                 |
-| Privilege                                        | Never run as root, and never from a root package hook                                                         |
+| Risk                                             | Containment                                                                                                   | Status                                                |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------| ------------------------------------------------------|
+| Arbitrary startup behaviour                      | OS sandbox where available (bwrap/seccomp, `sandbox-exec`); documented as absent elsewhere                    | absent (not installed here); documented, not faked    |
+| Descendants outliving the timeout                | Own process group, kill the group, not the parent                                                             | done — `setsid` + `killpg`, unconditionally after `wait()` too, not only on timeout, so a `--help` that exits quickly while a background process it spawned lingers doesn't escape either; proved by a hostile fixture binary that forks, writes, floods stdout past the cap, and reads a closed stdin, in `crates/harvest/tests/help_crawl.rs` |
+| Unbounded output exhausting memory               | Hard byte cap on stdout/stderr, truncate and mark                                                             | done                                                   |
+| Hanging on stdin                                 | stdin closed, never a tty                                                                                     | done                                                   |
+| Reading the user's config or cwd                 | Minimal environment, temporary working directory                                                              | done — breaks `rustup`'s `cargo` proxy, which needs `$HOME`; accepted trade-off |
+| Fork bombs                                       | Process-count limit (`RLIMIT_NPROC`)                                                                          | **withdrawn** — `RLIMIT_NPROC` is per-*uid* on Linux, not per-process-tree; setting it low in the child crashed unrelated processes under the same uid. Needs a pids cgroup instead; not built. Bounded only by the timeout, same as P0. |
+| Allowlisted name resolving elsewhere later       | Approve a canonical path + `exec_hash`, recheck symlink target, owner, mode, and caps immediately before exec | done                                                   |
+| `PATH` full of user-writable venv/npm/cargo dirs | Reject writable-by-non-root locations by default, opt in per path                                             | done — `CrawlLimits.allow_paths`                       |
+| Terminal escape injection via help text          | Strip control characters before indexing _and_ before display                                                 | done on ingest; display path not yet wired            |
+| Privilege                                        | Never run as root, and never from a root package hook                                                         | not enforced by the crawler itself; caller's responsibility |
 
 **Lazy beats sweeping.** Harvest a command the first time it is asked about, not by walking
 `PATH`. It serves the actual use case, avoids executing hundreds of irrelevant binaries,
@@ -492,28 +501,51 @@ Hand-write the HF→nnx weight loader. Two trip hazards: HF stores linears `[out
 nnx `Linear` wants `[in, out]` (transpose), and Qwen2 has attention biases on q/k/v but
 _not_ o.
 
-**Hard gate before training:** same prompt through HF `transformers` and the nnx port,
-logits within 1e-3. Most ports fail silently; this catches it.
+**Hard gate before training:** [done] the same prompt through HF `transformers` and the nnx
+port on the RTX 4090 produced a 0.000018 maximum logit difference with highest-precision
+float32 matmuls, below the 1e-3 gate. Most ports fail silently; this catches it.
 
-**Memory: 6GB was arithmetic, not a measurement.** 0.5B bf16 weights + grads + fp32 Adam
+**Memory: LoRA measured; full fine-tune still arithmetic.** [done] The RTX 4090 smoke test
+used a bf16 base, rank-16 adapters, batch 1 × sequence 128, and peaked at 2.75 GiB of JAX
+device memory. The earlier 6GB estimate for 0.5B bf16 weights + grads + fp32 Adam
 moments does come to roughly 6GB, but that figure ignores activations, XLA scratch buffers,
 the fp32 master copy, sequence length, batch size, and compilation overhead — the terms that
 actually decide whether a step fits. It gets measured at a stated
 batch/sequence/rematerialisation configuration before it is quoted again.
 
-**LoRA first, full fine-tune second.** The previous order was backwards for engineering and
-right only for learning. LoRA (r=16, q/k/v/o/gate/up/down) is cheaper, iterates faster, and
+**LoRA first, full fine-tune second.** [built] Rank-16 adapters on
+q/k/v/o/gate/up/down use a distinct nnx parameter type, and a tested compiled step updates
+only those 8,798,208 parameters. The previous order was backwards for engineering and right
+only for learning. LoRA is cheaper, iterates faster, and
 `convert_lora_to_gguf.py` is already in the local llama.cpp checkout; full fine-tuning stays
 on the list explicitly as a **learning objective**, which is a legitimate reason but not an
 efficiency one. Reuse `grain` and `orbax` from the course; `optax.adamw`, cosine schedule,
 warmup.
 
-**[plan] The model should emit a constrained structure, not shell text.** Have it produce a
-command AST — command, subcommand, flags with arguments, operands — which shelliq renders
-deterministically with correct quoting. Unconstrained shell text hands the model the job of
-being a shell escaper, which is both the easiest thing to get wrong and the worst thing to
-get wrong. A structured boundary also makes option checking exact instead of a re-parse of
-text the model already had structured in its head.
+**[smoke passed; quality run pending]** A deterministic four-row overfit on the
+real pinned tldr corpus reduced training loss from 2.8963 to 0.0000 in 80 steps
+and changed the selected completion from prose to the exact target command. The
+command-disjoint held-out loss worsened, so this establishes only the
+data→GPU→checkpoint→adapter/GGUF plumbing, not generalization.
+
+**[built: lossless Zsh syntax boundary and initial semantic lowerer; plan: semantic coverage]
+The model should emit a constrained structure, not shell text.** `crates/syntax` now pins
+`tree-sitter-zsh`, provides
+a versioned lossless CST with exact rendering and structural render/reparse validation, and
+compares it with native `zsh -f -n -c` through a corpus audit. On the pinned 30,351-row tldr
+corpus, native Zsh accepts 29,988 rows; the structural parser accepts 30,002; their safe
+intersection is 29,967 (99.93% of native-valid rows). Both reject 328 rows, many interactive
+keystrokes rather than commands; 56 disagreements remain explicit audit results.
+`training/SHELL_AST.md` records the bake-off and gate. The first project-owned semantic schema
+now lowers sequential simple commands, ordered word units, pipelines, and common file
+redirects, with deterministic render/reparse/re-lower equality. Word internals and the
+remaining statement families are still required before this becomes a training target. The
+CST is deliberately not mislabeled as the final learned AST: the semantic layer must cover
+full Zsh program structure with no raw-shell escape hatch. Unconstrained shell text hands the
+model the job of being a shell escaper, which is
+both the easiest thing to get wrong and the worst thing to get wrong. A structured boundary
+also makes option checking exact instead of a re-parse of text the model already had
+structured in its head.
 
 **Dataset** (~30–50k pairs), each formatted with a `<context>` block of retrieved index
 entries so training matches retrieval-augmented inference, tagged `# platform: linux|darwin`:
@@ -561,17 +593,34 @@ still only ~500MB.
 
 Designed not to fight oh-my-zsh, zsh-autosuggestions, or zsh-syntax-highlighting:
 
+- **[built]** `C-x C-h` — explain the current buffer against the local index, printed below
+  the prompt. Never touches `$BUFFER`, so there is nothing to undo (`shell/shelliq.zsh`).
+  Index-only, no model.
 - `C-x C-n` — ZLE widget: buffer treated as English, replaced with the verified command.
-  Never touches Tab.
-- `C-x C-h` — explain/fuzzy-search flags for the current buffer. Index-only, no model.
-- Tab, safely — a **fallback** completer, never a replacement:
+  Needs a model, so this is P1B, not here — see "never pull a model from inside a shell
+  widget." Never touches Tab.
+- **[built]** Tab, safely — a **fallback** completer, never a replacement. `shelliq.zsh`
+  reads the existing `:completion:*` `completer` style (whatever the user's own `.zshrc`
+  already set, oh-my-zsh's included) and inserts `_shelliq` before `_approximate` rather
+  than overwriting the list, e.g.:
 
   ```zsh
   zstyle ':completion:*' completer _complete _shelliq _approximate
   ```
 
-  `_shelliq` runs only when `_complete` produces nothing, so `_git`, `_docker`, and every
-  tool-provided completer keep priority. Inherits the existing `menu select` dropdown UI.
+  `_shelliq` is placed **first** in the `completer` list rather than last: `_complete`
+  (the standard completer) provides its own default filename-completion fallback for any
+  command with no dedicated completion function, which counts as "success" and would starve
+  a later completer entirely. So `_shelliq` runs first and self-guards instead, declining
+  immediately if a native completion function is already registered for the command
+  (`${+_comps[$cmd]}`), leaving `git`, `docker`, and every tool-provided completer untouched.
+  Candidate logic (`shelliq flags <command> --raw`, a plain one-spelling-per-line mode added
+  for this, since the decorated, truncated, colour-coded output people read is not something
+  a completer should have to parse) resolves correctly for a `--help`-crawled command like
+  `ollama`. **[verified]** interactive keystroke-level proof, done by hand in a real
+  terminal: `ollama --help<TAB>` offers real flag candidates while `git chec<TAB>` still
+  completes to `checkout` via `_git`, untouched. Inherits the existing `menu select` dropdown
+  UI.
 
 **bash:** `bind -x '"\C-x\C-n": _shelliq_widget'`, plus `complete -D`, which likewise fires
 only where nothing else is registered.
@@ -706,38 +755,59 @@ scored for **precision and recall per field**, plus fuzz and control-character t
 
 ### P0.5 — trust hardening
 
-| Gate                                                                               | Target   | Measured           | Result  |
-| ----------------------------------------------------------------------------------- | -------- | ------------------ | ------- |
-| No user-facing string calls a whole command "verified", "correct", or "safe"       | required | —                   | pass    |
-| Unsupported shell syntax → explicit abstention, non-zero exit                      | required | —                   | pass    |
-| Unbalanced quotes → abstention, **not** zero findings and exit 0                   | required | —                   | pass    |
-| Redirections, substitutions, heredocs, subshells → abstain or parse, never misread | required | —                   | pass    |
-| Every fact query filtered by resolved target, platform, and subcommand scope       | required | —                   | pass    |
-| Two installs of one tool resolve to distinct targets                               | required | —                   | pass    |
-| `shelliq source <citation>` prints excerpt + provenance                            | required | —                   | pass    |
-| Stale index reported as stale; refresh is atomic and reconciles removals           | required | —                   | pass    |
-| Schema migration from the P0 database, with a test                                 | required | —                   | pass    |
-| Index and WAL created `0600`; control characters stripped on ingest                | required | —                   | pass    |
-| Parser fixtures: precision and recall per field, per format                        | recorded | not yet built       | pending |
-| Test suite                                                                          | all green | 74 passing         | pass    |
+| Gate                                                                               | Target    | Measured      | Result  |
+| ---------------------------------------------------------------------------------- | --------- | ------------- | ------- |
+| No user-facing string calls a whole command "verified", "correct", or "safe"       | required  | —             | pass    |
+| Unsupported shell syntax → explicit abstention, non-zero exit                      | required  | —             | pass    |
+| Unbalanced quotes → abstention, **not** zero findings and exit 0                   | required  | —             | pass    |
+| Redirections, substitutions, heredocs, subshells → abstain or parse, never misread | required  | —             | pass    |
+| Every fact query filtered by resolved target, platform, and subcommand scope       | required  | —             | pass    |
+| Two installs of one tool resolve to distinct targets                               | required  | —             | pass    |
+| `shelliq source <citation>` prints excerpt + provenance                            | required  | —             | pass    |
+| Stale index reported as stale; refresh is atomic and reconciles removals           | required  | —             | pass    |
+| Schema migration from the P0 database, with a test                                 | required  | —             | pass    |
+| Index and WAL created `0600`; control characters stripped on ingest                | required  | —             | pass    |
+| Parser fixtures: precision and recall per field, per format                        | recorded  | not yet built | pending |
+| Test suite                                                                         | all green | 74 passing    | pass    |
 
 ### P1A — safe Tier 0 UX
 
-- Description search finds `-L, --location` from "follow redirect" — currently **failing**,
-  see section 4. Fixed by tldr ingestion and cross-reference expansion.
+- Description search finds `-L, --location` from "follow redirect" — **fixed**, see
+  `crates/index/src/search_relevance.rs`. Fixed by tldr ingestion and cross-reference
+  expansion.
 - Labelled search set: **Recall@5 and MRR recorded before and after** tldr and
-  cross-references, so the gain is attributable rather than asserted.
+  cross-references, so the gain is attributable rather than asserted. 23 labelled cases
+  across curl, grep, rsync, ssh, chmod, git-add, git-commit, ls on real harvested man pages
+  and vendored tldr content (`crates/index/src/search_relevance.rs`). Measured on this
+  machine: baseline (description search alone) recall@5 0.48, MRR 0.43; full (tldr +
+  cross-reference, RRF-fused) recall@5 0.87, MRR 0.72.
 - Cross-reference edge extraction measured for precision; expansion capped at one hop.
 - Every tldr example flag validated against the local target before it boosts anything; a
   GNU-only flag never becomes a fact on a Mac.
-- Latency re-measured with tldr, nucleo, expansion, and RRF all in the path.
-- `ollama`, `kubectl`, `cargo`, `uv` indexed lazily via the `--help` crawler, subcommands
-  included, each under the containment table in section 2.
-- Containment proved, not assumed: a deliberately hostile test binary that forks, writes,
-  emits escape sequences, floods stdout, and hangs on stdin is harvested without effect.
+- Latency re-measured with tldr, nucleo, expansion, and RRF all in the path. Measured on
+  this machine, full pipeline, 460 samples: p50 1.1ms, p95 1.6ms — well under the <10ms
+  target.
+- `uv`, `kubectl`, and `ollama` indexed lazily via the `--help` crawler and verified end to
+  end through `shelliq flags`/`search`/`explain` on this machine; `ollama` correctly yields
+  4 root flags plus 53 more scoped across its 16 subcommands, and `explain` catches a
+  fabricated flag against it. `cargo` is a known, accepted gap (rustup's proxy needs `$HOME`,
+  denied by the crawler's stripped environment). Subcommand paths are stored
+  (`Index::insert_help_crawl`) but nothing yet queries flags scoped to one
+  (`shelliq flags kubectl get`) — `kubectl`'s own root `--help` has no top-level flags at
+  all, which surfaced this gap.
+- **[done]** Containment proved, not assumed: a hostile fixture binary that forks a
+  background process, writes outside the crawl's scratch cwd, floods stdout past the byte
+  cap, and reads a closed stdin is harvested without effect
+  (`crates/harvest/tests/help_crawl.rs`). Found and fixed a real gap this way: the process
+  group was only swept on timeout, so a `--help` that exited quickly while a background
+  process it had spawned kept running escaped cleanup entirely; the sweep now also runs
+  unconditionally after `wait()`.
 - No binary outside the approved set is executed; approval is by path **and** hash.
 - No-fight check: with `shelliq.zsh` sourced, `git che<TAB>`, `docker run --rm<TAB>`, and
-  autosuggestions behave exactly as before.
+  autosuggestions behave exactly as before. **[verified]** by hand in a real terminal:
+  `git chec<TAB>` still completes to `checkout` via `_git` with `_shelliq` sourced and
+  placed first in the `completer` list; `_shelliq`'s self-guard on `${+_comps[$cmd]}` is
+  what keeps it out of `_git`/`_docker`'s way, not list position.
 
 ### P1B — optional generation on an existing model
 
@@ -762,7 +832,7 @@ scored for **precision and recall per field**, plus fuzz and control-character t
 - Same prompt through HF `transformers` and the nnx port agree within **1e-3** on logits.
   Hard gate; nothing downstream starts until it passes.
 - Step memory measured at a stated batch/sequence/rematerialisation config, not estimated.
-- Held-out splits are **command-level and source-level**, never a random pair split — a
+- **[built]** Held-out splits are **command-level, source-level, and platform-level**, never a random pair split — a
   random split leaks `tar` from train into test and reports memorisation as skill. Include
   unseen commands and an unseen platform.
 - Beats base 0.5B _and_ base-plus-structured-prompting; the second baseline is the honest
@@ -771,17 +841,17 @@ scored for **precision and recall per field**, plus fuzz and control-character t
   a differently-worded command can be right, and a command with all-valid flags can be
   dangerously wrong. Options-known rate is reported as a floor, never as accuracy.
 - Operand and argument correctness scored separately from flag correctness.
-- **Scrubber gate, blocking.** The scrubber's test suite includes a planted secret of every
+- **[built; real-corpus audit pending] Scrubber gate, blocking.** The scrubber's test suite includes a planted secret of every
   class in the privacy table and catches all of them. An audited random sample of the
   scrubbed set shows zero surviving secrets. Training does not start until both pass.
-- **Canary gate.** Planted canaries are inserted into any private training set and tested
+- **[built; trained-adapter probe pending] Canary gate.** Planted canaries are inserted into any private training set and tested
   for extraction afterwards. A recoverable canary means the adapter is not even locally
   acceptable.
 - No `.zsh_history` command text appears anywhere in the dataset — only its derived
   frequency counts, and only in the index.
 - Distributable weights trace to reviewed licensed data only; the transcript-derived adapter
   is marked non-exportable and never uploaded.
-- GGUF loads in `llama-server` and answers correctly at Q6_K or Q8_0, benchmarked against
+- **[zero-adapter Q8_0 load passed; trained artifact benchmark pending]** GGUF loads in `llama-server` and answers correctly at Q6_K or Q8_0, benchmarked against
   the P1B placeholder on the same held-out set, reusing harness patterns from
   `~/code/local-llm/benchmarks/`.
 
@@ -829,7 +899,8 @@ scored for **precision and recall per field**, plus fuzz and control-character t
 - **Leanness** — Tier 0 binary under 10MB; assert the default build links no inference
   library and opens no socket.
 - **No-fight check** — with `shelliq.zsh` sourced, confirm `git che<TAB>`, `docker run
---rm<TAB>`, and autosuggestions behave exactly as before.
+  --rm<TAB>`, and autosuggestions behave exactly as before. **[verified]** end to end; see
+  section 8.
 
 ## Decisions taken during P0
 
@@ -862,7 +933,7 @@ as a supplement to tldr; not a P0 index input, and never a flag source.
 3.14, dependencies added with `uv add` so constraints come from real resolution rather than
 guessed floors. Resolves clean: jax 0.11.0, flax 0.12.8, optax 0.2.8, orbax-checkpoint
 0.12.1, grain 0.2.18, transformers 5.14.1, datasets 5.0.1, numpy 2.5.1. `uv sync` is
-deferred to P2 because `jax[cuda12]` pulls ~3GB of wheels that P0 has no use for. Ruff is
+deferred to P2 because `jax[cuda13]` pulls ~3GB of wheels that P0 has no use for. Ruff is
 configured for single quotes to match the house style.
 
 ## Privacy of local data
