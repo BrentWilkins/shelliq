@@ -271,6 +271,42 @@ and enforces both exemption files as ratchets. The current result is 626 of 626
 rows converted, with no CST exemptions, no semantic exemptions, and 19
 explicitly reported rows whose semantic rendering normalizes whitespace.
 
+Train and evaluate the semantic-target pilot separately from the raw-shell
+baseline:
+
+```sh
+uv run python scripts/smoke_finetune.py \
+  --semantic-dataset artifacts/curated-semantic-v2.jsonl \
+  --sequence-length 384 \
+  --train-examples 400 \
+  --eval-examples 34 \
+  --batch-size 2 \
+  --steps 1000 \
+  --learning-rate 2e-4 \
+  --priority-source shelliq-curated \
+  --heldout-probe \
+  --checkpoint artifacts/semantic-pilot-v2/checkpoint \
+  --report artifacts/semantic-pilot-v2.report.json
+
+uv run python scripts/evaluate_semantic_checkpoint.py \
+  --semantic-dataset artifacts/curated-semantic-v2.jsonl \
+  --checkpoint artifacts/semantic-pilot-v2/checkpoint \
+  --output artifacts/semantic-pilot-v2.eval.json \
+  --examples 35 \
+  --sequence-length 384
+```
+
+On the 2026-08-07 RTX 4090 pilot, train loss moved from 2.4801 to
+0.0408 and held-out loss from 2.4368 to 0.4498 in 1,000 steps (126
+seconds). Across all 35 command-disjoint held-out intents, the adapter moved
+from 0% to 94.3% JSON/v2-envelope rate, 85.7% first-command accuracy, and
+11.4% decoded structural exact match. The envelope metric checks the compact
+top-level contract, not Rust render/re-lowering validity. These results show
+that the target format is learnable while identifying exact arguments and
+structure as the next quality bottleneck. Semantic generation uses a
+192-token cap so the observed target-length tail is not scored as artificial
+truncation.
+
 Personal builders require canaries and always pass through `PrivateDataGate`.
 They write the corpus, a canary-probe manifest, a deterministic 20-row scrubbed
 audit sample, and a report containing counts and IDs but no rejected text:

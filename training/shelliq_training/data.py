@@ -168,6 +168,70 @@ def load_jsonl(path: str | Path, *, corpus: Corpus | None = None) -> list[SFTRec
     return records
 
 
+def load_semantic_jsonl(path: str | Path) -> list[SFTRecord]:
+    """Load validated semantic-conversion rows as canonical JSON targets."""
+    expected = {
+        'conversion_schema_version',
+        'record_id',
+        'corpus',
+        'source',
+        'license',
+        'provenance',
+        'command',
+        'platform',
+        'instruction',
+        'shell_response',
+        'context',
+        'semantic_target',
+    }
+    records = []
+    seen_ids = set()
+    with Path(path).open(encoding='utf-8') as stream:
+        for line_number, line in enumerate(stream, start=1):
+            if not line.strip():
+                continue
+            try:
+                raw = json.loads(line)
+            except json.JSONDecodeError as error:
+                raise DatasetFormatError(f'{path}:{line_number}: {error}') from error
+            if not isinstance(raw, dict) or raw.keys() != expected:
+                raise DatasetFormatError(f'{path}:{line_number}: invalid semantic row fields')
+            target = raw['semantic_target']
+            if (
+                raw['conversion_schema_version'] != 1
+                or raw['corpus'] != Corpus.DISTRIBUTABLE.value
+                or not isinstance(target, dict)
+                or target.get('v') != 2
+                or target.get('d') != 'zsh'
+            ):
+                raise DatasetFormatError(f'{path}:{line_number}: invalid semantic schema')
+            record_id = raw['record_id']
+            if record_id in seen_ids:
+                raise DatasetFormatError(f'{path}:{line_number}: duplicate record_id {record_id!r}')
+            semantic_response = json.dumps(target, ensure_ascii=False, separators=(',', ':'))
+            try:
+                record = SFTRecord.from_dict(
+                    {
+                        'schema_version': SCHEMA_VERSION,
+                        'record_id': record_id,
+                        'corpus': raw['corpus'],
+                        'source': raw['source'],
+                        'license': raw['license'],
+                        'provenance': raw['provenance'],
+                        'command': raw['command'],
+                        'platform': raw['platform'],
+                        'instruction': raw['instruction'],
+                        'response': semantic_response,
+                        'context': (f'Output contract: compact SemanticDocumentV2 JSON only.\n{raw["context"]}'),
+                    }
+                )
+            except (TypeError, ValueError) as error:
+                raise DatasetFormatError(f'{path}:{line_number}: {error}') from error
+            records.append(record)
+            seen_ids.add(record_id)
+    return records
+
+
 def write_jsonl(path: str | Path, records: Iterable[SFTRecord], *, corpus: Corpus) -> None:
     """Write one pipeline, refusing to create a mixed-derived artifact."""
     materialized = list(records)

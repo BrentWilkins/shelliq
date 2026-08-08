@@ -38,6 +38,7 @@ from shelliq_training.data import (
     TokenizedExample,
     collate_sft,
     load_jsonl,
+    load_semantic_jsonl,
     split_records,
     tokenize_record,
     tokenizer_pad_id,
@@ -48,12 +49,14 @@ from shelliq_training.training import CausalLMBatch, create_lora_optimizer, eval
 from shelliq_training.weights import load_hf_state_dict
 
 MODEL_ID = 'Qwen/Qwen2.5-Coder-0.5B-Instruct'
-GENERATION_TOKENS = 32
+GENERATION_TOKENS = 192
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--dataset', type=Path, required=True)
+    dataset = parser.add_mutually_exclusive_group(required=True)
+    dataset.add_argument('--dataset', type=Path)
+    dataset.add_argument('--semantic-dataset', type=Path)
     parser.add_argument('--sequence-length', type=int, default=128)
     parser.add_argument('--train-examples', type=int, default=4)
     parser.add_argument('--eval-examples', type=int, default=4)
@@ -251,8 +254,16 @@ def main() -> None:
     if args.steps <= 0:
         raise SystemExit('--steps must be positive')
 
-    records = load_jsonl(args.dataset, corpus=Corpus.DISTRIBUTABLE)
-    clean_records, rejected = automatic_preflight(records)
+    if args.semantic_dataset is not None:
+        dataset_path = args.semantic_dataset
+        clean_records = load_semantic_jsonl(dataset_path)
+        rejected = {}
+        target_format = 'semantic-document-v2-json'
+    else:
+        dataset_path = args.dataset
+        clean_records, rejected = automatic_preflight(load_jsonl(dataset_path, corpus=Corpus.DISTRIBUTABLE))
+        target_format = 'raw-shell'
+    total_records = len(clean_records) + len(rejected)
     splits = split_records(clean_records, corpus=Corpus.DISTRIBUTABLE, seed=args.seed)
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, local_files_only=True)
     train_records, train_examples = select_examples(
@@ -286,7 +297,7 @@ def main() -> None:
     )
 
     print(
-        f'corpus: {len(records):,} records; automated preflight accepted {len(clean_records):,}, '
+        f'corpus: {total_records:,} records; automated preflight accepted {len(clean_records):,}, '
         f'rejected {len(rejected)}; split '
         f'{len(splits[Split.TRAIN]):,}/{len(splits[Split.VALIDATION]):,}/{len(splits[Split.TEST]):,} '
         '(train/validation/test)'
@@ -372,10 +383,11 @@ def main() -> None:
             'report_schema_version': 1,
             'model_id': MODEL_ID,
             'dataset': {
-                'path': str(args.dataset),
-                'sha256': _file_sha256(args.dataset),
+                'path': str(dataset_path),
+                'sha256': _file_sha256(dataset_path),
                 'accepted_records': len(clean_records),
                 'rejected_record_ids': sorted(rejected),
+                'target_format': target_format,
             },
             'selection': {
                 'seed': args.seed,
@@ -392,6 +404,7 @@ def main() -> None:
                 'sequence_length': args.sequence_length,
                 'batch_size': args.batch_size,
                 'steps': args.steps,
+                'generation_tokens': GENERATION_TOKENS,
                 'learning_rate': args.learning_rate,
                 'initial_train_loss': initial_train_loss,
                 'final_train_loss': final_train_loss,
