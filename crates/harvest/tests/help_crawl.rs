@@ -19,7 +19,8 @@ fn limits_allowing(path: &std::path::Path) -> CrawlLimits {
 
 /// `cargo` on this machine is rustup's toolchain-selecting proxy, which needs `$HOME` to
 /// find its own config and so cannot be exercised end to end under the crawler's stripped
-/// environment. `kubectl` is a plain root-owned binary with no such indirection.
+/// environment. `kubectl` is a plain binary with no such indirection. Its
+/// installation directory is explicitly opted in because local ownership varies.
 fn kubectl() -> Option<PathBuf> {
     let path = PathBuf::from("/usr/local/bin/kubectl");
     path.is_file().then_some(path)
@@ -28,7 +29,7 @@ fn kubectl() -> Option<PathBuf> {
 #[test]
 fn crawls_kubectl_flags_and_subcommands() {
     let Some(path) = kubectl() else { return };
-    let limits = CrawlLimits::default();
+    let limits = limits_allowing(&path);
     let nodes = crawl_help(&path, None, &limits).expect("crawl kubectl --help");
 
     let root = nodes.iter().find(|n| n.path.is_empty()).expect("root node");
