@@ -143,6 +143,10 @@ def main() -> None:
             'document_envelope_rate': 'Exact top-level v2/zsh/s JSON contract; not Rust round-trip validation.',
             'structural_exact_match': 'Decoded JSON equality, ignoring insignificant whitespace.',
             'first_command_accuracy': 'Literal first command name in the first pipeline stage.',
+            'command_flag_sequence_exact_match': (
+                'First command and ordered dash-prefixed arguments; ignores operand literals '
+                'that may be unspecified by the prompt.'
+            ),
         },
         'baseline': {
             'overall': _metrics(eval_records, baseline_predictions),

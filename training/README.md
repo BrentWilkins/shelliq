@@ -307,6 +307,33 @@ structure as the next quality bottleneck. Semantic generation uses a
 192-token cap so the observed target-length tail is not scored as artificial
 truncation.
 
+For the audited merged dataset, use the file converter. It preserves the same
+row envelope but records every CST and semantic rejection ID instead of using
+the curated corpus exemption ratchets:
+
+```sh
+cargo run -p shelliq-syntax --bin convert-semantic-dataset -- \
+  training/artifacts/distributable-v1.jsonl \
+  training/artifacts/distributable-semantic-v2.jsonl \
+  training/artifacts/distributable-semantic-v2.manifest.json
+```
+
+The 2026-08-08 conversion produced 30,412 validated rows from 30,977 inputs
+(98.2%), with 349 CST rejects, 216 semantic rejects, and all rejection IDs in
+the manifest. A 4,000-row broad pilot followed by a 492-row curated finishing
+stage reached 100% JSON/v2-envelope rate, 85.7% first-command accuracy, and
+37.1% exact first-command-plus-flag sequence on the same 35 curated held-out
+rows. The earlier curated-only adapter scored 21.2% on that grounded structural
+metric. Full decoded-document exact match fell from 11.4% to 5.7% because many
+prompts do not specify the literal operands demanded by their reference (for
+example, an instruction says “copy a tree” while the reference chooses
+`src/ dest/`). Keep full-document exact for continuity, but do not treat it as
+task success until operand grounding is audited.
+
+`smoke_finetune.py --resume-checkpoint INPUT --checkpoint OUTPUT` performs a
+format-checked finishing stage without overwriting the source checkpoint and
+records the starting optimizer step in its report.
+
 Personal builders require canaries and always pass through `PrivateDataGate`.
 They write the corpus, a canary-probe manifest, a deterministic 20-row scrubbed
 audit sample, and a report containing counts and IDs but no rejected text:

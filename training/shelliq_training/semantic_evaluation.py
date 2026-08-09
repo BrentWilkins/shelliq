@@ -17,6 +17,7 @@ class SemanticEvaluationMetrics:
     document_envelope_rate: float
     structural_exact_match: float
     first_command_accuracy: float
+    command_flag_sequence_exact_match: float
 
 
 def parse_semantic_document(text: str) -> dict[str, object] | None:
@@ -55,6 +56,29 @@ def first_command(document: dict[str, object] | None) -> str | None:
     return source if isinstance(source, str) else None
 
 
+def first_command_flags(document: dict[str, object] | None) -> tuple[str, tuple[str, ...]] | None:
+    """Extract the first command and its ordered flag-like arguments."""
+    command = first_command(document)
+    if command is None or document is None:
+        return None
+    statements = document['s']
+    assert isinstance(statements, list)
+    stage = statements[0]['c'][0]
+    arguments = stage.get('a', [])
+    if not isinstance(arguments, list):
+        return None
+    flags = []
+    for argument in arguments:
+        if not isinstance(argument, dict) or set(argument) != {'s'}:
+            return None
+        source = argument['s']
+        if not isinstance(source, str):
+            return None
+        if source.startswith('-'):
+            flags.append(source)
+    return command, tuple(flags)
+
+
 def evaluate_semantic_predictions(
     records: Sequence[SFTRecord], predictions: Sequence[ModelPrediction]
 ) -> SemanticEvaluationMetrics:
@@ -65,6 +89,7 @@ def evaluate_semantic_predictions(
     valid_envelopes = 0
     structural_matches = 0
     command_matches = 0
+    command_flag_matches = 0
     for record, prediction in zip(records, predictions, strict=True):
         try:
             json.loads(prediction.text)
@@ -81,6 +106,7 @@ def evaluate_semantic_predictions(
             valid_envelopes += 1
             structural_matches += actual == expected
         command_matches += first_command(actual) == first_command(expected)
+        command_flag_matches += first_command_flags(actual) == first_command_flags(expected)
 
     total = len(records)
     return SemanticEvaluationMetrics(
@@ -89,4 +115,5 @@ def evaluate_semantic_predictions(
         document_envelope_rate=valid_envelopes / total,
         structural_exact_match=structural_matches / total,
         first_command_accuracy=command_matches / total,
+        command_flag_sequence_exact_match=command_flag_matches / total,
     )
