@@ -3,6 +3,9 @@
 //! Tier 0: everything here answers from the SQLite index alone. No model, no network, and
 //! no inference library is linked into this binary.
 
+#[cfg(feature = "model")]
+mod model;
+
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use shelliq_index::Index;
@@ -54,7 +57,28 @@ enum Command {
         raw: bool,
     },
     /// Show exactly where a citation such as `grep(1):168` came from.
-    Source { citation: String },
+    /// Generate an experimental command through a local model server.
+    #[cfg(feature = "model")]
+    Suggest {
+        /// Natural-language task to turn into an editable command.
+        #[arg(required = true, trailing_var_arg = true)]
+        instruction: Vec<String>,
+        /// OpenAI-compatible loopback chat-completions endpoint.
+        #[arg(long, default_value = "http://127.0.0.1:8080/v1/chat/completions")]
+        endpoint: String,
+        /// Retrieved evidence supplied to the model. Empty by default.
+        #[arg(long, default_value = "")]
+        context: String,
+        /// Entire request deadline in milliseconds.
+        #[arg(long, default_value_t = 5_000)]
+        timeout_ms: u64,
+        /// Print validated semantic JSON instead of rendered shell.
+        #[arg(long)]
+        json: bool,
+    },
+    Source {
+        citation: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -100,8 +124,59 @@ fn main() -> Result<()> {
         Command::Explain { line } => explain(&path, &line.join(" ")),
         Command::Search { command, query, limit } => search(&path, &command, &query.join(" "), limit),
         Command::Flags { command, raw } => list_flags(&path, &command, raw),
+        #[cfg(feature = "model")]
+        Command::Suggest {
+            instruction,
+            endpoint,
+            context,
+            timeout_ms,
+            json,
+        } => suggest_command(&path, &endpoint, &context, &instruction.join(" "), timeout_ms, json),
         Command::Source { citation } => source(&path, &citation),
     }
+}
+
+#[cfg(feature = "model")]
+fn suggest_command(
+    path: &std::path::Path,
+    endpoint: &str,
+    context: &str,
+    instruction: &str,
+    timeout_ms: u64,
+    json: bool,
+) -> Result<()> {
+    if timeout_ms == 0 {
+        anyhow::bail!("--timeout-ms must be positive");
+    }
+    let platform = match std::env::consts::OS {
+        "macos" => "darwin",
+        other => other,
+    };
+    let suggestion = model::suggest(
+        endpoint,
+        platform,
+        context,
+        instruction,
+        std::time::Duration::from_millis(timeout_ms),
+    )?;
+
+    let index = Index::open(path)?;
+    let findings = shelliq_verify::verify(&index, &suggestion.command)?;
+    let failures: Vec<_> = findings.iter().filter(|finding| !finding.is_clean()).collect();
+    if !failures.is_empty() {
+        for finding in failures {
+            eprintln!("{}", render::finding(finding));
+        }
+        anyhow::bail!("model suggestion failed local command/flag validation");
+    }
+
+    eprintln!("experimental model suggestion; flags checked, operand semantics unverified; inspect and edit before running");
+    if json {
+        println!("{}", suggestion.semantic_json);
+    } else {
+        println!("{}", suggestion.command);
+    }
+    Ok(())
 }
 
 fn build(path: &std::path::Path, names: &[String], allow_writable_paths: &[std::path::PathBuf]) -> Result<()> {
