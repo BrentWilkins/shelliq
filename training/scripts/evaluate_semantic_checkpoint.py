@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.evaluate_checkpoint import _generate  # noqa: E402
 from scripts.smoke_finetune import GENERATION_TOKENS, MODEL_ID, select_examples  # noqa: E402
-from shelliq_training.checkpoint import restore_checkpoint  # noqa: E402
+from shelliq_training.checkpoint import TargetFormat, restore_checkpoint  # noqa: E402
 from shelliq_training.config import Qwen2Config  # noqa: E402
 from shelliq_training.data import Corpus, SFTRecord, Split, load_semantic_jsonl, split_records  # noqa: E402
 from shelliq_training.evaluation import ModelPrediction  # noqa: E402
@@ -112,6 +112,7 @@ def main() -> None:
         optimizer,
         model_id=MODEL_ID,
         corpus=Corpus.DISTRIBUTABLE,
+        target_format=TargetFormat.SEMANTIC_DOCUMENT_V2,
     )
     trained_predictions, trained_texts = _generate(
         model,

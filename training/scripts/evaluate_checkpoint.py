@@ -29,7 +29,7 @@ from scripts.smoke_finetune import (  # noqa: E402
     greedy_completion,
     select_examples,
 )
-from shelliq_training.checkpoint import restore_checkpoint  # noqa: E402
+from shelliq_training.checkpoint import TargetFormat, restore_checkpoint  # noqa: E402
 from shelliq_training.config import Qwen2Config  # noqa: E402
 from shelliq_training.data import (  # noqa: E402
     IGNORE_INDEX,
@@ -280,6 +280,7 @@ def main() -> None:
         optimizer,
         model_id=MODEL_ID,
         corpus=Corpus.DISTRIBUTABLE,
+        target_format=TargetFormat.RAW_SHELL,
     )
     trained_predictions, trained_texts = _generate(
         model,
