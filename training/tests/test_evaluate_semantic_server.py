@@ -9,7 +9,6 @@ from scripts.evaluate_semantic_server import parse_completion_response, validate
     'endpoint',
     [
         'http://127.0.0.1:8080/v1/chat/completions',
-        'http://localhost:11434/v1/chat/completions',
         'http://[::1]:8080/v1/chat/completions',
     ],
 )
@@ -22,6 +21,7 @@ def test_validate_endpoint_accepts_only_loopback_chat_completions(endpoint):
     [
         'https://127.0.0.1:8080/v1/chat/completions',
         'http://example.com/v1/chat/completions',
+        'http://localhost:11434/v1/chat/completions',
         'http://user@127.0.0.1:8080/v1/chat/completions',
         'http://127.0.0.1:8080/health',
         'http://127.0.0.1:8080/v1/chat/completions?token=x',

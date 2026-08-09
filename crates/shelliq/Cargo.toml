@@ -10,10 +10,18 @@ description = "A local, verifiable CLI assistant that answers from your own man 
 name = "shelliq"
 path = "src/main.rs"
 
+[features]
+default = []
+model = ["dep:serde", "dep:serde_json", "dep:shelliq-syntax", "dep:ureq"]
+
 [dependencies]
 anstyle = "1.0.14"
 anyhow = "1.0.104"
 clap = { version = "4.6.4", features = ["derive"] }
+serde = { version = "1.0.229", features = ["derive"], optional = true }
+serde_json = { version = "1.0.151", optional = true }
 shelliq-harvest = { version = "0.1.0", path = "../harvest" }
 shelliq-index = { version = "0.1.0", path = "../index" }
+shelliq-syntax = { version = "0.1.0", path = "../syntax", optional = true }
 shelliq-verify = { version = "0.1.0", path = "../verify" }
+ureq = { version = "3.4.0", default-features = false, features = ["json"], optional = true }
