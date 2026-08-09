@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from shelliq_training.data import SFTRecord, format_user_message, load_semantic_jsonl  # noqa: E402
 from shelliq_training.evaluation import ModelPrediction  # noqa: E402
+from shelliq_training.prompt import PromptContract  # noqa: E402
 from shelliq_training.semantic_evaluation import (  # noqa: E402
     evaluate_semantic_predictions,
     load_grounding_audit,
@@ -39,6 +40,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--endpoint', default='http://127.0.0.1:8080/v1/chat/completions')
     parser.add_argument('--timeout', type=float, default=30.0)
     parser.add_argument('--system-prompt')
+    parser.add_argument(
+        '--prompt-contract',
+        type=PromptContract,
+        choices=PromptContract,
+        default=PromptContract.CONTEXT_AUTHORITATIVE_V1,
+    )
     parser.add_argument('--candidates', type=int, default=1)
     parser.add_argument('--temperature', type=float, default=0.0)
     parser.add_argument('--seed', type=int, default=2026)
@@ -186,7 +193,7 @@ def main() -> None:
             started = time.perf_counter()
             text, model_id = request_completion(
                 endpoint,
-                format_user_message(record),
+                format_user_message(record, prompt_contract=args.prompt_contract),
                 args.timeout,
                 args.system_prompt,
                 temperature=args.temperature,
@@ -210,6 +217,7 @@ def main() -> None:
         'evaluation_schema_version': 1,
         'endpoint': endpoint,
         'system_prompt': args.system_prompt,
+        'prompt_contract': args.prompt_contract.value,
         'generation': {
             'candidates': args.candidates,
             'temperature': args.temperature,

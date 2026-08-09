@@ -22,6 +22,7 @@ from shelliq_training.config import Qwen2Config
 from shelliq_training.data import Corpus, Platform, SFTRecord, collate_sft, tokenize_record, tokenizer_pad_id
 from shelliq_training.lora import inject_lora, parameter_count
 from shelliq_training.model import Qwen2ForCausalLM
+from shelliq_training.prompt import PromptContract
 from shelliq_training.training import create_lora_optimizer, train_step
 from shelliq_training.weights import load_hf_state_dict
 
@@ -54,7 +55,12 @@ def make_batch() -> dict[str, jax.Array]:
         response="find . -type f -printf '%s %p\\n' | sort -nr | head -5",
         context='GNU find supports -type f and -printf.',
     )
-    example = tokenize_record(record, tokenizer, max_length=SEQUENCE_LENGTH)
+    example = tokenize_record(
+        record,
+        tokenizer,
+        max_length=SEQUENCE_LENGTH,
+        prompt_contract=PromptContract.LEGACY_USER_V1,
+    )
     return collate_sft(
         [example],
         sequence_length=SEQUENCE_LENGTH,

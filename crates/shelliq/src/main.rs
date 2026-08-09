@@ -69,6 +69,9 @@ enum Command {
         /// Retrieved evidence supplied to the model. Empty by default.
         #[arg(long, default_value = "")]
         context: String,
+        /// Prompt shape expected by the served adapter.
+        #[arg(long, value_enum, default_value_t)]
+        prompt_contract: model::PromptContract,
         /// Entire request deadline in milliseconds.
         #[arg(long, default_value_t = 5_000)]
         timeout_ms: u64,
@@ -129,9 +132,18 @@ fn main() -> Result<()> {
             instruction,
             endpoint,
             context,
+            prompt_contract,
             timeout_ms,
             json,
-        } => suggest_command(&path, &endpoint, &context, &instruction.join(" "), timeout_ms, json),
+        } => suggest_command(
+            &path,
+            &endpoint,
+            &context,
+            &instruction.join(" "),
+            prompt_contract,
+            timeout_ms,
+            json,
+        ),
         Command::Source { citation } => source(&path, &citation),
     }
 }
@@ -142,6 +154,7 @@ fn suggest_command(
     endpoint: &str,
     context: &str,
     instruction: &str,
+    prompt_contract: model::PromptContract,
     timeout_ms: u64,
     json: bool,
 ) -> Result<()> {
@@ -157,6 +170,7 @@ fn suggest_command(
         platform,
         context,
         instruction,
+        prompt_contract,
         std::time::Duration::from_millis(timeout_ms),
     )?;
 

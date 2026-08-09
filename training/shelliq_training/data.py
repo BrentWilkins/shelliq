@@ -12,6 +12,8 @@ from typing import Protocol, cast
 
 import jax.numpy as jnp
 
+from shelliq_training.prompt import LEGACY_SEMANTIC_CONTEXT_PREFIX, PromptContract
+from shelliq_training.prompt import format_user_message as format_prompt_user_message
 from shelliq_training.training import IGNORE_INDEX, CausalLMBatch
 
 SCHEMA_VERSION = 1
@@ -222,7 +224,7 @@ def load_semantic_jsonl(path: str | Path) -> list[SFTRecord]:
                         'platform': raw['platform'],
                         'instruction': raw['instruction'],
                         'response': semantic_response,
-                        'context': (f'Output contract: compact SemanticDocumentV2 JSON only.\n{raw["context"]}'),
+                        'context': f'{LEGACY_SEMANTIC_CONTEXT_PREFIX}{raw["context"]}',
                     }
                 )
             except (TypeError, ValueError) as error:
@@ -296,17 +298,27 @@ def split_records(
     return result
 
 
-def format_user_message(record: SFTRecord) -> str:
-    """Match the retrieval-augmented inference shape planned for shelliq."""
-    context = record.context.replace('</context>', '&lt;/context&gt;')
-    return f'# platform: {record.platform.value}\n<context>\n{context}\n</context>\n\n{record.instruction}'
+def format_user_message(record: SFTRecord, *, prompt_contract: PromptContract) -> str:
+    """Match the selected versioned retrieval-augmented inference shape."""
+    return format_prompt_user_message(
+        platform=record.platform.value,
+        context=record.context,
+        instruction=record.instruction,
+        contract=prompt_contract,
+    )
 
 
-def tokenize_record(record: SFTRecord, tokenizer: ChatTokenizer, *, max_length: int) -> TokenizedExample:
+def tokenize_record(
+    record: SFTRecord,
+    tokenizer: ChatTokenizer,
+    *,
+    max_length: int,
+    prompt_contract: PromptContract,
+) -> TokenizedExample:
     """Apply Qwen's chat template and mask every token before the answer."""
     if max_length < 2:
         raise ValueError('max_length must be at least 2')
-    user_message = {'role': 'user', 'content': format_user_message(record)}
+    user_message = {'role': 'user', 'content': format_user_message(record, prompt_contract=prompt_contract)}
     prompt_ids = _token_ids(
         tokenizer.apply_chat_template(
             [user_message],

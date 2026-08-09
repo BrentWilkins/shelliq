@@ -48,6 +48,7 @@ from shelliq_training.evaluation import (  # noqa: E402
 )
 from shelliq_training.lora import inject_lora  # noqa: E402
 from shelliq_training.model import Qwen2ForCausalLM  # noqa: E402
+from shelliq_training.prompt import PromptContract  # noqa: E402
 from shelliq_training.training import create_lora_optimizer  # noqa: E402
 from shelliq_training.weights import load_hf_state_dict  # noqa: E402
 
@@ -281,6 +282,7 @@ def main() -> None:
         model_id=MODEL_ID,
         corpus=Corpus.DISTRIBUTABLE,
         target_format=TargetFormat.RAW_SHELL,
+        prompt_contract=PromptContract.LEGACY_USER_V1,
     )
     trained_predictions, trained_texts = _generate(
         model,

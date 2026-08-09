@@ -16,12 +16,13 @@ import numpy as np
 from flax import nnx
 from safetensors.numpy import save_file
 
-from shelliq_training.checkpoint import lora_signature
+from shelliq_training.checkpoint import TargetFormat, lora_signature
 from shelliq_training.data import Corpus
 from shelliq_training.lora import LoRALinear
 from shelliq_training.model import Qwen2ForCausalLM
+from shelliq_training.prompt import PromptContract
 
-EXPORT_SCHEMA_VERSION = 1
+EXPORT_SCHEMA_VERSION = 2
 SUPPORTED_QUANTIZATIONS = frozenset({'Q6_K', 'Q8_0'})
 _HF_COPY_FILES = (
     'config.json',
@@ -43,6 +44,8 @@ class ExportError(RuntimeError):
 class ExportMetadata:
     model_id: str
     corpus: Corpus
+    target_format: TargetFormat
+    prompt_contract: PromptContract
     rank: int
     alpha: float
     targets: tuple[str, ...]
@@ -52,6 +55,8 @@ class ExportMetadata:
         result = asdict(self)
         result['schema_version'] = EXPORT_SCHEMA_VERSION
         result['corpus'] = self.corpus.value
+        result['target_format'] = self.target_format.value
+        result['prompt_contract'] = self.prompt_contract.value
         result['publishable'] = self.corpus is Corpus.DISTRIBUTABLE
         return result
 
@@ -86,6 +91,8 @@ def export_peft_adapter(
     *,
     model_id: str,
     corpus: Corpus,
+    target_format: TargetFormat,
+    prompt_contract: PromptContract,
 ) -> ExportMetadata:
     """Write an immutable PEFT adapter directory without any base weights."""
     output = Path(output_directory).resolve()
@@ -93,7 +100,7 @@ def export_peft_adapter(
     rank, alpha, targets = lora_signature(model)
     tensors = _adapter_tensors(model)
     parameter_count = sum(int(tensor.size) for tensor in tensors.values())
-    metadata = ExportMetadata(model_id, corpus, rank, alpha, targets, parameter_count)
+    metadata = ExportMetadata(model_id, corpus, target_format, prompt_contract, rank, alpha, targets, parameter_count)
 
     with _staged_directory(output) as stage:
         save_file(
@@ -129,6 +136,8 @@ def export_merged_hf_model(
     *,
     model_id: str,
     corpus: Corpus,
+    target_format: TargetFormat,
+    prompt_contract: PromptContract,
 ) -> ExportMetadata:
     """Merge LoRA into base kernels and write a llama.cpp-convertible HF directory."""
     base = Path(base_model_directory).resolve()
@@ -139,7 +148,7 @@ def export_merged_hf_model(
     rank, alpha, targets = lora_signature(model)
     tensors = _merged_hf_tensors(model)
     adapter_parameters = sum(int(tensor.size) for tensor in _adapter_tensors(model).values())
-    metadata = ExportMetadata(model_id, corpus, rank, alpha, targets, adapter_parameters)
+    metadata = ExportMetadata(model_id, corpus, target_format, prompt_contract, rank, alpha, targets, adapter_parameters)
 
     with _staged_directory(output) as stage:
         copied = 0

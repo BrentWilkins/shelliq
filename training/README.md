@@ -307,6 +307,14 @@ structure as the next quality bottleneck. Semantic generation uses a
 192-token cap so the observed target-length tail is not scored as artificial
 truncation.
 
+New semantic runs default to the versioned `context-authoritative-v1` prompt.
+It labels retrieved context as authoritative evidence for command names and
+option spellings, labels the instruction separately, and tells the model to
+derive operand count and values from that instruction. Use
+`--prompt-contract legacy-user-v1` only to reproduce or evaluate an older
+adapter; schema-v1 and schema-v2 checkpoints are permanently classified as
+legacy prompts.
+
 For the audited merged dataset, use the file converter. It preserves the same
 row envelope but records every CST and semantic rejection ID instead of using
 the curated corpus exemption ratchets:
@@ -337,6 +345,7 @@ uv run python scripts/evaluate_semantic_server.py \
   --semantic-dataset artifacts/distributable-semantic-v2.jsonl \
   --reference-report artifacts/semantic-distributable-curated-finish-v2.eval.json \
   --endpoint http://127.0.0.1:8080/v1/chat/completions \
+  --prompt-contract legacy-user-v1 \
   --output artifacts/model.eval.json
 ```
 
@@ -400,6 +409,7 @@ metadata = save_checkpoint(
     model_id='Qwen/Qwen2.5-Coder-0.5B-Instruct',
     corpus=Corpus.DISTRIBUTABLE,
     target_format=TargetFormat.RAW_SHELL,
+    prompt_contract=PromptContract.LEGACY_USER_V1,
 )
 metadata = restore_checkpoint(
     'checkpoints/step-00001000',
@@ -408,13 +418,15 @@ metadata = restore_checkpoint(
     model_id='Qwen/Qwen2.5-Coder-0.5B-Instruct',
     corpus=Corpus.DISTRIBUTABLE,
     target_format=TargetFormat.RAW_SHELL,
+    prompt_contract=PromptContract.LEGACY_USER_V1,
 )
 ```
 
 Checkpoint directories are immutable. Restore refuses model ID, corpus, target
-format, rank, alpha, and target-module mismatches. Schema-v1 checkpoints remain
-readable as raw-shell checkpoints; semantic targets require schema v2. Base
-weights are not duplicated.
+format, prompt contract, rank, alpha, and target-module mismatches. Schema-v1
+checkpoints remain readable as raw-shell checkpoints; schema-v2 checkpoints
+retain their target format; both are read as `legacy-user-v1`. Schema-v3 records
+the prompt contract explicitly. Base weights are not duplicated.
 
 ## Evaluation
 
@@ -444,6 +456,7 @@ uv run python scripts/export_checkpoint.py \
   --base path/to/Qwen2.5-Coder-0.5B-Instruct \
   --output exports/adapter --kind adapter --corpus personal \
   --target-format raw-shell \
+  --prompt-contract legacy-user-v1 \
   --gguf-output exports/adapter-f16.gguf --llama-cpp ../../llama.cpp
 
 uv run python scripts/export_checkpoint.py \
@@ -451,6 +464,7 @@ uv run python scripts/export_checkpoint.py \
   --base path/to/Qwen2.5-Coder-0.5B-Instruct \
   --output exports/merged --kind merged --corpus distributable \
   --target-format semantic-document-v2-json \
+  --prompt-contract context-authoritative-v1 \
   --gguf-output exports/model-q8.gguf --llama-cpp ../../llama.cpp \
   --quantization Q8_0
 ```

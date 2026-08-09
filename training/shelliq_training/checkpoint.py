@@ -16,8 +16,9 @@ from flax import nnx
 from shelliq_training.data import Corpus
 from shelliq_training.lora import DEFAULT_TARGETS, LoRALinear
 from shelliq_training.model import Qwen2ForCausalLM
+from shelliq_training.prompt import PromptContract
 
-CHECKPOINT_SCHEMA_VERSION = 2
+CHECKPOINT_SCHEMA_VERSION = 3
 
 
 class TargetFormat(StrEnum):
@@ -35,6 +36,7 @@ class CheckpointMetadata:
     model_id: str
     corpus: Corpus
     target_format: TargetFormat
+    prompt_contract: PromptContract
     rank: int
     alpha: float
     targets: tuple[str, ...]
@@ -46,6 +48,7 @@ class CheckpointMetadata:
             'model_id': self.model_id,
             'corpus': self.corpus.value,
             'target_format': self.target_format.value,
+            'prompt_contract': self.prompt_contract.value,
             'rank': self.rank,
             'alpha': self.alpha,
             'targets': list(self.targets),
@@ -55,8 +58,10 @@ class CheckpointMetadata:
     def from_dict(cls, raw: Mapping[str, object]) -> CheckpointMetadata:
         schema_version = raw.get('schema_version')
         expected = {'schema_version', 'step', 'model_id', 'corpus', 'rank', 'alpha', 'targets'}
-        if schema_version == CHECKPOINT_SCHEMA_VERSION:
+        if schema_version in {2, CHECKPOINT_SCHEMA_VERSION}:
             expected.add('target_format')
+        if schema_version == CHECKPOINT_SCHEMA_VERSION:
+            expected.add('prompt_contract')
         if raw.keys() != expected:
             missing = expected - raw.keys()
             unknown = raw.keys() - expected
@@ -66,7 +71,7 @@ class CheckpointMetadata:
             if unknown:
                 details.append(f'unknown {", ".join(sorted(unknown))}')
             raise CheckpointError(f'invalid checkpoint metadata: {"; ".join(details)}')
-        if schema_version not in {1, CHECKPOINT_SCHEMA_VERSION}:
+        if schema_version not in {1, 2, CHECKPOINT_SCHEMA_VERSION}:
             raise CheckpointError(f'unsupported checkpoint schema: {raw["schema_version"]!r}')
         try:
             step = int(cast(int, raw['step']))
@@ -75,6 +80,9 @@ class CheckpointMetadata:
             model_id = cast(str, raw['model_id'])
             corpus = Corpus(cast(str, raw['corpus']))
             target_format = TargetFormat.RAW_SHELL if schema_version == 1 else TargetFormat(cast(str, raw['target_format']))
+            prompt_contract = (
+                PromptContract.LEGACY_USER_V1 if schema_version in {1, 2} else PromptContract(cast(str, raw['prompt_contract']))
+            )
             raw_targets = cast(list[object], raw['targets'])
             targets = tuple(cast(str, target) for target in raw_targets)
         except (TypeError, ValueError) as error:
@@ -90,6 +98,7 @@ class CheckpointMetadata:
             model_id=model_id,
             corpus=corpus,
             target_format=target_format,
+            prompt_contract=prompt_contract,
             rank=rank,
             alpha=alpha,
             targets=targets,
@@ -104,6 +113,7 @@ def save_checkpoint(
     model_id: str,
     corpus: Corpus,
     target_format: TargetFormat,
+    prompt_contract: PromptContract,
 ) -> CheckpointMetadata:
     """Atomically save adapters, optimizer moments, step, and compatibility data."""
     path = Path(directory).resolve()
@@ -116,6 +126,7 @@ def save_checkpoint(
         model_id=model_id,
         corpus=corpus,
         target_format=target_format,
+        prompt_contract=prompt_contract,
         rank=rank,
         alpha=alpha,
         targets=targets,
@@ -143,6 +154,7 @@ def restore_checkpoint(
     model_id: str,
     corpus: Corpus,
     target_format: TargetFormat,
+    prompt_contract: PromptContract,
 ) -> CheckpointMetadata:
     """Restore only after model, corpus, and LoRA configuration agree."""
     path = Path(directory).resolve()
@@ -167,6 +179,7 @@ def restore_checkpoint(
         model_id=model_id,
         corpus=corpus,
         target_format=target_format,
+        prompt_contract=prompt_contract,
     )
 
     adapter_state = nnx.state(model, nnx.LoRAParam)
@@ -220,6 +233,7 @@ def _validate_compatibility(
     model_id: str,
     corpus: Corpus,
     target_format: TargetFormat,
+    prompt_contract: PromptContract,
 ) -> None:
     rank, alpha, targets = lora_signature(model)
     mismatches = []
@@ -229,6 +243,8 @@ def _validate_compatibility(
         mismatches.append(f'corpus {metadata.corpus.value!r} != {corpus.value!r}')
     if metadata.target_format is not target_format:
         mismatches.append(f'target format {metadata.target_format.value!r} != {target_format.value!r}')
+    if metadata.prompt_contract is not prompt_contract:
+        mismatches.append(f'prompt contract {metadata.prompt_contract.value!r} != {prompt_contract.value!r}')
     if metadata.rank != rank:
         mismatches.append(f'rank {metadata.rank} != {rank}')
     if not math.isclose(metadata.alpha, alpha):

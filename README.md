@@ -81,6 +81,10 @@ experimental model suggestion; flags checked, operand semantics unverified; insp
 cp -a SOURCE/DEST/
 ```
 
+`suggest` defaults to the versioned `context-authoritative-v1` prompt contract.
+Use `--prompt-contract legacy-user-v1` only with an older adapter trained on
+that exact prompt shape; the prompt contract must match the served model.
+
 This is an integration preview, not a correctness claim. Command-level operand
 arity and intent coverage are not yet validated, so suggestions can be
 syntactically valid while still being incomplete or wrong. The client refuses

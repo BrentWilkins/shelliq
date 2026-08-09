@@ -45,6 +45,7 @@ from shelliq_training.data import (
 )
 from shelliq_training.lora import inject_lora, parameter_count
 from shelliq_training.model import Qwen2ForCausalLM
+from shelliq_training.prompt import PromptContract
 from shelliq_training.training import CausalLMBatch, create_lora_optimizer, eval_step, train_step
 from shelliq_training.weights import load_hf_state_dict
 
@@ -69,6 +70,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--report', type=Path)
     parser.add_argument('--heldout-probe', action='store_true')
     parser.add_argument('--priority-source')
+    parser.add_argument('--prompt-contract', type=PromptContract, choices=PromptContract)
     return parser.parse_args()
 
 
@@ -92,6 +94,7 @@ def select_examples(
     max_length: int,
     seed: int,
     priority_source: str | None = None,
+    prompt_contract: PromptContract = PromptContract.LEGACY_USER_V1,
 ) -> tuple[list[SFTRecord], list[TokenizedExample]]:
     """Choose deterministic rows, optionally retaining every priority-source row."""
     selected_records: list[SFTRecord] = []
@@ -105,7 +108,12 @@ def select_examples(
         if require_new_command and record.command in seen_commands:
             return False
         try:
-            example = tokenize_record(record, tokenizer, max_length=max_length)  # type: ignore[arg-type]
+            example = tokenize_record(  # type: ignore[arg-type]
+                record,
+                tokenizer,
+                max_length=max_length,
+                prompt_contract=prompt_contract,
+            )
         except SequenceTooLongError:
             return False
         prompt_length = next(index for index, label in enumerate(example.labels) if label != IGNORE_INDEX)
@@ -266,10 +274,13 @@ def main() -> None:
         clean_records = load_semantic_jsonl(dataset_path)
         rejected = {}
         target_format = TargetFormat.SEMANTIC_DOCUMENT_V2
+        default_prompt_contract = PromptContract.CONTEXT_AUTHORITATIVE_V1
     else:
         dataset_path = args.dataset
         clean_records, rejected = automatic_preflight(load_jsonl(dataset_path, corpus=Corpus.DISTRIBUTABLE))
         target_format = TargetFormat.RAW_SHELL
+        default_prompt_contract = PromptContract.LEGACY_USER_V1
+    prompt_contract = args.prompt_contract or default_prompt_contract
     total_records = len(clean_records) + len(rejected)
     splits = split_records(clean_records, corpus=Corpus.DISTRIBUTABLE, seed=args.seed)
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, local_files_only=True)
@@ -280,6 +291,7 @@ def main() -> None:
         max_length=args.sequence_length,
         seed=args.seed,
         priority_source=args.priority_source,
+        prompt_contract=prompt_contract,
     )
     eval_records, eval_examples = select_examples(
         splits[Split.TEST],
@@ -288,6 +300,7 @@ def main() -> None:
         max_length=args.sequence_length,
         seed=args.seed + 1,
         priority_source=args.priority_source,
+        prompt_contract=prompt_contract,
     )
     pad_id = tokenizer_pad_id(tokenizer)
     train_batches = make_batches(
@@ -329,6 +342,7 @@ def main() -> None:
             model_id=MODEL_ID,
             corpus=Corpus.DISTRIBUTABLE,
             target_format=target_format,
+            prompt_contract=prompt_contract,
         )
         print(f'resumed checkpoint: {args.resume_checkpoint} at step {resumed_metadata.step}')
     print(f'parameters: {parameter_count(model, nnx.Param):,} total; {parameter_count(model, nnx.LoRAParam):,} trainable LoRA')
@@ -395,6 +409,7 @@ def main() -> None:
             model_id=MODEL_ID,
             corpus=Corpus.DISTRIBUTABLE,
             target_format=target_format,
+            prompt_contract=prompt_contract,
         )
         print(f'checkpoint: {args.checkpoint} at step {metadata.step}')
     if args.report is not None:
@@ -407,6 +422,7 @@ def main() -> None:
                 'accepted_records': len(clean_records),
                 'rejected_record_ids': sorted(rejected),
                 'target_format': target_format.value,
+                'prompt_contract': prompt_contract.value,
             },
             'resume_checkpoint': None
             if resumed_metadata is None

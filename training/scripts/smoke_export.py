@@ -12,6 +12,7 @@ from safetensors.flax import load_file
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from shelliq_training.checkpoint import TargetFormat  # noqa: E402
 from shelliq_training.config import Qwen2Config  # noqa: E402
 from shelliq_training.data import Corpus  # noqa: E402
 from shelliq_training.export import (  # noqa: E402
@@ -24,6 +25,7 @@ from shelliq_training.export import (  # noqa: E402
 )
 from shelliq_training.lora import inject_lora  # noqa: E402
 from shelliq_training.model import Qwen2ForCausalLM  # noqa: E402
+from shelliq_training.prompt import PromptContract  # noqa: E402
 from shelliq_training.weights import load_hf_state_dict  # noqa: E402
 
 MODEL_ID = 'Qwen/Qwen2.5-Coder-0.5B-Instruct'
@@ -57,9 +59,24 @@ def main() -> None:
     adapter_gguf = output / 'adapter-f16.gguf'
     merged = output / 'merged-hf'
     model_gguf = output / f'model-{args.quantization.lower()}.gguf'
-    export_peft_adapter(model, adapter, model_id=MODEL_ID, corpus=Corpus.DISTRIBUTABLE)
+    export_peft_adapter(
+        model,
+        adapter,
+        model_id=MODEL_ID,
+        corpus=Corpus.DISTRIBUTABLE,
+        target_format=TargetFormat.RAW_SHELL,
+        prompt_contract=PromptContract.LEGACY_USER_V1,
+    )
     export_adapter_gguf(adapter, args.base, adapter_gguf, toolchain=toolchain)
-    export_merged_hf_model(model, args.base, merged, model_id=MODEL_ID, corpus=Corpus.DISTRIBUTABLE)
+    export_merged_hf_model(
+        model,
+        args.base,
+        merged,
+        model_id=MODEL_ID,
+        corpus=Corpus.DISTRIBUTABLE,
+        target_format=TargetFormat.RAW_SHELL,
+        prompt_contract=PromptContract.LEGACY_USER_V1,
+    )
     export_model_gguf(
         merged,
         model_gguf,

@@ -25,6 +25,7 @@ from shelliq_training.export import (  # noqa: E402
 )
 from shelliq_training.lora import DEFAULT_TARGETS, inject_lora  # noqa: E402
 from shelliq_training.model import Qwen2ForCausalLM  # noqa: E402
+from shelliq_training.prompt import PromptContract  # noqa: E402
 from shelliq_training.training import create_lora_optimizer  # noqa: E402
 from shelliq_training.weights import load_hf_state_dict  # noqa: E402
 
@@ -40,6 +41,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--model-id', default=DEFAULT_MODEL_ID)
     parser.add_argument('--corpus', type=Corpus, required=True)
     parser.add_argument('--target-format', type=TargetFormat, choices=TargetFormat, required=True)
+    parser.add_argument('--prompt-contract', type=PromptContract, choices=PromptContract, required=True)
     parser.add_argument('--rank', type=int, default=16)
     parser.add_argument('--alpha', type=float, default=32.0)
     parser.add_argument('--targets', default=','.join(DEFAULT_TARGETS))
@@ -66,9 +68,17 @@ def main() -> None:
         model_id=args.model_id,
         corpus=args.corpus,
         target_format=args.target_format,
+        prompt_contract=args.prompt_contract,
     )
     if args.kind == 'adapter':
-        metadata = export_peft_adapter(model, args.output, model_id=args.model_id, corpus=args.corpus)
+        metadata = export_peft_adapter(
+            model,
+            args.output,
+            model_id=args.model_id,
+            corpus=args.corpus,
+            target_format=args.target_format,
+            prompt_contract=args.prompt_contract,
+        )
     else:
         metadata = export_merged_hf_model(
             model,
@@ -76,6 +86,8 @@ def main() -> None:
             args.output,
             model_id=args.model_id,
             corpus=args.corpus,
+            target_format=args.target_format,
+            prompt_contract=args.prompt_contract,
         )
     if args.gguf_output is not None:
         if args.llama_cpp is None:

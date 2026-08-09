@@ -7,6 +7,7 @@ import pytest
 from flax import nnx
 from safetensors.numpy import load_file
 
+from shelliq_training.checkpoint import TargetFormat
 from shelliq_training.config import Qwen2Config
 from shelliq_training.data import Corpus
 from shelliq_training.export import (
@@ -18,6 +19,7 @@ from shelliq_training.export import (
 )
 from shelliq_training.lora import inject_lora
 from shelliq_training.model import Qwen2ForCausalLM
+from shelliq_training.prompt import PromptContract
 
 
 def tiny_model(param_dtype=jnp.float32):
@@ -50,6 +52,8 @@ def test_peft_adapter_has_hf_shapes_metadata_and_no_base_weights(tmp_path):
         output,
         model_id='Qwen/tiny',
         corpus=Corpus.PERSONAL,
+        target_format=TargetFormat.SEMANTIC_DOCUMENT_V2,
+        prompt_contract=PromptContract.CONTEXT_AUTHORITATIVE_V1,
     )
 
     tensors = load_file(output / 'adapter_model.safetensors')
@@ -62,7 +66,14 @@ def test_peft_adapter_has_hf_shapes_metadata_and_no_base_weights(tmp_path):
     assert config['base_model_name_or_path'] == 'Qwen/tiny'
     assert shelliq['publishable'] is False
     with pytest.raises(FileExistsError):
-        export_peft_adapter(model, output, model_id='Qwen/tiny', corpus=Corpus.PERSONAL)
+        export_peft_adapter(
+            model,
+            output,
+            model_id='Qwen/tiny',
+            corpus=Corpus.PERSONAL,
+            target_format=TargetFormat.SEMANTIC_DOCUMENT_V2,
+            prompt_contract=PromptContract.CONTEXT_AUTHORITATIVE_V1,
+        )
 
 
 def test_merged_hf_export_applies_lora_delta_and_marks_publication_policy(tmp_path):
@@ -81,6 +92,8 @@ def test_merged_hf_export_applies_lora_delta_and_marks_publication_policy(tmp_pa
         output,
         model_id='Qwen/tiny',
         corpus=Corpus.DISTRIBUTABLE,
+        target_format=TargetFormat.SEMANTIC_DOCUMENT_V2,
+        prompt_contract=PromptContract.CONTEXT_AUTHORITATIVE_V1,
     )
 
     tensors = load_file(output / 'model.safetensors')
@@ -101,6 +114,8 @@ def test_merged_hf_export_supports_bfloat16_base(tmp_path):
         tmp_path / 'merged',
         model_id='Qwen/tiny',
         corpus=Corpus.DISTRIBUTABLE,
+        target_format=TargetFormat.SEMANTIC_DOCUMENT_V2,
+        prompt_contract=PromptContract.CONTEXT_AUTHORITATIVE_V1,
     )
 
     tensors = load_file(tmp_path / 'merged' / 'model.safetensors')

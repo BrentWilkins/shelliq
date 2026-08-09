@@ -28,6 +28,7 @@ from shelliq_training.data import Corpus, SFTRecord, Split, load_semantic_jsonl,
 from shelliq_training.evaluation import ModelPrediction  # noqa: E402
 from shelliq_training.lora import inject_lora  # noqa: E402
 from shelliq_training.model import Qwen2ForCausalLM  # noqa: E402
+from shelliq_training.prompt import PromptContract  # noqa: E402
 from shelliq_training.semantic_evaluation import (  # noqa: E402
     GroundingAudit,
     evaluate_semantic_predictions,
@@ -46,6 +47,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--sequence-length', type=int, default=384)
     parser.add_argument('--seed', type=int, default=2026)
     parser.add_argument('--priority-source', default='shelliq-curated')
+    parser.add_argument(
+        '--prompt-contract',
+        type=PromptContract,
+        choices=PromptContract,
+        default=PromptContract.CONTEXT_AUTHORITATIVE_V1,
+    )
     parser.add_argument(
         '--grounding-audit',
         type=Path,
@@ -102,6 +109,7 @@ def main() -> None:
         max_length=args.sequence_length,
         seed=args.seed + 1,
         priority_source=args.priority_source,
+        prompt_contract=args.prompt_contract,
     )
     grounding_audit = load_grounding_audit(args.grounding_audit)
     selected_ids = {record.record_id for record in eval_records}
@@ -132,6 +140,7 @@ def main() -> None:
         model_id=MODEL_ID,
         corpus=Corpus.DISTRIBUTABLE,
         target_format=TargetFormat.SEMANTIC_DOCUMENT_V2,
+        prompt_contract=args.prompt_contract,
     )
     trained_predictions, trained_texts = _generate(
         model,
@@ -144,6 +153,7 @@ def main() -> None:
     report = {
         'evaluation_schema_version': 2,
         'target_format': 'semantic-document-v2-json',
+        'prompt_contract': args.prompt_contract.value,
         'model_id': MODEL_ID,
         'dataset': {
             'path': str(args.semantic_dataset),

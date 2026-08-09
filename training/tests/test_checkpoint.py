@@ -14,6 +14,7 @@ from shelliq_training.config import Qwen2Config
 from shelliq_training.data import Corpus
 from shelliq_training.lora import inject_lora
 from shelliq_training.model import Qwen2ForCausalLM
+from shelliq_training.prompt import PromptContract
 from shelliq_training.training import create_lora_optimizer, train_step
 
 
@@ -60,6 +61,7 @@ def test_checkpoint_restores_adapters_optimizer_and_next_step(tmp_path):
         model_id='tiny-qwen',
         corpus=Corpus.DISTRIBUTABLE,
         target_format=TargetFormat.RAW_SHELL,
+        prompt_contract=PromptContract.LEGACY_USER_V1,
     )
 
     resumed_model, resumed_optimizer = training_pair()
@@ -70,6 +72,7 @@ def test_checkpoint_restores_adapters_optimizer_and_next_step(tmp_path):
         model_id='tiny-qwen',
         corpus=Corpus.DISTRIBUTABLE,
         target_format=TargetFormat.RAW_SHELL,
+        prompt_contract=PromptContract.LEGACY_USER_V1,
     )
     assert restored == metadata
     assert int(resumed_optimizer.step[...]) == 1
@@ -92,6 +95,7 @@ def test_checkpoint_refuses_pipeline_mismatch(tmp_path):
         model_id='tiny-qwen',
         corpus=Corpus.DISTRIBUTABLE,
         target_format=TargetFormat.RAW_SHELL,
+        prompt_contract=PromptContract.LEGACY_USER_V1,
     )
 
     with pytest.raises(CheckpointError, match="corpus 'distributable' != 'personal'"):
@@ -102,6 +106,7 @@ def test_checkpoint_refuses_pipeline_mismatch(tmp_path):
             model_id='tiny-qwen',
             corpus=Corpus.PERSONAL,
             target_format=TargetFormat.RAW_SHELL,
+            prompt_contract=PromptContract.LEGACY_USER_V1,
         )
 
 
@@ -115,6 +120,7 @@ def test_checkpoint_refuses_target_format_mismatch(tmp_path):
         model_id='tiny-qwen',
         corpus=Corpus.DISTRIBUTABLE,
         target_format=TargetFormat.SEMANTIC_DOCUMENT_V2,
+        prompt_contract=PromptContract.CONTEXT_AUTHORITATIVE_V1,
     )
 
     with pytest.raises(CheckpointError, match='target format'):
@@ -125,6 +131,32 @@ def test_checkpoint_refuses_target_format_mismatch(tmp_path):
             model_id='tiny-qwen',
             corpus=Corpus.DISTRIBUTABLE,
             target_format=TargetFormat.RAW_SHELL,
+            prompt_contract=PromptContract.CONTEXT_AUTHORITATIVE_V1,
+        )
+
+
+def test_checkpoint_refuses_prompt_contract_mismatch(tmp_path):
+    model, optimizer = training_pair()
+    checkpoint_path = tmp_path / 'semantic-step-0'
+    save_checkpoint(
+        checkpoint_path,
+        model,
+        optimizer,
+        model_id='tiny-qwen',
+        corpus=Corpus.DISTRIBUTABLE,
+        target_format=TargetFormat.SEMANTIC_DOCUMENT_V2,
+        prompt_contract=PromptContract.CONTEXT_AUTHORITATIVE_V1,
+    )
+
+    with pytest.raises(CheckpointError, match='prompt contract'):
+        restore_checkpoint(
+            checkpoint_path,
+            model,
+            optimizer,
+            model_id='tiny-qwen',
+            corpus=Corpus.DISTRIBUTABLE,
+            target_format=TargetFormat.SEMANTIC_DOCUMENT_V2,
+            prompt_contract=PromptContract.LEGACY_USER_V1,
         )
 
 
@@ -142,7 +174,26 @@ def test_schema_v1_metadata_is_read_as_raw_shell():
     )
 
     assert metadata.target_format is TargetFormat.RAW_SHELL
-    assert metadata.to_dict()['schema_version'] == 2
+    assert metadata.prompt_contract is PromptContract.LEGACY_USER_V1
+    assert metadata.to_dict()['schema_version'] == 3
+
+
+def test_schema_v2_metadata_is_read_as_legacy_prompt():
+    metadata = CheckpointMetadata.from_dict(
+        {
+            'schema_version': 2,
+            'step': 4,
+            'model_id': 'tiny-qwen',
+            'corpus': 'distributable',
+            'target_format': 'semantic-document-v2-json',
+            'rank': 4,
+            'alpha': 8.0,
+            'targets': ['q_proj'],
+        }
+    )
+
+    assert metadata.target_format is TargetFormat.SEMANTIC_DOCUMENT_V2
+    assert metadata.prompt_contract is PromptContract.LEGACY_USER_V1
 
 
 def test_checkpoint_never_overwrites_existing_directory(tmp_path):
@@ -158,4 +209,5 @@ def test_checkpoint_never_overwrites_existing_directory(tmp_path):
             model_id='tiny-qwen',
             corpus=Corpus.DISTRIBUTABLE,
             target_format=TargetFormat.RAW_SHELL,
+            prompt_contract=PromptContract.LEGACY_USER_V1,
         )
