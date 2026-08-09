@@ -65,6 +65,28 @@ The index is built per machine and never shipped, so macOS needs no data transfe
 still go stale — it reflects the pages as of the last build, so `shelliq index --refresh`
 after an upgrade is what keeps it honest.
 
+## Experimental model alpha
+
+An opt-in `cargo build --release --features model` build adds
+`shelliq suggest`. It can query an OpenAI-compatible model server bound to numeric
+loopback, deserialize compact SemanticDocumentV2 JSON, validate its Rust
+render/reparse round trip, and check recognized flags against the local index.
+It prints an editable command and never executes it:
+
+```console
+$ shelliq suggest --endpoint http://127.0.0.1:8080/v1/chat/completions \
+    --context 'cp -a SOURCE DEST preserves attributes and symlinks' \
+    copy a tree while preserving its attributes
+experimental model suggestion; flags checked, operand semantics unverified; inspect and edit before running
+cp -a SOURCE/DEST/
+```
+
+This is an integration preview, not a correctness claim. Command-level operand
+arity and intent coverage are not yet validated, so suggestions can be
+syntactically valid while still being incomplete or wrong. The client refuses
+non-loopback endpoints, credentials, redirects, ambient proxies, oversized
+responses, invalid semantic JSON, and semantic documents that do not round trip.
+
 ## Footprint
 
 The default build links no inference library, opens no socket, and needs no GPU. A model is

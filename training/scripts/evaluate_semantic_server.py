@@ -55,7 +55,7 @@ def validate_endpoint(endpoint: str) -> str:
     parsed = urllib.parse.urlsplit(endpoint)
     if (
         parsed.scheme != 'http'
-        or parsed.hostname not in {'127.0.0.1', '::1', 'localhost'}
+        or parsed.hostname not in {'127.0.0.1', '::1'}
         or parsed.username is not None
         or parsed.password is not None
         or parsed.query
