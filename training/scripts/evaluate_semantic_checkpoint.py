@@ -28,7 +28,11 @@ from shelliq_training.data import Corpus, SFTRecord, Split, load_semantic_jsonl,
 from shelliq_training.evaluation import ModelPrediction  # noqa: E402
 from shelliq_training.lora import inject_lora  # noqa: E402
 from shelliq_training.model import Qwen2ForCausalLM  # noqa: E402
-from shelliq_training.semantic_evaluation import evaluate_semantic_predictions  # noqa: E402
+from shelliq_training.semantic_evaluation import (  # noqa: E402
+    GroundingAudit,
+    evaluate_semantic_predictions,
+    load_grounding_audit,
+)
 from shelliq_training.training import create_lora_optimizer  # noqa: E402
 from shelliq_training.weights import load_hf_state_dict  # noqa: E402
 
@@ -42,6 +46,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--sequence-length', type=int, default=384)
     parser.add_argument('--seed', type=int, default=2026)
     parser.add_argument('--priority-source', default='shelliq-curated')
+    parser.add_argument(
+        '--grounding-audit',
+        type=Path,
+        default=Path(__file__).resolve().parents[1] / 'evaluation' / 'curated-grounding-v1.json',
+    )
     return parser.parse_args()
 
 
@@ -53,16 +62,19 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _metrics(records: list[SFTRecord], predictions: list[ModelPrediction]) -> dict[str, object]:
-    return asdict(evaluate_semantic_predictions(records, predictions))
+def _metrics(records: list[SFTRecord], predictions: list[ModelPrediction], grounding_audit: GroundingAudit) -> dict[str, object]:
+    return asdict(evaluate_semantic_predictions(records, predictions, grounding_audit))
 
 
-def _by_source(records: list[SFTRecord], predictions: list[ModelPrediction]) -> dict[str, dict[str, object]]:
+def _by_source(
+    records: list[SFTRecord], predictions: list[ModelPrediction], grounding_audit: GroundingAudit
+) -> dict[str, dict[str, object]]:
     prediction_by_id = {prediction.record_id: prediction for prediction in predictions}
     return {
         source: _metrics(
             source_records,
             [prediction_by_id[record.record_id] for record in source_records],
+            grounding_audit,
         )
         for source in sorted({record.source for record in records})
         if (source_records := [record for record in records if record.source == source])
@@ -91,6 +103,13 @@ def main() -> None:
         seed=args.seed + 1,
         priority_source=args.priority_source,
     )
+    grounding_audit = load_grounding_audit(args.grounding_audit)
+    selected_ids = {record.record_id for record in eval_records}
+    audited_ids = set(grounding_audit)
+    if selected_ids != audited_ids:
+        missing = sorted(selected_ids - audited_ids)
+        extra = sorted(audited_ids - selected_ids)
+        raise SystemExit(f'grounding audit does not match selection: missing={missing}, extra={extra}')
     print(f'evaluation selection: {len(eval_records)} rows, sources={dict(Counter(record.source for record in eval_records))}')
 
     model = Qwen2ForCausalLM(Qwen2Config(), param_dtype=jnp.bfloat16, rngs=nnx.Rngs(0))
@@ -123,7 +142,7 @@ def main() -> None:
     )
 
     report = {
-        'evaluation_schema_version': 1,
+        'evaluation_schema_version': 2,
         'target_format': 'semantic-document-v2-json',
         'model_id': MODEL_ID,
         'dataset': {
@@ -132,6 +151,10 @@ def main() -> None:
             'accepted_records': len(records),
         },
         'checkpoint': {'path': str(args.checkpoint), 'step': metadata.step},
+        'grounding_audit': {
+            'path': str(args.grounding_audit),
+            'sha256': _sha256(args.grounding_audit),
+        },
         'selection': {
             'seed': args.seed,
             'examples': len(eval_records),
@@ -142,6 +165,10 @@ def main() -> None:
         'metric_notes': {
             'document_envelope_rate': 'Exact top-level v2/zsh/s JSON contract; not Rust round-trip validation.',
             'structural_exact_match': 'Decoded JSON equality, ignoring insignificant whitespace.',
+            'grounded_document_exact_match': (
+                'Decoded JSON equality after replacing only manually audited prompt-variable literals; '
+                'all commands, flags, argument positions, redirects, and AST shape remain exact.'
+            ),
             'first_command_accuracy': 'Literal first command name in the first pipeline stage.',
             'command_flag_sequence_exact_match': (
                 'First command and ordered dash-prefixed arguments; ignores operand literals '
@@ -149,12 +176,12 @@ def main() -> None:
             ),
         },
         'baseline': {
-            'overall': _metrics(eval_records, baseline_predictions),
-            'by_source': _by_source(eval_records, baseline_predictions),
+            'overall': _metrics(eval_records, baseline_predictions, grounding_audit),
+            'by_source': _by_source(eval_records, baseline_predictions, grounding_audit),
         },
         'trained': {
-            'overall': _metrics(eval_records, trained_predictions),
-            'by_source': _by_source(eval_records, trained_predictions),
+            'overall': _metrics(eval_records, trained_predictions, grounding_audit),
+            'by_source': _by_source(eval_records, trained_predictions, grounding_audit),
         },
         'examples': [
             {
