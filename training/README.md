@@ -323,12 +323,31 @@ The 2026-08-08 conversion produced 30,412 validated rows from 30,977 inputs
 the manifest. A 4,000-row broad pilot followed by a 492-row curated finishing
 stage reached 100% JSON/v2-envelope rate, 85.7% first-command accuracy, and
 37.1% exact first-command-plus-flag sequence on the same 35 curated held-out
-rows. The earlier curated-only adapter scored 21.2% on that grounded structural
-metric. Full decoded-document exact match fell from 11.4% to 5.7% because many
-prompts do not specify the literal operands demanded by their reference (for
-example, an instruction says “copy a tree” while the reference chooses
-`src/ dest/`). Keep full-document exact for continuity, but do not treat it as
-task success until operand grounding is audited.
+rows. Full decoded-document exact match was 5.7%. The versioned
+`evaluation/curated-grounding-v1.json` audit marks only literal values that the
+prompt does not specify; after normalizing those values, whole-document exact
+match is 20.0%. Commands, flags, argument positions, redirects, and AST shape
+remain exact.
+
+Exported GGUF models can be evaluated through the same loopback HTTP boundary
+planned for the alpha runtime:
+
+```sh
+uv run python scripts/evaluate_semantic_server.py \
+  --semantic-dataset artifacts/distributable-semantic-v2.jsonl \
+  --reference-report artifacts/semantic-distributable-curated-finish-v2.eval.json \
+  --endpoint http://127.0.0.1:8080/v1/chat/completions \
+  --output artifacts/model.eval.json
+```
+
+The evaluator disables proxies and redirects, accepts only uncredentialed
+loopback HTTP endpoints, caps response size at one MiB, and records latency and
+every generation. Multiple sampled candidates additionally report an explicitly
+label-aware oracle upper bound; it is diagnostic and never a deployable score.
+The Q8_0 alpha export exactly reproduced the JAX checkpoint metrics and averaged
+95 ms per request on the RTX 4090. Four candidates at temperature 0.2 provided
+no oracle improvement, so targeted training—not sampling—is the next quality
+lever.
 
 `smoke_finetune.py --resume-checkpoint INPUT --checkpoint OUTPUT` performs a
 format-checked finishing stage without overwriting the source checkpoint and
