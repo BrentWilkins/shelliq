@@ -44,6 +44,7 @@ def test_semantic_metrics_distinguish_json_envelope_structure_and_command():
     assert metrics.document_envelope_rate == pytest.approx(2 / 3)
     assert metrics.structural_exact_match == pytest.approx(1 / 3)
     assert metrics.first_command_accuracy == pytest.approx(2 / 3)
+    assert metrics.command_flag_sequence_exact_match == pytest.approx(2 / 3)
 
 
 def test_semantic_parser_rejects_wrong_contract():
