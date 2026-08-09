@@ -26,7 +26,7 @@ from huggingface_hub import hf_hub_download
 from safetensors.flax import load_file
 from transformers import AutoTokenizer
 
-from shelliq_training.checkpoint import TargetFormat, save_checkpoint
+from shelliq_training.checkpoint import TargetFormat, restore_checkpoint, save_checkpoint
 from shelliq_training.config import Qwen2Config
 from shelliq_training.corpus_audit import preflight_records
 from shelliq_training.data import (
@@ -65,6 +65,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--learning-rate', type=float, default=1e-3)
     parser.add_argument('--seed', type=int, default=2026)
     parser.add_argument('--checkpoint', type=Path)
+    parser.add_argument('--resume-checkpoint', type=Path)
     parser.add_argument('--report', type=Path)
     parser.add_argument('--heldout-probe', action='store_true')
     parser.add_argument('--priority-source')
@@ -116,14 +117,14 @@ def select_examples(
         return True
 
     for record in prioritized:
+        if len(examples) >= count:
+            break
         add_record(record, require_new_command=False)
-        if len(examples) == count:
-            break
     for record in remaining:
-        add_record(record, require_new_command=True)
-        if len(examples) == count:
+        if len(examples) >= count:
             break
-    if len(examples) != count:
+        add_record(record, require_new_command=True)
+    if len(examples) < count:
         raise ValueError(f'only found {len(examples)} usable examples; requested {count}')
     return selected_records, examples
 
@@ -253,6 +254,12 @@ def main() -> None:
         raise SystemExit(f'--sequence-length must exceed {GENERATION_TOKENS + 1}')
     if args.steps <= 0:
         raise SystemExit('--steps must be positive')
+    if (
+        args.checkpoint is not None
+        and args.resume_checkpoint is not None
+        and args.checkpoint.resolve() == args.resume_checkpoint.resolve()
+    ):
+        raise SystemExit('--checkpoint and --resume-checkpoint must be different paths')
 
     if args.semantic_dataset is not None:
         dataset_path = args.semantic_dataset
@@ -313,6 +320,17 @@ def main() -> None:
     load_hf_state_dict(model, load_file(weights_path), param_dtype=jnp.bfloat16)
     inject_lora(model, rank=16, alpha=32, rngs=nnx.Rngs(1))
     optimizer = create_lora_optimizer(model, learning_rate=args.learning_rate)
+    resumed_metadata = None
+    if args.resume_checkpoint is not None:
+        resumed_metadata = restore_checkpoint(
+            args.resume_checkpoint,
+            model,
+            optimizer,
+            model_id=MODEL_ID,
+            corpus=Corpus.DISTRIBUTABLE,
+            target_format=target_format,
+        )
+        print(f'resumed checkpoint: {args.resume_checkpoint} at step {resumed_metadata.step}')
     print(f'parameters: {parameter_count(model, nnx.Param):,} total; {parameter_count(model, nnx.LoRAParam):,} trainable LoRA')
 
     started = time.perf_counter()
@@ -390,6 +408,12 @@ def main() -> None:
                 'rejected_record_ids': sorted(rejected),
                 'target_format': target_format.value,
             },
+            'resume_checkpoint': None
+            if resumed_metadata is None
+            else {
+                'path': str(args.resume_checkpoint),
+                'step': resumed_metadata.step,
+            },
             'selection': {
                 'seed': args.seed,
                 'priority_source': args.priority_source,
@@ -401,6 +425,7 @@ def main() -> None:
                 'eval_source_counts': dict(Counter(record.source for record in eval_records)),
             },
             'training': {
+                'starting_step': 0 if resumed_metadata is None else resumed_metadata.step,
                 'device': str(jax.devices()[0]),
                 'sequence_length': args.sequence_length,
                 'batch_size': args.batch_size,

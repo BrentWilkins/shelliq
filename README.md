@@ -35,9 +35,9 @@ bundled short flag — `-sirN` looks fine — so the checker decomposes bundles 
 checking anything.
 
 ```console
-$ shelliq search curl maximum redirects     # find a flag by what it does
-$ shelliq flags tar                         # every flag, ranked
-$ shelliq index stats
+shelliq search curl maximum redirects     # find a flag by what it does
+shelliq flags tar                         # every flag, ranked
+shelliq index stats
 ```
 
 ## How it works
