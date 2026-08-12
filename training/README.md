@@ -369,6 +369,23 @@ The analyzer accepts checkpoint and served-GGUF reports, recomputes metrics from
 rejects mismatched benchmark IDs, and classifies wrong commands, missing/extra/reordered flags, and
 operand/structure errors. The promotion gate requires 100% JSON and v2 envelopes, at least 31/35 first
 commands, and strict improvements over the incumbents' 13/35 command-plus-flag and 7/35 grounded-document scores.
+
+The focused finishing family targets those classified failures without training on release-benchmark
+commands. Build its derived semantic artifact with the checked leakage and split gate:
+
+```sh
+uv run python scripts/build_targeted_semantic_dataset.py \
+  --dataset corpus/targeted-finishing.jsonl \
+  --holdout-report artifacts/semantic-authoritative-curated-v3.eval.json \
+  --output artifacts/targeted-finishing-semantic-v1.jsonl \
+  --manifest artifacts/targeted-finishing-semantic-v1.manifest.json \
+  --converter ../target/release/convert-semantic-dataset
+```
+
+The v1 family has 28 rows across 14 command families: 24 train, two validation, and two test rows under
+seed 2026. It teaches multi-flag retention, repeated option values, bundled short flags, `--` separation,
+and operand placement. Its builder rejects shared holdout IDs or instructions and excludes every command
+family present in the 35-row release benchmark.
 The Q8_0 alpha export exactly reproduced the JAX checkpoint metrics and averaged
 95 ms per request on the RTX 4090. Four candidates at temperature 0.2 provided
 no oracle improvement, so targeted training—not sampling—is the next quality

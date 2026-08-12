@@ -4,7 +4,11 @@ First-party, hand-authored schema-version-1 rows. Unlike `artifacts/`, this
 directory is **git-tracked**: every row is reviewable, diffable, and editable by
 hand.
 
-The corpus currently contains 626 rows across 13 command-family files.
+The corpus currently contains 654 rows across 14 command-family files.
+
+`targeted-finishing.jsonl` is also a standalone finishing family. Its commands are deliberately disjoint
+from the 35-row release benchmark; `scripts/build_targeted_semantic_dataset.py` enforces that boundary and
+requires independent train and test command hashes before semantic conversion.
 
 These rows exist to cover what tldr structurally cannot teach. tldr examples are
 single-clause, placeholder-stripped, and overwhelmingly GNU-flavored. The gaps
