@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "records": {
+    "retention:v1:linux:awk-active-user-ids": {"variable_literal_paths": ["/s/0/c/0/a/2/s"]},
+    "retention:v1:linux:sed-line-window": {"variable_literal_paths": ["/s/0/c/0/a/2/s"]},
+    "retention:v1:linux:sort-numeric-field": {"variable_literal_paths": ["/s/0/c/0/a/2/s"]},
+    "retention:v1:linux:uniq-count-names": {"variable_literal_paths": ["/s/0/c/0/a/0/s"]},
+    "retention:v1:linux:xargs-null-basenames": {"variable_literal_paths": ["/s/0/c/0/r/0/t/s"]},
+    "retention:v1:linux:du-human-summary": {"variable_literal_paths": ["/s/0/c/0/a/1/s"]},
+    "retention:v1:linux:df-human-var": {"variable_literal_paths": ["/s/0/c/0/a/1/s"]},
+    "retention:v1:linux:ps-memory-order": {"variable_literal_paths": []},
+    "retention:v1:linux:chmod-readable-tree": {"variable_literal_paths": ["/s/0/c/0/a/2/s"]},
+    "retention:v1:linux:grep-todo-tree": {"variable_literal_paths": []},
+    "retention:v1:linux:tail-follow-window": {"variable_literal_paths": ["/s/0/c/0/a/3/s"]},
+    "retention:v1:linux:wc-jsonl-lines": {"variable_literal_paths": ["/s/0/c/0/a/1/s"]},
+    "retention:v1:linux:tr-uppercase-file": {"variable_literal_paths": ["/s/0/c/0/r/0/t/s"]},
+    "retention:v1:linux:cut-selected-fields": {"variable_literal_paths": ["/s/0/c/0/a/2/s"]},
+    "retention:v1:linux:lsof-listener-8080": {"variable_literal_paths": []},
+    "retention:v1:linux:fd-hidden-toml": {"variable_literal_paths": []},
+    "retention:v1:linux:jq-item-names": {"variable_literal_paths": ["/s/0/c/0/a/2/s"]},
+    "retention:v1:linux:docker-compose-log-window": {"variable_literal_paths": ["/s/0/c/0/a/5/s"]},
+    "retention:v1:linux:gh-open-issues": {"variable_literal_paths": []},
+    "retention:v1:linux:uv-frozen-tests": {"variable_literal_paths": []}
+  }
+}

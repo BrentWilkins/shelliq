@@ -24,7 +24,15 @@ from scripts.evaluate_checkpoint import _generate  # noqa: E402
 from scripts.smoke_finetune import GENERATION_TOKENS, MODEL_ID, select_examples  # noqa: E402
 from shelliq_training.checkpoint import TargetFormat, restore_checkpoint  # noqa: E402
 from shelliq_training.config import Qwen2Config  # noqa: E402
-from shelliq_training.data import Corpus, SFTRecord, Split, load_semantic_jsonl, split_records  # noqa: E402
+from shelliq_training.data import (  # noqa: E402
+    IGNORE_INDEX,
+    Corpus,
+    SFTRecord,
+    Split,
+    load_semantic_jsonl,
+    split_records,
+    tokenize_record,
+)
 from shelliq_training.evaluation import ModelPrediction  # noqa: E402
 from shelliq_training.lora import inject_lora  # noqa: E402
 from shelliq_training.model import Qwen2ForCausalLM  # noqa: E402
@@ -44,6 +52,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--checkpoint', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--examples', type=int, default=35)
+    parser.add_argument(
+        '--selection',
+        choices=('test', 'all'),
+        default='test',
+        help='Evaluate the command-grouped test split or every row in a dedicated benchmark.',
+    )
     parser.add_argument('--sequence-length', type=int, default=384)
     parser.add_argument('--seed', type=int, default=2026)
     parser.add_argument('--priority-source', default='shelliq-curated')
@@ -102,15 +116,35 @@ def main() -> None:
     records = load_semantic_jsonl(args.semantic_dataset)
     splits = split_records(records, corpus=Corpus.DISTRIBUTABLE, seed=args.seed)
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, local_files_only=True)
-    eval_records, eval_examples = select_examples(
-        splits[Split.TEST],
-        tokenizer,
-        count=args.examples,
-        max_length=args.sequence_length,
-        seed=args.seed + 1,
-        priority_source=args.priority_source,
-        prompt_contract=args.prompt_contract,
-    )
+    if args.selection == 'all':
+        eval_records = records
+        eval_examples = [
+            tokenize_record(
+                record,
+                tokenizer,
+                max_length=args.sequence_length,
+                prompt_contract=args.prompt_contract,
+            )
+            for record in eval_records
+        ]
+        too_long = [
+            record.record_id
+            for record, example in zip(eval_records, eval_examples, strict=True)
+            if next(index for index, label in enumerate(example.labels) if label != IGNORE_INDEX) + GENERATION_TOKENS
+            > args.sequence_length
+        ]
+        if too_long:
+            raise SystemExit(f'benchmark prompts leave fewer than {GENERATION_TOKENS} generation tokens: {too_long}')
+    else:
+        eval_records, eval_examples = select_examples(
+            splits[Split.TEST],
+            tokenizer,
+            count=args.examples,
+            max_length=args.sequence_length,
+            seed=args.seed + 1,
+            priority_source=args.priority_source,
+            prompt_contract=args.prompt_contract,
+        )
     grounding_audit = load_grounding_audit(args.grounding_audit)
     selected_ids = {record.record_id for record in eval_records}
     audited_ids = set(grounding_audit)
@@ -170,6 +204,7 @@ def main() -> None:
             'examples': len(eval_records),
             'generation_tokens': GENERATION_TOKENS,
             'priority_source': args.priority_source,
+            'selection': args.selection,
             'source_counts': dict(Counter(record.source for record in eval_records)),
         },
         'metric_notes': {

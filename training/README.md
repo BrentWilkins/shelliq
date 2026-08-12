@@ -460,6 +460,57 @@ Before calling a final adapter generally regression-safe, add a larger stable
 retention suite spanning those categories and run it beside the focused
 release benchmark after every finishing stage.
 
+The first frozen positive-retention slice is
+[`evaluation/semantic-retention-v1.jsonl`](evaluation/semantic-retention-v1.jsonl):
+20 cases across common text processing, filesystem/process inspection, and
+modern tooling. It lives outside `corpus/`, is never merged into training, and
+uses command families disjoint from both the release benchmark and targeted
+finishing family. Build its ignored semantic artifact and evaluate every row:
+
+```sh
+cargo run --release -p shelliq-syntax --bin convert-semantic-dataset -- \
+  training/evaluation/semantic-retention-v1.jsonl \
+  training/artifacts/semantic-retention-v1.jsonl \
+  training/artifacts/semantic-retention-v1.manifest.json
+
+uv run python scripts/evaluate_semantic_checkpoint.py \
+  --semantic-dataset artifacts/semantic-retention-v1.jsonl \
+  --selection all \
+  --sequence-length 448 \
+  --checkpoint artifacts/semantic-authoritative-curated-v3/checkpoint \
+  --grounding-audit evaluation/semantic-retention-grounding-v1.json \
+  --output artifacts/semantic-retention-incumbent-v1.eval.json
+```
+
+Freeze that incumbent report, evaluate a candidate with the same command, then
+require no aggregate regression in JSON, envelope, first-command, ordered-flag,
+or grounded-document metrics:
+
+```sh
+uv run python scripts/analyze_semantic_retention.py \
+  --baseline artifacts/semantic-retention-incumbent-v1.eval.json \
+  --candidate artifacts/semantic-retention-candidate.eval.json \
+  --grounding-audit evaluation/semantic-retention-grounding-v1.json \
+  --output artifacts/semantic-retention-candidate.analysis.json \
+  --gate
+```
+
+The analyzer also lists per-example improvements and regressions for review and
+refuses mismatched IDs, instructions, or expected targets. This v1 slice covers
+positive semantic generation only. Abstention, unsafe requests, malformed
+inputs, and unrelated coding/chat probes require a separate response contract
+and remain explicit follow-up work rather than being assigned fake command
+targets.
+
+The 2026-08-12 incumbent baseline scored 20/20 JSON envelopes and first
+commands, 14/20 exact ordered flag sequences, and 8/20 grounded documents.
+Three flag misses are functionally plausible alternate spellings (`-nP`,
+`--state=open`, and split rather than bundled grep flags), so the frozen report
+is a regression floor while functional-equivalence scoring remains follow-up
+work. Do not silently normalize those cases after seeing candidate output;
+version the evaluator and re-baseline every candidate together if equivalence
+rules change.
+
 ### Where reinforcement learning could fit
 
 Large-model post-training commonly combines supervised examples with later
