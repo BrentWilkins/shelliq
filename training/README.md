@@ -395,6 +395,89 @@ lever.
 format-checked finishing stage without overwriting the source checkpoint and
 records the starting optimizer step in its report.
 
+### Purpose and result of the targeted finishing experiment
+
+The 28-row family is a diagnostic and curriculum seed, not a replacement for
+the 654-row curated corpus. Its deterministic split leaves only 24 rows for
+training. Those rows isolate the failure modes measured by the release gate
+while using command families disjoint from the gate, so an improvement would
+show transferable flag and operand learning rather than benchmark
+memorization. The first experiment deliberately resumed the best adapter and
+trained on only those 24 rows. This aggressive test asks two questions: does
+the small family contain a learnable corrective signal, and how much rehearsal
+of the broad corpus is required to retain existing behavior?
+
+Only LoRA parameters are optimized; the Qwen base weights remain frozen. A
+finishing run updates the existing LoRA adapter rather than stacking a second
+adapter. Consequently, the observed catastrophic forgetting is interference
+inside the adapter: the underlying pretrained base model is unchanged, but the
+composed base-plus-adapter model behaves worse. A merged HF or GGUF export
+folds that adapter delta into exported weights, so the same regression would
+be visible in the runtime model even though the original base checkpoint is
+still intact.
+
+The pure-targeted sweep overfit quickly: targeted training loss fell while
+held-out loss rose, and release JSON, command, flag, and grounded-document
+scores all regressed. Mixing all 654 semantic rows with the targeted family
+preserved more behavior and produced the best first-command score, but did not
+beat the incumbent flag and grounded-document promotion thresholds. A lower
+learning-rate continuation from the curated checkpoint preserved JSON,
+command, and grounded scores but plateaued below the flag threshold. No
+candidate was promoted or exported. The result is evidence that 24 focused
+training rows are too small for a standalone finishing stage; the next useful
+dataset experiment is a broader, more varied targeted family mixed with the
+full corpus, followed by the same command-disjoint release gate.
+
+### Holdout lifecycle and retention claims
+
+A holdout is not knowledge the project promises never to teach. It is evidence
+reserved from a particular model-selection cycle. Keep the 35-row release
+benchmark untouched while choosing data, learning rate, and step count. Teach
+the same underlying skills with different commands and paraphrases, then use
+the holdout to measure transfer. If its exact rows or command families are
+later added to training for a final fit, that benchmark is spent: retire it
+from promotion decisions and create a new command-disjoint shadow holdout
+before claiming generalization. Training on the test rows and continuing to
+report their score would measure memorization, not the last five percent of
+generalized capability.
+
+The current adapter was not trained from only the 654 curated rows. Its broad
+stage selected 4,000 semantic rows: 3,507 TLDR and 493 curated. The following
+curated stage trained on 492 command-grouped training rows while retaining 34
+for its loss probe, and the separate release evaluation covers 35 held-out
+curated intents. During that curated stage, held-out loss improved from 0.4116
+to 0.3265. The promoted checkpoint also retained 100% JSON and v2-envelope
+rates, 31/35 first commands, 11/35 exact command-plus-flag sequences, and 7/35
+grounded documents on the release set. The later low-dose mixed continuation
+kept JSON, envelope, command, and grounded scores unchanged and improved flags
+to 12/35, although that still failed the strict promotion gate.
+
+This is useful retention evidence for the ShellIQ prompt and semantic-output
+task, not proof that every pretrained capability is preserved. The current
+suite does not broadly score paraphrase robustness, unrelated coding/chat
+tasks, malformed or out-of-domain requests, or safety/abstention behavior.
+Before calling a final adapter generally regression-safe, add a larger stable
+retention suite spanning those categories and run it beside the focused
+release benchmark after every finishing stage.
+
+### Where reinforcement learning could fit
+
+Large-model post-training commonly combines supervised examples with later
+optimization against preferences or verifiable rewards. The closest analogue
+here would start from a stable supervised LoRA, sample several semantic
+documents for each request, execute or statically verify them in a sandbox,
+and reward schema validity, command/flag correctness, grounding, and task
+success. This could improve selection among behaviors the model already knows;
+it does not replace missing command coverage or a retention suite.
+
+Do not make reinforcement learning the next training stage. First expand the
+focused supervised data, train it with broad rehearsal, and establish stable
+task, retention, and safety graders. RL on 24 examples or on proxy metrics such
+as JSON validity would invite the same narrow over-specialization—or reward
+hacking—seen in the pure finishing sweep. Reconsider it once graders can score
+functional command success and reject unsafe behavior without relying on the
+reference answer's exact text.
+
 Personal builders require canaries and always pass through `PrivateDataGate`.
 They write the corpus, a canary-probe manifest, a deterministic 20-row scrubbed
 audit sample, and a report containing counts and IDs but no rejected text:
