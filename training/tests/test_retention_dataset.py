@@ -7,7 +7,10 @@ from shelliq_training.semantic_evaluation import load_grounding_audit
 TRAINING_ROOT = Path(__file__).resolve().parents[1]
 RETENTION_PATH = TRAINING_ROOT / 'evaluation' / 'semantic-retention-v1.jsonl'
 GROUNDING_PATH = TRAINING_ROOT / 'evaluation' / 'semantic-retention-grounding-v1.json'
-TARGETED_PATH = TRAINING_ROOT / 'corpus' / 'targeted-finishing.jsonl'
+TARGETED_PATHS = (
+    TRAINING_ROOT / 'corpus' / 'targeted-finishing.jsonl',
+    TRAINING_ROOT / 'corpus' / 'targeted-finishing-v2.jsonl',
+)
 RELEASE_COMMANDS = {
     'cargo',
     'cp',
@@ -37,7 +40,7 @@ def test_retention_suite_is_frozen_audited_and_outside_training_corpus():
 
 def test_retention_commands_are_disjoint_from_focused_benchmarks():
     retention_commands = {record.command for record in load_jsonl(RETENTION_PATH, corpus=Corpus.DISTRIBUTABLE)}
-    targeted_commands = {json.loads(line)['command'] for line in TARGETED_PATH.read_text().splitlines()}
+    targeted_commands = {json.loads(line)['command'] for path in TARGETED_PATHS for line in path.read_text().splitlines()}
 
     assert retention_commands.isdisjoint(RELEASE_COMMANDS)
     assert retention_commands.isdisjoint(targeted_commands)

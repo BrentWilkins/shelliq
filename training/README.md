@@ -395,6 +395,43 @@ lever.
 format-checked finishing stage without overwriting the source checkpoint and
 records the starting optimizer step in its report.
 
+The v2 expansion adds 72 rows in `corpus/targeted-finishing-v2.jsonl`, making
+100 focused rows total. Build both immutable source families into one derived
+artifact by repeating `--dataset`:
+
+```sh
+uv run python scripts/build_targeted_semantic_dataset.py \
+  --dataset corpus/targeted-finishing.jsonl \
+  --dataset corpus/targeted-finishing-v2.jsonl \
+  --holdout-report artifacts/semantic-authoritative-curated-v3.eval.json \
+  --output artifacts/targeted-finishing-semantic-v2.jsonl \
+  --manifest artifacts/targeted-finishing-semantic-v2.manifest.json \
+  --converter ../target/release/convert-semantic-dataset
+```
+
+The checked result is 100/100 semantic conversions with zero rejects and a
+96/2/2 train/validation/test split. A controlled weighted-rehearsal run resumes
+the broad checkpoint and repeats only selected focused IDs three times:
+
+```sh
+uv run python scripts/smoke_finetune.py \
+  --semantic-dataset artifacts/curated-semantic-v4.jsonl \
+  --sequence-length 384 --train-examples 588 --eval-examples 36 \
+  --batch-size 2 --steps 500 --learning-rate 5e-5 \
+  --priority-source shelliq-curated \
+  --rehearsal-record-prefix curated:targeted-finishing \
+  --rehearsal-weight 3 --heldout-probe \
+  --resume-checkpoint artifacts/semantic-authoritative-broad-v3/checkpoint \
+  --checkpoint artifacts/semantic-weighted-rehearsal-v1/checkpoint \
+  --report artifacts/semantic-weighted-rehearsal-v1.report.json
+```
+
+This selects 588 unique rows and 780 effective examples: all 96 focused
+training rows receive three exposures, for 288 focused and 492 ordinary
+exposures. Weighting happens only after command-grouped splitting and selection;
+validation and test rows are never repeated. The report records unique and
+effective counts, the ID prefix, and the multiplier.
+
 ### Purpose and result of the targeted finishing experiment
 
 The 28-row family is a diagnostic and curriculum seed, not a replacement for

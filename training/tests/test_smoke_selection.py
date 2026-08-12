@@ -1,4 +1,8 @@
-from scripts.smoke_finetune import select_examples
+from dataclasses import replace
+
+import pytest
+
+from scripts.smoke_finetune import apply_rehearsal_weight, select_examples
 from shelliq_training.data import Corpus, Platform, SFTRecord
 
 
@@ -45,3 +49,33 @@ def test_priority_selection_stops_at_requested_count():
 
     assert len(selected) == 35
     assert len(examples) == 35
+
+
+def test_rehearsal_weight_repeats_only_matching_records_deterministically():
+    records = [record(1), record(2), record(3)]
+    records[1] = replace(records[1], record_id='curated:targeted-finishing:linux:row-2')
+    _, examples = select_examples(
+        records,
+        FakeQwenTokenizer(),
+        count=3,
+        max_length=384,
+        seed=2026,
+    )
+
+    weighted_records, weighted_examples = apply_rehearsal_weight(
+        records,
+        examples,
+        record_prefix='curated:targeted-finishing:',
+        weight=3,
+        seed=2026,
+    )
+
+    assert len(weighted_records) == len(weighted_examples) == 5
+    assert sum('targeted-finishing' in item.record_id for item in weighted_records) == 3
+
+
+def test_rehearsal_weight_rejects_missing_prefix():
+    records = [record(1)]
+    _, examples = select_examples(records, FakeQwenTokenizer(), count=1, max_length=384, seed=2026)
+    with pytest.raises(ValueError, match='no selected training record IDs'):
+        apply_rehearsal_weight(records, examples, record_prefix='missing:', weight=2, seed=2026)

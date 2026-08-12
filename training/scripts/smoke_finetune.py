@@ -70,6 +70,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--report', type=Path)
     parser.add_argument('--heldout-probe', action='store_true')
     parser.add_argument('--priority-source')
+    parser.add_argument(
+        '--rehearsal-record-prefix',
+        help='Repeat selected training rows whose record IDs start with this prefix.',
+    )
+    parser.add_argument('--rehearsal-weight', type=int, default=1)
     parser.add_argument('--prompt-contract', type=PromptContract, choices=PromptContract)
     return parser.parse_args()
 
@@ -154,6 +159,35 @@ def make_batches(
         )
         for offset in range(0, len(examples), batch_size)
     ]
+
+
+def apply_rehearsal_weight(
+    records: Sequence[SFTRecord],
+    examples: Sequence[TokenizedExample],
+    *,
+    record_prefix: str | None,
+    weight: int,
+    seed: int,
+) -> tuple[list[SFTRecord], list[TokenizedExample]]:
+    """Repeat a named curriculum slice without duplicating source records."""
+    if len(records) != len(examples):
+        raise ValueError('records and examples must have equal lengths')
+    if weight < 1:
+        raise ValueError('rehearsal weight must be positive')
+    if record_prefix is None:
+        if weight != 1:
+            raise ValueError('rehearsal weight requires a record prefix')
+        return list(records), list(examples)
+    weighted: list[tuple[SFTRecord, TokenizedExample, int]] = []
+    matched = 0
+    for record, example in zip(records, examples, strict=True):
+        repeats = weight if record.record_id.startswith(record_prefix) else 1
+        matched += repeats > 1
+        weighted.extend((record, example, occurrence) for occurrence in range(repeats))
+    if not matched:
+        raise ValueError(f'no selected training record IDs start with {record_prefix!r}')
+    weighted.sort(key=lambda item: hashlib.sha256(f'{seed}\0{item[0].record_id}\0{item[2]}'.encode()).digest())
+    return [item[0] for item in weighted], [item[1] for item in weighted]
 
 
 def mean_loss(model: Qwen2ForCausalLM, batches: Sequence[CausalLMBatch]) -> float:
@@ -292,6 +326,14 @@ def main() -> None:
         seed=args.seed,
         priority_source=args.priority_source,
         prompt_contract=prompt_contract,
+    )
+    unique_train_records = train_records
+    train_records, train_examples = apply_rehearsal_weight(
+        train_records,
+        train_examples,
+        record_prefix=args.rehearsal_record_prefix,
+        weight=args.rehearsal_weight,
+        seed=args.seed,
     )
     eval_records, eval_examples = select_examples(
         splits[Split.TEST],
@@ -433,9 +475,18 @@ def main() -> None:
             'selection': {
                 'seed': args.seed,
                 'priority_source': args.priority_source,
-                'train_examples': len(train_records),
-                'train_record_ids_sha256': _record_id_sha256(train_records),
-                'train_source_counts': dict(Counter(record.source for record in train_records)),
+                'train_examples': len(unique_train_records),
+                'train_record_ids_sha256': _record_id_sha256(unique_train_records),
+                'train_source_counts': dict(Counter(record.source for record in unique_train_records)),
+                'effective_train_examples': len(train_records),
+                'effective_train_source_counts': dict(Counter(record.source for record in train_records)),
+                'effective_rehearsal_examples': sum(
+                    record.record_id.startswith(args.rehearsal_record_prefix)
+                    for record in train_records
+                    if args.rehearsal_record_prefix is not None
+                ),
+                'rehearsal_record_prefix': args.rehearsal_record_prefix,
+                'rehearsal_weight': args.rehearsal_weight,
                 'eval_examples': len(eval_records),
                 'eval_record_ids_sha256': _record_id_sha256(eval_records),
                 'eval_source_counts': dict(Counter(record.source for record in eval_records)),

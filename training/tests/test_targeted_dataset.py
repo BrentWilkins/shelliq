@@ -34,10 +34,10 @@ def test_rejects_holdout_ids_instructions_and_command_families(tmp_path):
 
     write_dataset(dataset, record_id='heldout:one')
     with pytest.raises(ValueError, match='record_ids'):
-        validate_no_holdout_leakage(dataset, report, seed=2026)
+        validate_no_holdout_leakage([dataset], report, seed=2026)
     write_dataset(dataset, instruction='Copy everything')
     with pytest.raises(ValueError, match='instructions'):
-        validate_no_holdout_leakage(dataset, report, seed=2026)
+        validate_no_holdout_leakage([dataset], report, seed=2026)
     write_dataset(dataset, command='cp')
     with pytest.raises(ValueError, match='command families'):
         validate_no_holdout_leakage(dataset, report, seed=2026)

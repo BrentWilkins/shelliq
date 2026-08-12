@@ -4,9 +4,10 @@ First-party, hand-authored schema-version-1 rows. Unlike `artifacts/`, this
 directory is **git-tracked**: every row is reviewable, diffable, and editable by
 hand.
 
-The corpus currently contains 654 rows across 14 command-family files.
+The corpus currently contains 726 rows across 15 command-family files.
 
-`targeted-finishing.jsonl` is also a standalone finishing family. Its commands are deliberately disjoint
+`targeted-finishing.jsonl` and `targeted-finishing-v2.jsonl` form a standalone 100-row finishing family.
+Their commands are deliberately disjoint
 from the 35-row release benchmark; `scripts/build_targeted_semantic_dataset.py` enforces that boundary and
 requires independent train and test command hashes before semantic conversion.
 
