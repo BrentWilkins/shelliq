@@ -432,6 +432,23 @@ exposures. Weighting happens only after command-grouped splitting and selection;
 validation and test rows are never repeated. The report records unique and
 effective counts, the ID prefix, and the multiplier.
 
+The 2026-08-12 controlled run completed in 123 seconds. Relative to the same
+broad checkpoint, training loss moved from 0.3007 to 0.0303 and command-grouped
+held-out loss improved from 0.4295 to 0.3414. That healthy loss curve did not
+translate to the frozen release gate: JSON/envelope stayed 35/35 and first
+commands stayed 31/35, but exact command-plus-flag sequences fell to 8/35 and
+grounded documents to 5/35, versus the incumbent's 13/35 and 7/35 gate floors.
+On the separate retention suite, first commands stayed 20/20 and grounded
+documents improved from 8/20 to 9/20, while exact flag sequences regressed from
+14/20 to 12/20. The candidate was rejected and not exported.
+
+Conclusion: expanding from 28 to 100 rows removes the extreme tiny-dataset
+failure, but a 3x weight (37% of effective examples) still shifts flag behavior
+too far toward the focused command families and does not transfer to the
+release families. Do not treat this recipe as a default. The next controlled
+candidate should reduce focused exposure and/or train fewer lower-rate steps,
+with both frozen gates unchanged.
+
 ### Purpose and result of the targeted finishing experiment
 
 The 28-row family is a diagnostic and curriculum seed, not a replacement for
