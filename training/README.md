@@ -350,9 +350,25 @@ uv run python scripts/evaluate_semantic_server.py \
 ```
 
 The evaluator disables proxies and redirects, accepts only uncredentialed
-loopback HTTP endpoints, caps response size at one MiB, and records latency and
+loopback HTTP endpoints, caps response size at one MiB, and records latency for
 every generation. Multiple sampled candidates additionally report an explicitly
 label-aware oracle upper bound; it is diagnostic and never a deployable score.
+
+Compare a candidate against the incumbent on the identical audited rows before promotion:
+
+```sh
+uv run python scripts/analyze_semantic_errors.py \
+  --baseline artifacts/semantic-distributable-curated-finish-v2.eval.json \
+  --candidate artifacts/model.eval.json \
+  --grounding-audit evaluation/curated-grounding-v1.json \
+  --output artifacts/model.error-analysis.json \
+  --gate
+```
+
+The analyzer accepts checkpoint and served-GGUF reports, recomputes metrics from individual generations,
+rejects mismatched benchmark IDs, and classifies wrong commands, missing/extra/reordered flags, and
+operand/structure errors. The promotion gate requires 100% JSON and v2 envelopes, at least 31/35 first
+commands, and strict improvements over the incumbents' 13/35 command-plus-flag and 7/35 grounded-document scores.
 The Q8_0 alpha export exactly reproduced the JAX checkpoint metrics and averaged
 95 ms per request on the RTX 4090. Four candidates at temperature 0.2 provided
 no oracle improvement, so targeted training—not sampling—is the next quality
