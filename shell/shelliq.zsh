@@ -1,4 +1,4 @@
-# shelliq.zsh — zsh integration, Tier 0 only: no model, no network, nothing executed.
+# shelliq.zsh — zsh integration. Suggestions are opt-in and never auto-executed.
 #
 # Two things, both designed not to fight oh-my-zsh, zsh-autosuggestions, or
 # zsh-syntax-highlighting:
@@ -11,8 +11,7 @@
 #             (`_git`, `_docker`, ...), so it only ever fires for commands zsh would
 #             otherwise fall back to plain filename completion for.
 #
-# `shelliq generate`-style buffer replacement (English -> command) needs a model and is
-# P1B, not here — see PLAN.md's "never pull a model from inside a shell widget."
+# Model suggestions are opt-in through the widget below.
 
 _shelliq_explain_widget() {
     emulate -L zsh
@@ -30,6 +29,64 @@ _shelliq_explain_widget() {
 }
 zle -N _shelliq_explain_widget
 bindkey '^X^H' _shelliq_explain_widget
+
+# C-x C-g turns the current English buffer into an editable suggestion. It never
+# accepts or executes the result; Enter remains an explicit user action.
+_shelliq_suggest_widget() {
+  emulate -L zsh
+  if [[ -z $BUFFER ]]; then
+    zle -M 'shelliq: type a request first'
+    return
+  fi
+
+  local request=$BUFFER out command
+  local -a lines
+  out=$(shelliq suggest -- "$request" 2>&1)
+  local status=$?
+  lines=("${(@f)out}")
+  if (( status != 0 || ${#lines} == 0 )); then
+    zle -I
+    print
+    print -r -- "$out"
+    zle reset-prompt
+    return
+  fi
+
+  command=${lines[-1]}
+  lines[-1]=()
+  zle split-undo
+  BUFFER=$command
+  CURSOR=${#BUFFER}
+  zle -I
+  if (( ${#lines} )); then
+    print
+    print -r -- "${(F)lines}"
+  fi
+  zle reset-prompt
+}
+zle -N _shelliq_suggest_widget
+bindkey '^X^G' _shelliq_suggest_widget
+
+# Function form: `shelliq-suggest find large files`, then edit/run the preloaded line.
+# `print -z` writes to zsh's input buffer and never executes it.
+shelliq-suggest() {
+  emulate -L zsh
+  if (( $# == 0 )); then
+    print -u2 -- 'usage: shelliq-suggest <natural-language request>'
+    return 2
+  fi
+  local out command
+  local -a lines
+  out=$(shelliq suggest -- "$@" 2>&1) || {
+    print -u2 -r -- "$out"
+    return 1
+  }
+  lines=("${(@f)out}")
+  command=${lines[-1]}
+  lines[-1]=()
+  (( ${#lines} )) && print -u2 -r -- "${(F)lines}"
+  print -z -- "$command"
+}
 
 # A completion function, not a widget: registered onto the `completer` style's list rather
 # than bound to Tab directly. `_complete` (the standard completer) can't be trusted to

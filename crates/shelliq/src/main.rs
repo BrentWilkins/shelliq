@@ -226,7 +226,9 @@ fn suggest_command(
         anyhow::bail!("model suggestion failed local command/flag validation");
     }
 
-    eprintln!("experimental model suggestion; flags checked, operand semantics unverified; inspect and edit before running");
+    eprintln!(
+        "experimental model suggestion; option spellings checked, operand semantics and pipeline compatibility unverified; inspect and edit before running"
+    );
     if json {
         println!("{}", suggestion.semantic_json);
     } else {

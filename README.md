@@ -93,6 +93,12 @@ non-empty value uses the existing single model pass. Targeted
 `shelliq index build NAME` may use its guarded `--help` crawler when no man page
 exists, but broad `index scan` never executes discovered programs.
 
+For zsh, source `shell/shelliq.zsh`, type an English request at an empty
+prompt, and press `Ctrl-X Ctrl-G`. The suggestion is placed in the editable
+command buffer; it is never executed automatically, and Enter remains an
+explicit choice. Alternatively, `shelliq-suggest find large files` preloads
+the next input line.
+
 `suggest` defaults to the versioned `context-authoritative-v1` prompt contract.
 Use `--prompt-contract legacy-user-v1` only with an older adapter trained on
 that exact prompt shape; the prompt contract must match the served model.
@@ -102,6 +108,11 @@ arity and intent coverage are not yet validated, so suggestions can be
 syntactically valid while still being incomplete or wrong. The client refuses
 non-loopback endpoints, credentials, redirects, ambient proxies, oversized
 responses, invalid semantic JSON, and semantic documents that do not round trip.
+
+Pipeline data compatibility is also not validated. For example, a suggestion
+that feeds `find -print0` directly to line-oriented `sort` can contain only
+real options and still be functionally wrong. Treat the editable-buffer step as
+a required review boundary, especially for pipelines.
 
 ## Footprint
 
