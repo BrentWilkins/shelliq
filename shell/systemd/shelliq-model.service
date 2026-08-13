@@ -1,0 +1,16 @@
+[Unit]
+Description=ShellIQ local model server
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/home/brent/code/llama.cpp/build/bin/llama-server --model /home/brent/code/shelliq/training/artifacts/current.gguf --host 127.0.0.1 --port 8080 --ctx-size 4096 --gpu-layers all --no-webui
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,5 @@
+#!/bin/sh
+# Development-machine launcher: keep editor-specific XDG variables from selecting a
+# different index while still picking up every new release build from this checkout.
+export SHELLIQ_INDEX="${SHELLIQ_INDEX:-/home/brent/.local/share/shelliq/alpha-index.sqlite}"
+exec /home/brent/code/shelliq/target/release/shelliq "$@"

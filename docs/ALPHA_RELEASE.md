@@ -50,3 +50,14 @@ Measured on 2026-08-12 with the artifact above, an RTX 4090, and a seven-command
 index (`cp`, `grep`, `find`, `sort`, `tar`, `curl`, `ls`): shortlist recall 5/5,
 end-to-end locally validated suggestions 5/5, unsupported abstention passed, mean latency
 164 ms, and maximum latency 239 ms. This is a smoke gate, not a broad accuracy claim.
+
+## Lightweight development installation
+
+On the development machine, `~/.local/bin/shelliq` may point at the small
+`shell/shelliq-alpha` launcher, which executes `target/release/shelliq` and pins the
+alpha index independently of editor-specific XDG variables. A future
+`cargo build --release --features model` atomically replaces that build output, so the next
+invocation uses the new client without a separate installer. The user service in
+`shell/systemd/shelliq-model.service` similarly points at
+`training/artifacts/current.gguf`; update that symlink only after a model passes the alpha
+gate, then restart the service.
