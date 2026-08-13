@@ -37,6 +37,7 @@ checking anything.
 ```console
 shelliq search curl maximum redirects     # find a flag by what it does
 shelliq flags tar                         # every flag, ranked
+shelliq index scan                        # index PATH commands with installed man pages
 shelliq index stats
 ```
 
@@ -62,7 +63,7 @@ together, or that running it is safe. A checked command is not a verified comman
 the claim ladder in `PLAN.md`.
 
 The index is built per machine and never shipped, so macOS needs no data transfer. It can
-still go stale — it reflects the pages as of the last build, so `shelliq index --refresh`
+still go stale — it reflects the pages as of the last build, so `shelliq index refresh`
 after an upgrade is what keeps it honest.
 
 ## Experimental model alpha
@@ -75,11 +76,22 @@ It prints an editable command and never executes it:
 
 ```console
 $ shelliq suggest --endpoint http://127.0.0.1:8080/v1/chat/completions \
-    --context 'cp -a SOURCE DEST preserves attributes and symlinks' \
     copy a tree while preserving its attributes
 experimental model suggestion; flags checked, operand semantics unverified; inspect and edit before running
 cp -a SOURCE/DEST/
 ```
+
+Run `shelliq index scan` first. It discovers executable filenames on `PATH`
+without starting them and indexes only their installed man pages. In automatic
+mode, `suggest` searches that documentation for a small installed-command
+shortlist, requires a draft model pass to choose from it, retrieves cited flags
+for the selected command, and runs a final model pass with that evidence. If no
+documentation matches, it abstains and asks you to scan.
+
+`--context` remains an explicit override for supplying evidence yourself; a
+non-empty value uses the existing single model pass. Targeted
+`shelliq index build NAME` may use its guarded `--help` crawler when no man page
+exists, but broad `index scan` never executes discovered programs.
 
 `suggest` defaults to the versioned `context-authoritative-v1` prompt contract.
 Use `--prompt-contract legacy-user-v1` only with an older adapter trained on

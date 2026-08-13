@@ -68,6 +68,12 @@ pub fn split_bundle(index: &Index, command: &str, token: &str) -> Result<Vec<Bun
     if !token.starts_with('-') || token.starts_with("--") || token.len() <= 2 {
         return Ok(vec![BundlePart::Flag(token.to_string())]);
     }
+    // Some utilities use multi-character single-dash options (`find -type`, Java
+    // `-classpath`). An exact local fact takes precedence over interpreting the token as
+    // a POSIX-style short-option bundle.
+    if matches!(index.lookup_flag(command, token)?, FlagLookup::Exact(_)) {
+        return Ok(vec![BundlePart::Flag(token.to_string())]);
+    }
 
     let chars: Vec<char> = token[1..].chars().collect();
     let mut parts = Vec::new();
@@ -298,6 +304,30 @@ mod tests {
         // -A takes NUM, so `5` is its argument, not the flag `-5`.
         let parts = split_bundle(&idx, "grep", "-A5").unwrap();
         assert_eq!(parts, vec![BundlePart::Flag("-A".into()), BundlePart::Argument("5".into()),]);
+    }
+
+    #[test]
+    fn exact_multi_character_single_dash_option_is_not_split_as_a_bundle() {
+        let mut idx = seeded();
+        idx.insert_command(
+            &shelliq_harvest::resolve_target("find", false),
+            &ParsedCommand {
+                name: "find".into(),
+                section: "1".into(),
+                platform: std::env::consts::OS.into(),
+                synopsis: String::new(),
+                description: String::new(),
+                source_path: String::new(),
+                source_hash: String::new(),
+                flags: vec![f("-type", "", Some("c"), 1)],
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            split_bundle(&idx, "find", "-type").unwrap(),
+            vec![BundlePart::Flag("-type".into())]
+        );
     }
 
     #[test]

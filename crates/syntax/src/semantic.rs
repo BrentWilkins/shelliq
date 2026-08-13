@@ -130,6 +130,14 @@ impl SemanticDocumentV2 {
         &self.statements
     }
 
+    /// First executable name, for retrieval routing before final generation.
+    pub fn first_command_name(&self) -> Option<&str> {
+        match self.statements.first()? {
+            StatementV2::Pipeline { stages, .. } => Some(stages.first()?.name().source()),
+            StatementV2::Declaration { utility, .. } => Some(utility.source()),
+        }
+    }
+
     pub fn render(&self) -> String {
         self.statements.iter().map(StatementV2::render).collect::<Vec<_>>().join("\n")
     }
@@ -877,6 +885,13 @@ mod tests {
         let decoded: SemanticDocumentV1 = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded, document);
         decoded.validate().unwrap();
+    }
+
+    #[test]
+    fn reports_the_first_executable_name_structurally() {
+        let syntax = SyntaxDocumentV1::parse("find . -type f | sort -u").unwrap();
+        let document = SemanticDocumentV2::lower(&syntax).unwrap();
+        assert_eq!(document.first_command_name(), Some("find"));
     }
 
     #[test]

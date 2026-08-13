@@ -22,6 +22,7 @@ pub enum PromptContract {
 #[derive(Debug, Eq, PartialEq)]
 pub struct Suggestion {
     pub command: String,
+    pub command_name: String,
     pub semantic_json: String,
 }
 
@@ -149,8 +150,13 @@ fn validate_generation(content: String) -> Result<Suggestion> {
     semantic
         .validate()
         .context("model output failed semantic render/reparse validation")?;
+    let command_name = semantic
+        .first_command_name()
+        .context("model output contains no executable command")?
+        .to_owned();
     Ok(Suggestion {
         command: semantic.render(),
+        command_name,
         semantic_json: content,
     })
 }
@@ -208,6 +214,7 @@ mod tests {
         let result = validate_generation(semantic.clone()).unwrap();
 
         assert_eq!(result.command, "cp -a src/ dest/");
+        assert_eq!(result.command_name, "cp");
         assert_eq!(result.semantic_json, semantic);
     }
 

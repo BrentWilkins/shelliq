@@ -12,6 +12,7 @@
 
 use anyhow::{Context, Result, bail};
 use sha2::{Digest, Sha256};
+use std::collections::BTreeSet;
 use std::process::Command;
 
 pub mod help_crawler;
@@ -148,6 +149,42 @@ const SHELL_BUILTINS: &[&str] = &[
     "declare", "typeset", "readonly", "return", "break", "continue", "printf", "getopts", "hash", "bg", "fg", "disown",
     "suspend", "times", "command", "builtin", "enable", "help",
 ];
+
+/// Executable command names visible through the current `PATH`, plus the builtins ShellIQ
+/// knows how to resolve.
+///
+/// Discovery only reads directory entries and metadata. It never starts a discovered
+/// executable, which makes it safe to use as the first stage of system indexing.
+pub fn discover_path_commands() -> Vec<String> {
+    discover_commands_in_path(std::env::var_os("PATH").as_deref())
+}
+
+/// Path-argument form of [`discover_path_commands`], primarily for deterministic callers
+/// and tests that must not mutate the process-global `PATH`.
+pub fn discover_commands_in_path(path: Option<&std::ffi::OsStr>) -> Vec<String> {
+    let mut names: BTreeSet<String> = SHELL_BUILTINS.iter().map(|name| (*name).to_owned()).collect();
+    let Some(path) = path else {
+        return names.into_iter().collect();
+    };
+
+    for directory in std::env::split_paths(path) {
+        let Ok(entries) = std::fs::read_dir(directory) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let Ok(name) = entry.file_name().into_string() else {
+                continue;
+            };
+            let Ok(metadata) = entry.metadata() else {
+                continue;
+            };
+            if metadata.is_file() && is_executable(&metadata) {
+                names.insert(name);
+            }
+        }
+    }
+    names.into_iter().collect()
+}
 
 /// The executable identity a shell would run for this name, right now.
 ///
@@ -594,6 +631,12 @@ fn split_arg(part: &str) -> (&str, Option<&str>, bool) {
             let arg = raw.trim_matches(|c| c == '[' || c == ']' || c == '<' || c == '>');
             if arg.is_empty() {
                 (&part[..i], None, true)
+            } else if raw.contains(char::is_whitespace) && !raw.starts_with(['[', '<']) && !raw.ends_with(';') {
+                // Rendered man pages occasionally put prose on the tag line (`-print
+                // True; print ...`). Unwrapped multi-word text is a description, not an
+                // argument placeholder. Preserve command-list placeholders such as
+                // `-exec command ;` and explicitly delimited forms.
+                (&part[..i], None, true)
             } else {
                 (&part[..i], Some(arg), !optional)
             }
@@ -620,6 +663,38 @@ fn is_flag_name(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn path_discovery_includes_only_executable_files_and_deduplicates_names() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = std::env::temp_dir().join(format!(
+            "shelliq-path-discovery-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let first = root.join("first");
+        let second = root.join("second");
+        std::fs::create_dir_all(&first).unwrap();
+        std::fs::create_dir_all(&second).unwrap();
+        for path in [first.join("alpha"), second.join("alpha"), second.join("beta")] {
+            std::fs::write(&path, b"").unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        std::fs::write(first.join("not-executable"), b"").unwrap();
+        std::fs::create_dir(first.join("directory")).unwrap();
+
+        let joined = std::env::join_paths([&first, &second]).unwrap();
+        let names = discover_commands_in_path(Some(&joined));
+        assert!(names.windows(2).all(|pair| pair[0] < pair[1]));
+        assert_eq!(names.iter().filter(|name| name.as_str() == "alpha").count(), 1);
+        assert!(names.iter().any(|name| name == "beta"));
+        assert!(!names.iter().any(|name| name == "not-executable"));
+        assert!(!names.iter().any(|name| name == "directory"));
+
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn splits_flag_from_inline_description() {
@@ -665,6 +740,19 @@ mod tests {
         assert_eq!(f.short.as_deref(), Some("-A"));
         assert_eq!(f.long.as_deref(), Some("--after-context"));
         assert_eq!(f.arg_type.as_deref(), Some("NUM"));
+    }
+
+    #[test]
+    fn prose_after_a_single_dash_option_is_not_an_argument_placeholder() {
+        let flag = parse_spec("-print True; print the full file name").unwrap();
+        assert_eq!(flag.short.as_deref(), Some("-print"));
+        assert_eq!(flag.arg_type, None);
+    }
+
+    #[test]
+    fn command_list_placeholder_with_spaces_is_preserved() {
+        let flag = parse_spec("-exec command ;").unwrap();
+        assert_eq!(flag.arg_type.as_deref(), Some("command ;"));
     }
 
     #[test]

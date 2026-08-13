@@ -336,6 +336,55 @@ impl Index {
         Ok(n > 0)
     }
 
+    /// Rank installed, indexed command names whose local documentation matches a task.
+    ///
+    /// Both flag prose and examples contribute. Results are checked against live `PATH`
+    /// resolution through `command_exists`, so a removed or shadowed executable is never
+    /// offered to the model as an available command.
+    pub fn search_commands(&self, query: &str, limit: usize) -> Result<Vec<String>> {
+        let terms = fts_terms(query);
+        if terms.is_empty() || limit == 0 {
+            return Ok(Vec::new());
+        }
+        let candidates = limit.saturating_mul(8).max(40);
+        let mut scores = std::collections::HashMap::<String, f64>::new();
+        let mut matched_terms = std::collections::HashMap::<String, std::collections::HashSet<usize>>::new();
+        for (term_index, term) in terms.iter().enumerate() {
+            for sql in [
+                "SELECT c.name FROM examples_fts JOIN examples e ON e.id = examples_fts.rowid JOIN commands c ON c.id = e.command_id WHERE examples_fts MATCH ?1 ORDER BY bm25(examples_fts) LIMIT ?2",
+                "SELECT c.name FROM flags_fts JOIN flags f ON f.id = flags_fts.rowid JOIN commands c ON c.id = f.command_id WHERE flags_fts MATCH ?1 ORDER BY bm25(flags_fts) LIMIT ?2",
+            ] {
+                let mut stmt = self.conn.prepare(sql)?;
+                let names = stmt
+                    .query_map(params![term, candidates as i64], |row| row.get::<_, String>(0))?
+                    .collect::<Result<Vec<_>, _>>()?;
+                let mut seen = std::collections::HashSet::new();
+                for (rank, name) in names.into_iter().filter(|name| seen.insert(name.clone())).enumerate() {
+                    *scores.entry(name.clone()).or_default() += 1.0 / (60.0 + rank as f64 + 1.0);
+                    matched_terms.entry(name).or_default().insert(term_index);
+                }
+            }
+        }
+        let mut names: Vec<_> = scores.into_iter().collect();
+        names.sort_by(|(left_name, left_score), (right_name, right_score)| {
+            right_score.total_cmp(left_score).then_with(|| left_name.cmp(right_name))
+        });
+
+        let mut available = Vec::new();
+        for (name, _) in names {
+            let required_coverage = terms.len().min(2);
+            if matched_terms.get(&name).map_or(0, std::collections::HashSet::len) >= required_coverage
+                && self.command_exists(&name)?
+            {
+                available.push(name);
+                if available.len() == limit {
+                    break;
+                }
+            }
+        }
+        Ok(available)
+    }
+
     /// The section that answers a bare command lookup, by `SECTION_PREFERENCE`.
     fn preferred_section(&self, command: &str) -> Result<Option<(i64, String)>> {
         let Some((target, _)) = self.resolved_target(command)? else {
@@ -724,12 +773,22 @@ pub fn secure_permissions(path: &std::path::Path) {
 /// User input reaches this from a shell buffer, so every term is quoted rather than passed
 /// through as FTS5 syntax where `"` or `*` would be operators or a syntax error.
 fn fts_query(input: &str) -> String {
+    fts_terms(input).join(" OR ")
+}
+
+fn fts_terms(input: &str) -> Vec<String> {
+    const STOP_WORDS: &[&str] = &[
+        "and", "for", "from", "into", "the", "this", "that", "under", "using", "while", "with",
+    ];
     input
         .split_whitespace()
-        .map(|t| format!("\"{}\"", t.replace('"', "")))
-        .filter(|t| t.len() > 2)
-        .collect::<Vec<_>>()
-        .join(" OR ")
+        .map(|term| {
+            term.trim_matches(|character: char| !character.is_alphanumeric())
+                .to_lowercase()
+        })
+        .filter(|term| term.len() >= 3 && !STOP_WORDS.contains(&term.as_str()))
+        .map(|term| format!("\"{}\"", term.replace('"', "")))
+        .collect()
 }
 
 fn row_to_flag(r: &rusqlite::Row) -> rusqlite::Result<FlagRow> {
@@ -942,6 +1001,27 @@ mod tests {
         // Quotes and operators must be treated as text, not FTS5 syntax.
         assert!(idx.search_flags("grep", "\"unbalanced AND *", 5).is_ok());
         assert!(idx.search_flags("grep", "", 5).unwrap().is_empty());
+    }
+
+    #[test]
+    fn command_search_ranks_an_installed_command_by_its_flag_prose() {
+        let idx = seeded();
+        let hits = idx.search_commands("symlinks", 6).unwrap();
+        assert_eq!(hits.first().map(String::as_str), Some("grep"));
+    }
+
+    #[test]
+    fn command_search_requires_two_matching_terms_for_multi_term_tasks() {
+        let idx = seeded();
+        assert!(idx.search_commands("symlinks transcoding", 6).unwrap().is_empty());
+    }
+
+    #[test]
+    fn fts_terms_drop_short_and_common_instruction_words_before_quoting() {
+        assert_eq!(
+            fts_terms("a file to copy with metadata"),
+            ["\"file\"", "\"copy\"", "\"metadata\""]
+        );
     }
 
     #[test]

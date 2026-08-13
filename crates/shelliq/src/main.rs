@@ -86,6 +86,9 @@ enum Command {
 
 #[derive(Subcommand)]
 enum IndexAction {
+    /// Discover executable names on PATH and index their installed man pages.
+    /// Discovery never executes the commands it finds.
+    Scan,
     /// Harvest the named commands. Every man section for a name is indexed; a name with no
     /// man page falls back to crawling `--help` and its subcommands' `--help`.
     Build {
@@ -114,6 +117,7 @@ fn main() -> Result<()> {
 
     match cli.command {
         Command::Index { action } => match action {
+            IndexAction::Scan => scan(&path),
             IndexAction::Build {
                 names,
                 allow_writable_path,
@@ -165,16 +169,54 @@ fn suggest_command(
         "macos" => "darwin",
         other => other,
     };
-    let suggestion = model::suggest(
-        endpoint,
-        platform,
-        context,
-        instruction,
-        prompt_contract,
-        std::time::Duration::from_millis(timeout_ms),
-    )?;
-
     let index = Index::open(path)?;
+    let deadline = std::time::Instant::now()
+        .checked_add(std::time::Duration::from_millis(timeout_ms))
+        .context("--timeout-ms is too large")?;
+    let suggestion = if context.trim().is_empty() {
+        let shortlist = index.search_commands(instruction, 6)?;
+        if std::env::var_os("SHELLIQ_DEBUG_RETRIEVAL").is_some() {
+            eprintln!("retrieved command shortlist: {}", shortlist.join(", "));
+        }
+        if shortlist.is_empty() {
+            anyhow::bail!(
+                "no installed command documentation matched the instruction; run `shelliq index scan` or pass explicit `--context`"
+            );
+        }
+
+        let draft_context = shortlist_context(&shortlist);
+        let draft = model::suggest(
+            endpoint,
+            platform,
+            &draft_context,
+            instruction,
+            prompt_contract,
+            remaining(deadline)?,
+        )?;
+        enforce_shortlist(&draft.command_name, &shortlist)?;
+
+        let flags = index.search_flags(&draft.command_name, instruction, 16)?;
+        let evidence = evidence_context(&draft.command_name, &flags);
+        let final_suggestion = model::suggest(
+            endpoint,
+            platform,
+            &evidence,
+            instruction,
+            prompt_contract,
+            remaining(deadline)?,
+        )?;
+        enforce_selected_command(&final_suggestion.command_name, &draft.command_name)?;
+        final_suggestion
+    } else {
+        model::suggest(
+            endpoint,
+            platform,
+            context,
+            instruction,
+            prompt_contract,
+            remaining(deadline)?,
+        )?
+    };
     let findings = shelliq_verify::verify(&index, &suggestion.command)?;
     let failures: Vec<_> = findings.iter().filter(|finding| !finding.is_clean()).collect();
     if !failures.is_empty() {
@@ -193,6 +235,97 @@ fn suggest_command(
     Ok(())
 }
 
+#[cfg(feature = "model")]
+fn remaining(deadline: std::time::Instant) -> Result<std::time::Duration> {
+    deadline
+        .checked_duration_since(std::time::Instant::now())
+        .filter(|duration| !duration.is_zero())
+        .context("model request deadline expired")
+}
+
+#[cfg(feature = "model")]
+fn shortlist_context(commands: &[String]) -> String {
+    format!(
+        "Selection pass: choose exactly one command name from this installed, indexed shortlist. Do not add flags yet.\nCommands:\n{}",
+        commands.iter().map(|name| format!("- {name}")).collect::<Vec<_>>().join("\n")
+    )
+}
+
+#[cfg(feature = "model")]
+fn enforce_shortlist(command: &str, shortlist: &[String]) -> Result<()> {
+    if shortlist.iter().any(|candidate| candidate == command) {
+        return Ok(());
+    }
+    anyhow::bail!(
+        "model selected `{command}`, which is outside the installed-command shortlist: {}",
+        shortlist.join(", ")
+    )
+}
+
+#[cfg(feature = "model")]
+fn enforce_selected_command(command: &str, selected: &str) -> Result<()> {
+    if command == selected {
+        return Ok(());
+    }
+    anyhow::bail!("final model pass changed selected command from `{selected}` to `{command}`")
+}
+
+#[cfg(feature = "model")]
+fn evidence_context(command: &str, flags: &[shelliq_index::FlagRow]) -> String {
+    let mut lines = vec![format!(
+        "Final pass: use exactly command `{command}`. Option tokens are case-sensitive. Use only exact option tokens listed below; every unlisted spelling or case variant is forbidden. Operands must come from the instruction."
+    )];
+    if flags.is_empty() {
+        lines.push("No relevant options were retrieved; emit the command without options.".to_string());
+    } else {
+        lines.push("Authorized local options:".to_string());
+        lines.extend(flags.iter().map(|flag| {
+            let tokens = [flag.short.as_deref(), flag.long.as_deref()]
+                .into_iter()
+                .flatten()
+                .map(|token| format!("`{token}`"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!(
+                "- exact tokens: {tokens}; meaning: {}; citation: {}",
+                flag.description,
+                flag.citation()
+            )
+        }));
+    }
+    lines.join("\n")
+}
+
+fn scan(path: &std::path::Path) -> Result<()> {
+    let names = shelliq_harvest::discover_path_commands();
+    let mut index = Index::open(path)?;
+    let mut commands = 0usize;
+    let mut pages = 0usize;
+    let mut flags = 0usize;
+
+    for name in &names {
+        let Ok(parsed) = shelliq_harvest::harvest_all(name) else {
+            continue;
+        };
+        let target = shelliq_harvest::resolve_target(name, true);
+        for command in parsed {
+            flags += command.flags.len();
+            pages += 1;
+            index.insert_command(&target, &command)?;
+        }
+        index.insert_tldr_examples(name)?;
+        commands += 1;
+    }
+
+    println!(
+        "discovered {} commands; indexed {commands} with {pages} man pages and {flags} flags -> {}",
+        names.len(),
+        path.display()
+    );
+    shelliq_index::secure_permissions(path);
+    Ok(())
+}
+
 fn build(path: &std::path::Path, names: &[String], allow_writable_paths: &[std::path::PathBuf]) -> Result<()> {
     let mut index = Index::open(path)?;
     let mut pages = 0usize;
@@ -208,6 +341,7 @@ fn build(path: &std::path::Path, names: &[String], allow_writable_paths: &[std::
                     println!("  {}({})  {} flags", cmd.name, cmd.section, cmd.flags.len());
                     index.insert_command(&target, &cmd)?;
                 }
+                index.insert_tldr_examples(name)?;
             }
             Err(man_err) => match harvest_via_help(&mut index, &target, name, allow_writable_paths) {
                 Ok(flag_count) => {
@@ -279,6 +413,7 @@ fn refresh(path: &std::path::Path, names: &[String], allow_writable_paths: &[std
                     pages += 1;
                     fresh.insert_command(&target, &cmd)?;
                 }
+                fresh.insert_tldr_examples(name)?;
             }
             Err(man_err) => match harvest_via_help(&mut fresh, &target, name, allow_writable_paths) {
                 Ok(_) => pages += 1,
@@ -529,5 +664,57 @@ mod render {
                 truncate(text, 48),
             ),
         }
+    }
+}
+
+#[cfg(all(test, feature = "model"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_index_scan_subcommand() {
+        let cli = Cli::try_parse_from(["shelliq", "index", "scan"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Index {
+                action: IndexAction::Scan
+            }
+        ));
+    }
+
+    #[test]
+    fn rejects_a_draft_command_outside_the_shortlist() {
+        let shortlist = vec!["cp".to_string(), "rsync".to_string()];
+        enforce_shortlist("cp", &shortlist).unwrap();
+        let error = enforce_shortlist("curl", &shortlist).unwrap_err();
+        assert!(error.to_string().contains("outside the installed-command shortlist"));
+    }
+
+    #[test]
+    fn final_pass_cannot_change_the_selected_command() {
+        enforce_selected_command("cp", "cp").unwrap();
+        let error = enforce_selected_command("rsync", "cp").unwrap_err();
+        assert!(error.to_string().contains("changed selected command"));
+    }
+
+    #[test]
+    fn evidence_lists_exact_case_sensitive_option_tokens() {
+        let flag = shelliq_index::FlagRow {
+            command: "cp".into(),
+            section: "1".into(),
+            short: Some("-R".into()),
+            long: Some("--recursive".into()),
+            arg_type: None,
+            arg_required: false,
+            description: "copy directories recursively".into(),
+            flag_group: None,
+            source_line: 66,
+            excerpt: String::new(),
+            rank_personal: 0,
+        };
+        let context = evidence_context("cp", &[flag]);
+        assert!(context.contains("Option tokens are case-sensitive"));
+        assert!(context.contains("exact tokens: `-R`, `--recursive`"));
+        assert!(!context.contains("`-r`"));
     }
 }
