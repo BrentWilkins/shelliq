@@ -42,9 +42,9 @@ _shelliq_suggest_widget() {
   local request=$BUFFER out command
   local -a lines
   out=$(shelliq suggest -- "$request" 2>&1)
-  local status=$?
+  local exit_status=$?
   lines=("${(@f)out}")
-  if (( status != 0 || ${#lines} == 0 )); then
+  if (( exit_status != 0 || ${#lines} == 0 )); then
     zle -I
     print
     print -r -- "$out"

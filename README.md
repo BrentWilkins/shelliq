@@ -97,7 +97,8 @@ For zsh, source `shell/shelliq.zsh`, type an English request at an empty
 prompt, and press `Ctrl-X Ctrl-G`. The suggestion is placed in the editable
 command buffer; it is never executed automatically, and Enter remains an
 explicit choice. Alternatively, `shelliq-suggest find large files` preloads
-the next input line.
+the next input line. VS Code may intercept terminal chords; on this development
+machine, `Ctrl-Alt-G` is configured to send the widget sequence to zsh.
 
 `suggest` defaults to the versioned `context-authoritative-v1` prompt contract.
 Use `--prompt-contract legacy-user-v1` only with an older adapter trained on
