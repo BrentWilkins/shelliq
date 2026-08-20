@@ -660,6 +660,11 @@ and weighting are not changed in one experiment. Use additional seeds when a
 winning margin is small, and evaluate only the final selected configuration on
 `evaluation/semantic-shadow-release-v1.jsonl`.
 
+The reviewed chosen/rejected data contract and verifier lifecycle for the next
+training phase are specified in [`PREFERENCE_DATA.md`](PREFERENCE_DATA.md).
+`shelliq_training.preference_data` provides the strict initial loader; it does
+not yet authorize a DPO run or treat model/teacher output as reviewed data.
+
 ## Checkpoints
 
 Create the base model, load its pinned Hugging Face weights, inject the same
