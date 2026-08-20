@@ -670,6 +670,22 @@ the margin is small. The runner must be manifest-pinned, resumable, sequential
 on one GPU, NaN-failing, non-overwriting, and produce plots plus a machine-
 readable summary. It must never invoke pipeline or shadow holdouts.
 
+**Short optimization screen result and deeper convergence study (2026-08-20).**
+All 30 short-budget runs completed at 750 steps. Rank 8, `alpha / rank = 1`,
+and learning rate `1e-4` had the lowest held-out loss (`0.3371`), but the best
+rank 4/8/16 results were separated by only `0.0037`; treat them as tied until
+longer curves and additional seeds distinguish them. Ratio 1 beat ratio 2
+overall, especially at larger ranks, but this can be an optimizer/clipping
+interaction rather than an intrinsic alpha rule. The next manifest-pinned run
+is `training/scripts/run_convergence_study.py`: ranks 4/8/16 at `5e-5` and
+`1e-4`, plus rank-8 alpha/rank diagnostics at 0.5 and 2. It trains for at most
+3,000 steps (1.5 passes over 4,000 examples), evaluates every 250 steps, stops
+after five checks without a `0.002` improvement, and records pre-clipping
+gradient norms and clipping frequency. Select by minimum corpus held-out loss;
+do not consult release, retention, pipeline, or shadow evaluations. Repeat only
+the finalists across seeds, then retrain the selected best-step recipe with a
+checkpoint for behavioral gates.
+
 **Second experiment: verifier-backed data and preferences on 0.5B.** For each prompt,
 sample several semantic documents and score properties that generalize across
 commands: schema/envelope validity, AST lowering, indexed command/flag facts,

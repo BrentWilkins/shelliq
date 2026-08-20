@@ -76,3 +76,19 @@ def train_step(
     )(model, batch)
     optimizer.update(model, gradients)
     return loss
+
+
+@nnx.jit
+def train_step_with_gradient_norm(
+    model: Qwen2ForCausalLM,
+    optimizer: nnx.Optimizer,
+    batch: CausalLMBatch,
+) -> tuple[jax.Array, jax.Array]:
+    """Train one batch and return loss plus the pre-clipping global gradient norm."""
+    loss, gradients = nnx.value_and_grad(
+        causal_lm_loss,
+        argnums=nnx.DiffState(0, nnx.LoRAParam),
+    )(model, batch)
+    gradient_norm = optax.tree.norm(gradients)
+    optimizer.update(model, gradients)
+    return loss, gradient_norm

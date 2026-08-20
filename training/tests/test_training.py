@@ -5,7 +5,13 @@ from flax import nnx
 from shelliq_training.config import Qwen2Config
 from shelliq_training.lora import LoRALinear, inject_lora, parameter_count
 from shelliq_training.model import Qwen2ForCausalLM
-from shelliq_training.training import create_lora_optimizer, eval_step, next_token_loss, train_step
+from shelliq_training.training import (
+    create_lora_optimizer,
+    eval_step,
+    next_token_loss,
+    train_step,
+    train_step_with_gradient_norm,
+)
 
 
 def tiny_model() -> Qwen2ForCausalLM:
@@ -84,3 +90,20 @@ def test_eval_step_does_not_update_lora_parameters():
     after = nnx.to_pure_dict(nnx.state(model, nnx.LoRAParam))
     assert bool(jnp.isfinite(loss))
     assert all(jnp.array_equal(old, new) for old, new in zip(jax.tree.leaves(before), jax.tree.leaves(after), strict=True))
+
+
+def test_diagnostic_train_step_reports_finite_preclip_gradient_norm():
+    model = tiny_model()
+    inject_lora(model, rank=4, alpha=4, rngs=nnx.Rngs(1))
+    optimizer = create_lora_optimizer(model, learning_rate=1e-2)
+    batch = {
+        'input_ids': jnp.array([[1, 2, 3, 4]]),
+        'attention_mask': jnp.ones((1, 4), dtype=jnp.int32),
+        'labels': jnp.array([[-100, -100, 3, 4]]),
+    }
+
+    loss, gradient_norm = train_step_with_gradient_norm(model, optimizer, batch)
+
+    assert bool(jnp.isfinite(loss))
+    assert bool(jnp.isfinite(gradient_norm))
+    assert float(gradient_norm) > 0

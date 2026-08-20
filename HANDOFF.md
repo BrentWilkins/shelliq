@@ -118,6 +118,28 @@ training/artifacts/pipeline-refine-lr2e6-s200-w4-v1.*.json
 
 ## Next work
 
+The short rank/alpha/LR optimization screen has now completed all 30 runs.
+Rank 8, `alpha / rank = 1`, learning rate `1e-4` led at held-out loss `0.3371`,
+but ranks 4/8/16 were within `0.0037`, so this is not a defensible rank winner.
+Run the committed deeper study from `training/` in the user's interactive
+terminal so Rich progress is visible:
+
+```sh
+UV_CACHE_DIR=/tmp/shelliq-uv-cache \
+  uv run --frozen python scripts/run_convergence_study.py --execute
+```
+
+It runs nine configurations: ranks 4/8/16 at `5e-5` and `1e-4` with
+`alpha / rank = 1`, plus rank-8 ratio/LR diagnostics `(0.5, 2e-4)`,
+`(2, 5e-5)`, and `(2, 1e-4)`. Each gets at most
+3,000 steps, held-out checks every 250 steps, patience 5/minimum delta `0.002`,
+and pre-clipping gradient diagnostics. It is exact-manifest resumable with
+`--resume`, saves reports rather than adapters, and forbids release, retention,
+pipeline, and shadow evaluation. Afterward, repeat only finalists across seeds
+and retrain the selected best-step recipe with a checkpoint. The obsolete
+ignored `training/artifacts/lora-rank-sweep-v1` adapters were removed after
+their exact results were committed, reclaiming 1.3 GB; incumbents were kept.
+
 The fixed-recipe GPU rank sweep is complete. Exact results and plots are in
 `training/experiments/lora-rank-fixed-recipe-v1.{json,md}`. Rank 8 led the tested
 8/16/32/64 recipes at release 12/35 flags, 8/35 grounded and retention 14/20
@@ -127,9 +149,9 @@ training-corpus held-out loss, so do not claim rank 8 is intrinsically optimal:
 the experiment held learning rates and step counts fixed instead of tuning each
 rank to convergence.
 
-Do not start a broad hyperparameter sweep. First record checkpoint-level loss
-curves, then narrowly compare two or three learning-rate/duration schedules for
-ranks 16 and 32, selecting by corpus held-out loss. More importantly, build the
+Do not start another broad hyperparameter sweep. The checkpoint-level
+rank-4/8/16 convergence study above is the active experiment; select only by
+corpus held-out loss and clipping diagnostics. More importantly, build the
 verifier-backed teacher-data loop: reviewed rejection-sampling winners become
 SFT data; verified useful near misses become `(prompt, chosen, rejected)` pairs
 for later offline DPO with supervised replay/reference regularization.

@@ -47,7 +47,14 @@ from shelliq_training.lora import inject_lora, parameter_count
 from shelliq_training.model import Qwen2ForCausalLM
 from shelliq_training.progress import interactive_progress, training_progress
 from shelliq_training.prompt import PromptContract
-from shelliq_training.training import CausalLMBatch, create_lora_optimizer, eval_step, train_step
+from shelliq_training.training import (
+    CausalLMBatch,
+    create_lora_optimizer,
+    eval_step,
+    train_step,
+    train_step_with_gradient_norm,
+)
+from shelliq_training.tuning import EarlyStoppingTracker, LossObservation, best_observation
 from shelliq_training.weights import load_hf_state_dict
 
 MODEL_ID = 'Qwen/Qwen2.5-Coder-0.5B-Instruct'
@@ -65,6 +72,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--batch-size', type=int, default=2)
     parser.add_argument('--steps', type=int, default=80)
     parser.add_argument('--learning-rate', type=float, default=1e-3)
+    parser.add_argument('--eval-interval', type=int, default=0)
+    parser.add_argument('--early-stopping-patience', type=int, default=0)
+    parser.add_argument('--early-stopping-min-delta', type=float, default=0.0)
+    parser.add_argument('--max-grad-norm', type=float, default=1.0)
+    parser.add_argument('--gradient-diagnostics', action='store_true')
     parser.add_argument('--rank', type=int, default=16)
     parser.add_argument('--alpha', type=float, default=32.0)
     parser.add_argument('--seed', type=int, default=2026)
@@ -299,6 +311,16 @@ def main() -> None:
         raise SystemExit(f'--sequence-length must exceed {GENERATION_TOKENS + 1}')
     if args.steps <= 0:
         raise SystemExit('--steps must be positive')
+    if args.eval_interval < 0:
+        raise SystemExit('--eval-interval must be non-negative')
+    if args.early_stopping_patience < 0:
+        raise SystemExit('--early-stopping-patience must be non-negative')
+    if args.early_stopping_patience and not args.eval_interval:
+        raise SystemExit('--early-stopping-patience requires --eval-interval')
+    if not math.isfinite(args.early_stopping_min_delta) or args.early_stopping_min_delta < 0:
+        raise SystemExit('--early-stopping-min-delta must be finite and non-negative')
+    if not math.isfinite(args.max_grad_norm) or args.max_grad_norm <= 0:
+        raise SystemExit('--max-grad-norm must be finite and positive')
     if args.rank <= 0:
         raise SystemExit('--rank must be positive')
     if not math.isfinite(args.alpha) or args.alpha <= 0:
@@ -381,7 +403,11 @@ def main() -> None:
     weights_path = hf_hub_download(MODEL_ID, 'model.safetensors', local_files_only=True)
     load_hf_state_dict(model, load_file(weights_path), param_dtype=jnp.bfloat16)
     inject_lora(model, rank=args.rank, alpha=args.alpha, rngs=nnx.Rngs(1))
-    optimizer = create_lora_optimizer(model, learning_rate=args.learning_rate)
+    optimizer = create_lora_optimizer(
+        model,
+        learning_rate=args.learning_rate,
+        max_grad_norm=args.max_grad_norm,
+    )
     resumed_metadata = None
     if args.resume_checkpoint is not None:
         resumed_metadata = restore_checkpoint(
@@ -420,6 +446,30 @@ def main() -> None:
 
     report_every = max(args.steps // 4, 1)
     show_progress = interactive_progress()
+    observations: list[LossObservation] = []
+    early_stopping = None
+    if args.eval_interval:
+        observations.append(
+            LossObservation(
+                step=0,
+                examples_seen=0,
+                train_loss=initial_train_loss,
+                heldout_loss=initial_eval_loss,
+            )
+        )
+        if args.early_stopping_patience:
+            early_stopping = EarlyStoppingTracker(
+                patience=args.early_stopping_patience,
+                min_delta=args.early_stopping_min_delta,
+            )
+            early_stopping.observe(observations[0])
+    gradient_norm_sum = 0.0
+    gradient_norm_max = 0.0
+    clipped_steps = 0
+    completed_steps = 0
+    stopped_early = False
+    interval_loss_sum = 0.0
+    interval_loss_steps = 0
     with training_progress() as progress:
         task = progress.add_task(
             f'rank {args.rank} training',
@@ -427,11 +477,40 @@ def main() -> None:
             loss='—',
         )
         for step in range(args.steps):
-            loss = train_step(model, optimizer, train_batches[step % len(train_batches)])
+            batch = train_batches[step % len(train_batches)]
+            if args.gradient_diagnostics:
+                loss, gradient_norm = train_step_with_gradient_norm(model, optimizer, batch)
+                gradient_norm_value = float(np.asarray(gradient_norm))
+                gradient_norm_sum += gradient_norm_value
+                gradient_norm_max = max(gradient_norm_max, gradient_norm_value)
+                clipped_steps += int(gradient_norm_value > args.max_grad_norm)
+            else:
+                loss = train_step(model, optimizer, batch)
             loss_value = float(np.asarray(loss))
+            completed_steps = step + 1
+            interval_loss_sum += loss_value
+            interval_loss_steps += 1
             progress.update(task, advance=1, loss=f'{loss_value:.4f}')
             if not show_progress and (step == 0 or (step + 1) % report_every == 0 or step + 1 == args.steps):
                 print(f'step {step + 1}/{args.steps}: loss={loss_value:.4f}')
+            should_evaluate = args.eval_interval and (completed_steps % args.eval_interval == 0 or completed_steps == args.steps)
+            if should_evaluate:
+                heldout_loss = mean_loss(model, eval_batches)
+                observation = LossObservation(
+                    step=completed_steps,
+                    examples_seen=completed_steps * args.batch_size,
+                    train_loss=interval_loss_sum / interval_loss_steps,
+                    heldout_loss=heldout_loss,
+                )
+                observations.append(observation)
+                interval_loss_sum = 0.0
+                interval_loss_steps = 0
+                progress.console.print(f'validation step {completed_steps}: heldout={heldout_loss:.4f}')
+                if early_stopping is not None and early_stopping.observe(observation):
+                    stopped_early = True
+                    progress.console.print(f'early stop at step {completed_steps}; best step {early_stopping.best.step}')
+                    progress.update(task, total=completed_steps, completed=completed_steps)
+                    break
 
     final_train_loss = mean_loss(model, train_batches)
     final_eval_loss = mean_loss(model, eval_batches)
@@ -470,9 +549,10 @@ def main() -> None:
             prompt_contract=prompt_contract,
         )
         print(f'checkpoint: {args.checkpoint} at step {metadata.step}')
+    best_loss_observation = best_observation(observations) if observations else None
     if args.report is not None:
         report = {
-            'report_schema_version': 1,
+            'report_schema_version': 2,
             'model_id': MODEL_ID,
             'adapter': {
                 'rank': args.rank,
@@ -517,13 +597,44 @@ def main() -> None:
                 'device': str(jax.devices()[0]),
                 'sequence_length': args.sequence_length,
                 'batch_size': args.batch_size,
-                'steps': args.steps,
+                'steps': completed_steps,
+                'max_steps': args.steps,
+                'stopped_early': stopped_early,
                 'generation_tokens': GENERATION_TOKENS,
                 'learning_rate': args.learning_rate,
+                'eval_interval': args.eval_interval,
+                'early_stopping_patience': args.early_stopping_patience,
+                'early_stopping_min_delta': args.early_stopping_min_delta,
+                'max_grad_norm': args.max_grad_norm,
                 'initial_train_loss': initial_train_loss,
                 'final_train_loss': final_train_loss,
                 'initial_heldout_loss': initial_eval_loss,
                 'final_heldout_loss': final_eval_loss,
+                'loss_observations': [
+                    {
+                        'step': observation.step,
+                        'examples_seen': observation.examples_seen,
+                        'train_loss': observation.train_loss,
+                        'heldout_loss': observation.heldout_loss,
+                    }
+                    for observation in observations
+                ],
+                'best_observation': None
+                if best_loss_observation is None
+                else {
+                    'step': best_loss_observation.step,
+                    'examples_seen': best_loss_observation.examples_seen,
+                    'train_loss': best_loss_observation.train_loss,
+                    'heldout_loss': best_loss_observation.heldout_loss,
+                },
+                'gradient_diagnostics': None
+                if not args.gradient_diagnostics
+                else {
+                    'mean_preclip_global_norm': gradient_norm_sum / completed_steps,
+                    'max_preclip_global_norm': gradient_norm_max,
+                    'clipped_steps': clipped_steps,
+                    'clipped_fraction': clipped_steps / completed_steps,
+                },
                 'elapsed_seconds': elapsed,
                 'passed_loss_gate': failure_message is None,
             },

@@ -660,6 +660,23 @@ and weighting are not changed in one experiment. Use additional seeds when a
 winning margin is small, and evaluate only the final selected configuration on
 `evaluation/semantic-shadow-release-v1.jsonl`.
 
+The follow-up convergence study is deeper than the fixed 750-step optimization
+screen: it permits 3,000 steps, evaluates held-out loss every 250 steps, uses
+early stopping, and records pre-clipping gradient norms. It compares ranks
+4/8/16 at learning rates `5e-5` and `1e-4`, with additional rank-8
+`alpha / rank` checks at 0.5 and 2. Inspect commands without training, then run
+or resume in an interactive terminal for Rich progress:
+
+```sh
+uv run --frozen python scripts/run_convergence_study.py
+uv run --frozen python scripts/run_convergence_study.py --execute
+uv run --frozen python scripts/run_convergence_study.py --execute --resume
+```
+
+This screen writes compact reports rather than adapter checkpoints and never
+uses the release, retention, pipeline, or shadow evaluations. Retrain and save
+only the recipe selected from its learning curves.
+
 The reviewed chosen/rejected data contract and verifier lifecycle for the next
 training phase are specified in [`PREFERENCE_DATA.md`](PREFERENCE_DATA.md).
 `shelliq_training.preference_data` provides the strict initial loader; it does
