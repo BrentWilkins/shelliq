@@ -118,13 +118,29 @@ training/artifacts/pipeline-refine-lr2e6-s200-w4-v1.*.json
 
 ## Next work
 
-Rank-sweep infrastructure is implemented but not yet committed or used for a
-full comparison. `training/scripts/run_rank_sweep.py` dry-runs by default and
-plans ranks 16/32/64 at constant `alpha / rank = 2`, with identical broad then
-curated training schedules, release-development evaluation, and retention
-evaluation. It fingerprints every input in an immutable manifest, supports
-exact-manifest resume, and deliberately never evaluates the pipeline or final
-shadow holdouts. Train/evaluation scripts now accept rank and alpha explicitly.
+The fixed-recipe GPU rank sweep is complete. Exact results and plots are in
+`training/experiments/lora-rank-fixed-recipe-v1.{json,md}`. Rank 8 led the tested
+8/16/32/64 recipes at release 12/35 flags, 8/35 grounded and retention 14/20
+flags, 8/20 grounded, but missed the 13/35 release flag floor. Nothing was
+promoted and the shadow holdout was not evaluated. Larger ranks also had worse
+training-corpus held-out loss, so do not claim rank 8 is intrinsically optimal:
+the experiment held learning rates and step counts fixed instead of tuning each
+rank to convergence.
+
+Do not start a broad hyperparameter sweep. First record checkpoint-level loss
+curves, then narrowly compare two or three learning-rate/duration schedules for
+ranks 16 and 32, selecting by corpus held-out loss. More importantly, build the
+verifier-backed teacher-data loop: reviewed rejection-sampling winners become
+SFT data; verified useful near misses become `(prompt, chosen, rejected)` pairs
+for later offline DPO with supervised replay/reference regularization.
+
+Rank-sweep infrastructure is committed and has completed the fixed-recipe
+comparison. `training/scripts/run_rank_sweep.py` dry-runs by default and uses
+constant `alpha / rank = 2`, identical broad then curated schedules,
+release-development evaluation, and retention evaluation. It fingerprints every
+input in an immutable manifest, supports exact-manifest resume, and deliberately
+never evaluates the pipeline or final shadow holdouts. Train/evaluation scripts
+accept rank and alpha explicitly.
 
 `training/evaluation/semantic-shadow-release-v1.jsonl` is the frozen final
 20-case gate: two examples in each of ten command families absent from all

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "experiment": "lora-rank-fixed-recipe-v1",
+  "date": "2026-08-20",
+  "claim_scope": "Ranks compared under one fixed training recipe; this does not estimate each rank's tuned optimum.",
+  "constant_alpha_over_rank": 2.0,
+  "ranks": [
+    {
+      "rank": 8,
+      "broad_heldout_loss": 0.353193620685488,
+      "curated_heldout_loss": 0.336950797173712,
+      "release_flags": [12, 35],
+      "release_grounded": [8, 35],
+      "retention_flags": [14, 20],
+      "retention_grounded": [8, 20]
+    },
+    {
+      "rank": 16,
+      "broad_heldout_loss": 0.3927553690955392,
+      "curated_heldout_loss": 0.37861353283127147,
+      "release_flags": [10, 35],
+      "release_grounded": [5, 35],
+      "retention_flags": [12, 20],
+      "retention_grounded": [9, 20]
+    },
+    {
+      "rank": 32,
+      "broad_heldout_loss": 0.4662426215218147,
+      "curated_heldout_loss": 0.4987111927734481,
+      "release_flags": [8, 35],
+      "release_grounded": [3, 35],
+      "retention_flags": [10, 20],
+      "retention_grounded": [5, 20]
+    },
+    {
+      "rank": 64,
+      "broad_heldout_loss": 0.6099869931931607,
+      "curated_heldout_loss": 0.5628208874000443,
+      "release_flags": [4, 35],
+      "release_grounded": [0, 35],
+      "retention_flags": [6, 20],
+      "retention_grounded": [5, 20]
+    }
+  ]
+}

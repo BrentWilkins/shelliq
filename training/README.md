@@ -619,6 +619,13 @@ Synthetic post-scrub canaries are planted only in masked prompt context;
 
 ## LoRA rank sweep
 
+The first fixed-recipe result and plots are recorded in
+[`experiments/lora-rank-fixed-recipe-v1.md`](experiments/lora-rank-fixed-recipe-v1.md).
+Rank 8 performed best of 8/16/32/64 but did not pass the release gate. Treat the
+result as a recipe-specific baseline, not proof that rank 8 is intrinsically
+optimal; larger ranks had worse held-out loss and may require different
+optimization schedules.
+
 The controlled 0.5B capacity comparison uses ranks 16, 32, and 64 while holding
 the base model, data split/order, seed, steps, and effective LoRA scale fixed.
 Each rank trains broad semantic SFT first and resumes into the curated v7

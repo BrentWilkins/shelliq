@@ -634,6 +634,42 @@ seeds before treating the difference as real. Curriculum-weight sweeps come
 after this ordering comparison and use the same development and retention
 gates; the shadow release suite remains single-use.
 
+**Fixed-recipe rank baseline (2026-08-20).** The initial 8/16/32/64 comparison
+held learning rates and 2,000-step broad plus 500-step curated schedules fixed.
+Rank 8 was best: release 12/35 flags and 8/35 grounded; retention 14/20 flags
+and 8/20 grounded; broad/curated held-out loss 0.353/0.337. Ranks 16, 32, and
+64 degraded progressively, but their training-corpus held-out losses also
+worsened, so this only shows that larger rank does not help without retuning.
+It does not establish each rank's attainable optimum. No candidate passed the
+13/35 release flag floor; do not promote or consult the shadow holdout. Keep the
+plots and exact summary in `training/experiments/lora-rank-fixed-recipe-v1.*`.
+
+Do not launch a full-budget Cartesian schedule grid next. Add checkpoint-level
+train/held-out loss history, then use the short-budget successive-halving screen
+below to select a narrow convergence diagnostic. Select checkpoints by corpus
+held-out loss before consulting release development. In parallel, prioritize a
+general verifier-backed data pipeline: reviewed rejection-sampling SFT first,
+then offline chosen/rejected preference optimization only after trustworthy
+near-miss pairs exist. Preserve the full supervised corpus through replay or a
+reference/KL constraint. Plot future learning curves against examples or tokens
+seen and clearly separate seeds, ranks, and schedules; never put the final
+shadow score on an optimization plot.
+
+The unattended version should use successive halving rather than evaluate a
+full Cartesian grid on release development. Screen ranks 4/8/16/32/64,
+`alpha / rank` ratios 1 and 2, and broad learning rates `1e-4`, `2e-4`, and
+`4e-4` under one short budget. Alpha and learning rate are interacting update
+scale controls, not independent conclusions. Score the screen only by the
+training-corpus held-out loss. Advance the best schedule per rank to a generous
+maximum with periodic held-out evaluation, best-checkpoint retention, and early
+stopping; this makes duration a within-run checkpoint choice rather than another
+grid dimension. Sweep only a small curated-stage learning-rate set from those
+winning broad checkpoints, then run release development and retention on the
+rank finalists. Repeat the top configurations with additional seeds only when
+the margin is small. The runner must be manifest-pinned, resumable, sequential
+on one GPU, NaN-failing, non-overwriting, and produce plots plus a machine-
+readable summary. It must never invoke pipeline or shadow holdouts.
+
 **Second experiment: verifier-backed data and preferences on 0.5B.** For each prompt,
 sample several semantic documents and score properties that generalize across
 commands: schema/envelope validity, AST lowering, indexed command/flag facts,
