@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import sys
 from collections import Counter
 from dataclasses import asdict
@@ -60,6 +61,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument('--sequence-length', type=int, default=384)
     parser.add_argument('--seed', type=int, default=2026)
+    parser.add_argument('--rank', type=int, default=16)
+    parser.add_argument('--alpha', type=float, default=32.0)
     parser.add_argument('--priority-source', default='shelliq-curated')
     parser.add_argument(
         '--prompt-contract',
@@ -110,6 +113,10 @@ def main() -> None:
         raise SystemExit(f'output parent does not exist: {args.output.parent}')
     if args.examples <= 0:
         raise SystemExit('--examples must be positive')
+    if args.rank <= 0:
+        raise SystemExit('--rank must be positive')
+    if not math.isfinite(args.alpha) or args.alpha <= 0:
+        raise SystemExit('--alpha must be finite and positive')
     if jax.default_backend() != 'gpu':
         raise SystemExit('evaluate_semantic_checkpoint.py requires JAX GPU backend')
 
@@ -157,7 +164,7 @@ def main() -> None:
     model = Qwen2ForCausalLM(Qwen2Config(), param_dtype=jnp.bfloat16, rngs=nnx.Rngs(0))
     weights_path = hf_hub_download(MODEL_ID, 'model.safetensors', local_files_only=True)
     load_hf_state_dict(model, load_file(weights_path), param_dtype=jnp.bfloat16)
-    inject_lora(model, rank=16, alpha=32, rngs=nnx.Rngs(1))
+    inject_lora(model, rank=args.rank, alpha=args.alpha, rngs=nnx.Rngs(1))
     optimizer = create_lora_optimizer(model)
 
     baseline_predictions, baseline_texts = _generate(
@@ -166,6 +173,7 @@ def main() -> None:
         eval_examples,
         tokenizer,
         sequence_length=args.sequence_length,
+        label='base evaluation',
     )
     metadata = restore_checkpoint(
         args.checkpoint,
@@ -182,6 +190,7 @@ def main() -> None:
         eval_examples,
         tokenizer,
         sequence_length=args.sequence_length,
+        label=f'rank {args.rank} evaluation',
     )
 
     report = {
@@ -195,6 +204,11 @@ def main() -> None:
             'accepted_records': len(records),
         },
         'checkpoint': {'path': str(args.checkpoint), 'step': metadata.step},
+        'adapter': {
+            'rank': metadata.rank,
+            'alpha': metadata.alpha,
+            'scale': metadata.alpha / metadata.rank,
+        },
         'grounding_audit': {
             'path': str(args.grounding_audit),
             'sha256': _sha256(args.grounding_audit),

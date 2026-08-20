@@ -40,3 +40,11 @@ the accompanying test enforces exact instruction and target separation. The
 suite's grounding audit intentionally has no variable literal paths, so grounded
 document matching remains strict for command stages, formats, operands, and
 pipeline operators.
+
+`semantic-shadow-release-v1.jsonl` is the untouched final gate for the 0.5B
+LoRA-rank sweep: 20 cases, two each across ten command families absent from every
+training corpus file. Its grounding audit has no variable literals, so every
+command, flag, value, operand, and structure must match. The existing 35-row
+release suite is development/model-selection data now. Do not evaluate rank
+variants on the shadow suite; evaluate it once after development and retention
+choose one winner. Never merge either evaluation file into training.

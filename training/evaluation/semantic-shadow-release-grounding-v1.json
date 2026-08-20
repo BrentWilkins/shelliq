@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "records": {
+    "shadow-release:v1:linux:chrt-inspect-pid": {"variable_literal_paths": []},
+    "shadow-release:v1:linux:chrt-round-robin": {"variable_literal_paths": []},
+    "shadow-release:v1:linux:env-clean-home": {"variable_literal_paths": []},
+    "shadow-release:v1:linux:env-unset-chdir": {"variable_literal_paths": []},
+    "shadow-release:v1:linux:flock-exclusive-timeout": {"variable_literal_paths": []},
+    "shadow-release:v1:linux:flock-shared-nonblock": {"variable_literal_paths": []},
+    "shadow-release:v1:linux:numfmt-iec-to-si": {"variable_literal_paths": []},
+    "shadow-release:v1:linux:numfmt-padding": {"variable_literal_paths": []},
+    "shadow-release:v1:linux:od-hex-prefix": {"variable_literal_paths": []},
+    "shadow-release:v1:linux:od-skip-characters": {"variable_literal_paths": []},
+    "shadow-release:v1:linux:pr-columns-header": {"variable_literal_paths": []},
+    "shadow-release:v1:linux:pr-number-double": {"variable_literal_paths": []},
+    "shadow-release:v1:linux:renice-group": {"variable_literal_paths": []},
+    "shadow-release:v1:linux:renice-process": {"variable_literal_paths": []},
+    "shadow-release:v1:linux:seq-equal-width": {"variable_literal_paths": []},
+    "shadow-release:v1:linux:seq-format-separator": {"variable_literal_paths": []},
+    "shadow-release:v1:linux:taskset-existing-all-tasks": {"variable_literal_paths": []},
+    "shadow-release:v1:linux:taskset-launch-list": {"variable_literal_paths": []},
+    "shadow-release:v1:linux:touch-no-create-date": {"variable_literal_paths": []},
+    "shadow-release:v1:linux:touch-reference": {"variable_literal_paths": []}
+  }
+}

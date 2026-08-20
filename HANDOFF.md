@@ -118,6 +118,33 @@ training/artifacts/pipeline-refine-lr2e6-s200-w4-v1.*.json
 
 ## Next work
 
+Rank-sweep infrastructure is implemented but not yet committed or used for a
+full comparison. `training/scripts/run_rank_sweep.py` dry-runs by default and
+plans ranks 16/32/64 at constant `alpha / rank = 2`, with identical broad then
+curated training schedules, release-development evaluation, and retention
+evaluation. It fingerprints every input in an immutable manifest, supports
+exact-manifest resume, and deliberately never evaluates the pipeline or final
+shadow holdouts. Train/evaluation scripts now accept rank and alpha explicitly.
+
+`training/evaluation/semantic-shadow-release-v1.jsonl` is the frozen final
+20-case gate: two examples in each of ten command families absent from all
+training corpus files. Its grounding audit is closed and strict. Do not run it
+for individual rank, ordering, seed, or curriculum-weight variants; consult it
+once after development plus retention select a winner.
+
+Long train/evaluation commands show Rich progress on an interactive terminal
+and retain sparse plain-text logs when redirected. A real CUDA rank-32 plumbing
+smoke completed 20 steps in 36.38 seconds, reduced training loss from 2.3671 to
+0.2182 and held-out loss from 2.4600 to 1.5132, and wrote a resumable checkpoint.
+This proves GPU/rank/progress plumbing only, not model quality.
+
+Keep broad -> curated order and the seed fixed during the rank comparison. Once
+a rank wins, compare that baseline against interleaved/replay training, then
+consider curriculum-weight sweeps. A simple curated -> broad reversal is a weak
+primary alternative because the broad final pass may erase specialization. If
+the apparent improvement is small, repeat rank 16 and the winner with extra
+seeds before promotion.
+
 Codex is currently the stronger teacher in a manual distillation loop: it
 proposes examples and contrasts, but only reviewed, deterministically checked
 records enter the corpus. Conversation text is not ingested automatically. Build

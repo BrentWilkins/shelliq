@@ -45,6 +45,7 @@ from shelliq_training.data import (
 )
 from shelliq_training.lora import inject_lora, parameter_count
 from shelliq_training.model import Qwen2ForCausalLM
+from shelliq_training.progress import interactive_progress, training_progress
 from shelliq_training.prompt import PromptContract
 from shelliq_training.training import CausalLMBatch, create_lora_optimizer, eval_step, train_step
 from shelliq_training.weights import load_hf_state_dict
@@ -64,6 +65,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--batch-size', type=int, default=2)
     parser.add_argument('--steps', type=int, default=80)
     parser.add_argument('--learning-rate', type=float, default=1e-3)
+    parser.add_argument('--rank', type=int, default=16)
+    parser.add_argument('--alpha', type=float, default=32.0)
     parser.add_argument('--seed', type=int, default=2026)
     parser.add_argument('--checkpoint', type=Path)
     parser.add_argument('--resume-checkpoint', type=Path)
@@ -296,6 +299,10 @@ def main() -> None:
         raise SystemExit(f'--sequence-length must exceed {GENERATION_TOKENS + 1}')
     if args.steps <= 0:
         raise SystemExit('--steps must be positive')
+    if args.rank <= 0:
+        raise SystemExit('--rank must be positive')
+    if not math.isfinite(args.alpha) or args.alpha <= 0:
+        raise SystemExit('--alpha must be finite and positive')
     if (
         args.checkpoint is not None
         and args.resume_checkpoint is not None
@@ -373,7 +380,7 @@ def main() -> None:
     model = Qwen2ForCausalLM(Qwen2Config(), param_dtype=jnp.bfloat16, rngs=nnx.Rngs(0))
     weights_path = hf_hub_download(MODEL_ID, 'model.safetensors', local_files_only=True)
     load_hf_state_dict(model, load_file(weights_path), param_dtype=jnp.bfloat16)
-    inject_lora(model, rank=16, alpha=32, rngs=nnx.Rngs(1))
+    inject_lora(model, rank=args.rank, alpha=args.alpha, rngs=nnx.Rngs(1))
     optimizer = create_lora_optimizer(model, learning_rate=args.learning_rate)
     resumed_metadata = None
     if args.resume_checkpoint is not None:
@@ -412,10 +419,19 @@ def main() -> None:
         _print_generation('heldout-before', eval_records[0], baseline_heldout_generation)
 
     report_every = max(args.steps // 4, 1)
-    for step in range(args.steps):
-        loss = train_step(model, optimizer, train_batches[step % len(train_batches)])
-        if step == 0 or (step + 1) % report_every == 0 or step + 1 == args.steps:
-            print(f'step {step + 1}/{args.steps}: loss={float(np.asarray(loss)):.4f}')
+    show_progress = interactive_progress()
+    with training_progress() as progress:
+        task = progress.add_task(
+            f'rank {args.rank} training',
+            total=args.steps,
+            loss='—',
+        )
+        for step in range(args.steps):
+            loss = train_step(model, optimizer, train_batches[step % len(train_batches)])
+            loss_value = float(np.asarray(loss))
+            progress.update(task, advance=1, loss=f'{loss_value:.4f}')
+            if not show_progress and (step == 0 or (step + 1) % report_every == 0 or step + 1 == args.steps):
+                print(f'step {step + 1}/{args.steps}: loss={loss_value:.4f}')
 
     final_train_loss = mean_loss(model, train_batches)
     final_eval_loss = mean_loss(model, eval_batches)
@@ -458,6 +474,11 @@ def main() -> None:
         report = {
             'report_schema_version': 1,
             'model_id': MODEL_ID,
+            'adapter': {
+                'rank': args.rank,
+                'alpha': args.alpha,
+                'scale': args.alpha / args.rank,
+            },
             'dataset': {
                 'path': str(dataset_path),
                 'sha256': _file_sha256(dataset_path),

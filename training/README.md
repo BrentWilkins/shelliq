@@ -617,6 +617,42 @@ runs. Every detector class is canary-tested when the gate is constructed.
 Synthetic post-scrub canaries are planted only in masked prompt context;
 `run_canary_extraction_gate` fails if a trained model reproduces one.
 
+## LoRA rank sweep
+
+The controlled 0.5B capacity comparison uses ranks 16, 32, and 64 while holding
+the base model, data split/order, seed, steps, and effective LoRA scale fixed.
+Each rank trains broad semantic SFT first and resumes into the curated v7
+finishing pass. It then runs the release-development and retention evaluations.
+The runner never evaluates the pipeline suite or the final shadow release gate.
+
+Inspect the exact commands and immutable input manifest without starting work:
+
+```sh
+uv run python scripts/run_rank_sweep.py
+```
+
+Start the GPU sweep, or resume stages already recorded by the exact same
+manifest:
+
+```sh
+uv run python scripts/run_rank_sweep.py --execute
+uv run python scripts/run_rank_sweep.py --execute --resume
+```
+
+Training requires CUDA; it does not silently fall back to CPU. Interactive
+terminals show Rich loss/example progress with elapsed time and ETA, while
+redirected runs keep sparse plain-text logs. The default rule `alpha = 2 * rank`
+keeps `alpha / rank` constant. Override rank or schedule options only as a new
+experiment with a new output directory.
+
+Curriculum order can affect the result, so the rank sweep intentionally keeps
+the same broad -> curated order. After choosing a rank, compare this baseline
+with an interleaved/replay schedule that retains broad examples during the
+finishing phase. Keep curriculum-weight sweeps separate so capacity, ordering,
+and weighting are not changed in one experiment. Use additional seeds when a
+winning margin is small, and evaluate only the final selected configuration on
+`evaluation/semantic-shadow-release-v1.jsonl`.
+
 ## Checkpoints
 
 Create the base model, load its pinned Hugging Face weights, inject the same

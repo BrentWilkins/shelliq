@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import subprocess
 import sys
 import time
@@ -48,6 +49,7 @@ from shelliq_training.evaluation import (  # noqa: E402
 )
 from shelliq_training.lora import inject_lora  # noqa: E402
 from shelliq_training.model import Qwen2ForCausalLM  # noqa: E402
+from shelliq_training.progress import evaluation_progress  # noqa: E402
 from shelliq_training.prompt import PromptContract  # noqa: E402
 from shelliq_training.training import create_lora_optimizer  # noqa: E402
 from shelliq_training.weights import load_hf_state_dict  # noqa: E402
@@ -61,6 +63,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--examples', type=int, default=64)
     parser.add_argument('--sequence-length', type=int, default=256)
     parser.add_argument('--seed', type=int, default=2026)
+    parser.add_argument('--rank', type=int, default=16)
+    parser.add_argument('--alpha', type=float, default=32.0)
     parser.add_argument('--priority-source', default='shelliq-curated')
     parser.add_argument('--option-arities', type=Path)
     return parser.parse_args()
@@ -153,17 +157,21 @@ def _generate(
     tokenizer: object,
     *,
     sequence_length: int,
+    label: str = 'evaluating',
 ) -> tuple[list[ModelPrediction], list[str]]:
     # Compile before measuring per-example latency.
     greedy_completion(model, examples[0], tokenizer, sequence_length=sequence_length)
     predictions = []
     texts = []
-    for record, example in zip(records, examples, strict=True):
-        started = time.perf_counter()
-        text = greedy_completion(model, example, tokenizer, sequence_length=sequence_length)
-        latency_ms = (time.perf_counter() - started) * 1000
-        predictions.append(ModelPrediction(record.record_id, text, latency_ms))
-        texts.append(text)
+    with evaluation_progress() as progress:
+        task = progress.add_task(label, total=len(records), record_id='')
+        for record, example in zip(records, examples, strict=True):
+            started = time.perf_counter()
+            text = greedy_completion(model, example, tokenizer, sequence_length=sequence_length)
+            latency_ms = (time.perf_counter() - started) * 1000
+            predictions.append(ModelPrediction(record.record_id, text, latency_ms))
+            texts.append(text)
+            progress.update(task, advance=1, record_id=record.record_id)
     return predictions, texts
 
 
@@ -243,6 +251,10 @@ def main() -> None:
         raise SystemExit(f'output parent does not exist: {args.output.parent}')
     if args.examples <= 0:
         raise SystemExit('--examples must be positive')
+    if args.rank <= 0:
+        raise SystemExit('--rank must be positive')
+    if not math.isfinite(args.alpha) or args.alpha <= 0:
+        raise SystemExit('--alpha must be finite and positive')
     if jax.default_backend() != 'gpu':
         raise SystemExit('evaluate_checkpoint.py requires a JAX GPU backend')
 
@@ -265,7 +277,7 @@ def main() -> None:
     model = Qwen2ForCausalLM(Qwen2Config(), param_dtype=jnp.bfloat16, rngs=nnx.Rngs(0))
     weights_path = hf_hub_download(MODEL_ID, 'model.safetensors', local_files_only=True)
     load_hf_state_dict(model, load_file(weights_path), param_dtype=jnp.bfloat16)
-    inject_lora(model, rank=16, alpha=32, rngs=nnx.Rngs(1))
+    inject_lora(model, rank=args.rank, alpha=args.alpha, rngs=nnx.Rngs(1))
     optimizer = create_lora_optimizer(model)
 
     baseline_predictions, baseline_texts = _generate(
@@ -274,6 +286,7 @@ def main() -> None:
         eval_examples,
         tokenizer,
         sequence_length=args.sequence_length,
+        label='base evaluation',
     )
     metadata = restore_checkpoint(
         args.checkpoint,
@@ -290,6 +303,7 @@ def main() -> None:
         eval_examples,
         tokenizer,
         sequence_length=args.sequence_length,
+        label=f'rank {args.rank} evaluation',
     )
 
     report = {
@@ -304,6 +318,11 @@ def main() -> None:
         'checkpoint': {
             'path': str(args.checkpoint),
             'step': metadata.step,
+        },
+        'adapter': {
+            'rank': metadata.rank,
+            'alpha': metadata.alpha,
+            'scale': metadata.alpha / metadata.rank,
         },
         'selection': {
             'seed': args.seed,

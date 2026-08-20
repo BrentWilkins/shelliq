@@ -622,6 +622,18 @@ than confounding it with the first comparison. Require release-development and
 retention gates, then evaluate only the winning configuration on the shadow
 release suite. Use multiple seeds only after a rank shows a meaningful margin.
 
+Hold curriculum order fixed during that comparison: broad SFT first, then the
+curated finishing pass, with the same seed and selected-record order at every
+rank. Otherwise rank and curriculum order are confounded. After selecting the
+best rank, compare the sequential baseline with an interleaved/replay schedule
+that keeps broad examples present during finishing. Do not use a simple
+curated-then-broad reversal as the primary alternative because the broad final
+stage can wash out the specialization being measured. If the ordering result or
+rank margin is small, repeat rank 16 and the apparent winner with additional
+seeds before treating the difference as real. Curriculum-weight sweeps come
+after this ordering comparison and use the same development and retention
+gates; the shadow release suite remains single-use.
+
 **Second experiment: verifier-backed data and preferences on 0.5B.** For each prompt,
 sample several semantic documents and score properties that generalize across
 commands: schema/envelope validity, AST lowering, indexed command/flag facts,
