@@ -32,3 +32,11 @@ both expected and generated documents. Commands, flags, argument count and
 order, redirects, quoting structure, and every other AST field remain exact.
 Every selected record is present even when its path list is empty, making the
 audit a closed, reviewable set rather than a permissive fallback.
+
+`pipeline-compatibility-v1.jsonl` is a frozen eight-row regression suite for
+pipeline record shape and delimiter compatibility. Its real alpha failure
+prompt and expected response are excluded from `corpus/pipeline-contracts.jsonl`;
+the accompanying test enforces exact instruction and target separation. The
+suite's grounding audit intentionally has no variable literal paths, so grounded
+document matching remains strict for command stages, formats, operands, and
+pipeline operators.

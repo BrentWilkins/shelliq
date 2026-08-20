@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "records": {
+    "pipeline-compatibility:v1:linux:large-files-largest-first": {"variable_literal_paths": []},
+    "pipeline-compatibility:v1:linux:top-opt-files": {"variable_literal_paths": []},
+    "pipeline-compatibility:v1:linux:oldest-tmp-logs": {"variable_literal_paths": []},
+    "pipeline-compatibility:v1:linux:null-path-sort": {"variable_literal_paths": []},
+    "pipeline-compatibility:v1:linux:null-size-rank": {"variable_literal_paths": []},
+    "pipeline-compatibility:v1:linux:null-delete-consumer": {"variable_literal_paths": []},
+    "pipeline-compatibility:v1:linux:plain-path-sort": {"variable_literal_paths": []},
+    "pipeline-compatibility:v1:linux:human-directory-rank": {"variable_literal_paths": []}
+  }
+}

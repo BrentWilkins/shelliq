@@ -4,7 +4,7 @@ First-party, hand-authored schema-version-1 rows. Unlike `artifacts/`, this
 directory is **git-tracked**: every row is reviewable, diffable, and editable by
 hand.
 
-The corpus currently contains 726 rows across 15 command-family files.
+The corpus currently contains 786 rows across 17 command-family files.
 
 `targeted-finishing.jsonl` and `targeted-finishing-v2.jsonl` form a standalone 100-row finishing family.
 Their commands are deliberately disjoint
@@ -63,11 +63,11 @@ is drawn at the **file** level, not row by row:
 | | rows | zsh | bash | sh |
 | ------------------- | ---: | ---: | ---: | ---: |
 | `zsh-native.jsonl`  |   47 |   47 |   26 |   25 |
-| everything else     |  579 |  579 |  579 |  574 |
+| everything else     |  639 |  639 |  639 |  634 |
 
 `zsh-native.jsonl` is dialect-locked by design: glob qualifiers, globbing flags,
 and `print -N` have no Bash or `sh` equivalent, and teaching them is the point.
-A future `sh` profile skips that file wholesale. The remaining 579 rows are
+A future `sh` profile skips that file wholesale. The remaining 627 rows are
 ordinary command usage that already parses in all three shells, apart from five
 `pipelines` rows using process substitution or a here-string — Zsh and Bash, but
 not POSIX `sh`.

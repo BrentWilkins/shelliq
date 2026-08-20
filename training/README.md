@@ -710,3 +710,49 @@ GGUF was 16.8 MiB, merged bfloat16 safetensors were 942 MiB, the Q8_0 GGUF was
 507 MiB with valid GGUF v3 magic, and `llama-cli` loaded and generated from it.
 This proves format/tool compatibility only; it says nothing about fine-tuned
 quality because the smoke adapter is intentionally zero-initialized.
+
+## Pipeline-contract curriculum
+
+`corpus/pipeline-contracts.jsonl` contains 12 training-only examples that teach
+producer record shape and consumer framing through varied `find`, `sort`,
+`xargs`, `stat`, and `du` pipelines. The exact alpha failure wording is kept in
+the separate eight-row `evaluation/pipeline-compatibility-v1.jsonl` suite.
+`tests/test_pipeline_compatibility_dataset.py` requires disjoint instructions
+and targets and a closed grounding audit.
+
+The 2026-08-20 conservative experiment resumed
+`semantic-authoritative-curated-v3`, rehearsed 600 broad rows, weighted the 12
+pipeline rows 4x, and trained at `2e-6`. At 100 and 200 additional steps,
+pipeline command/flag exact match improved from 1/8 to 3/8 and 4/8. The original
+large-file sorting failure became functionally correct. Retention improved with
+no regressions at 100 steps, but the frozen release benchmark plateaued at
+12/35 command/flag matches and 7/35 grounded documents. Because the promotion
+gate requires more than 13/35 and more than 7/35 respectively, neither
+checkpoint is a release candidate. Do not export or serve them.
+
+The pipeline rows remain part of every later full curated build. They are not a
+discarded experiment or a standalone fix. `corpus/intent-fidelity.jsonl` adds a
+balanced 48-row curriculum across 12 command families disjoint from both frozen
+release and retention gates. Four contrastive examples per family teach exact
+action/subcommand selection, complete multi-constraint flag sets, option-value
+binding, operand preservation, separators, and redirections. The next candidate
+should mix both curricula with the entire curated corpus at low dose and be
+selected on release plus retention before consulting the pipeline suite once for
+final confirmation.
+
+The first broader-curriculum candidate resumed the incumbent for 100 steps at
+`2e-6`, selected all 636 usable broad training rows, and repeated the 36
+intent-fidelity rows in the training split once (672 effective examples). Train
+loss moved 0.0672 to 0.0594 and command-grouped held-out loss 0.4058 to 0.3985.
+The frozen release gate remained at 12/35 exact command/flag sequences and 7/35
+grounded documents, so the candidate was rejected before pipeline evaluation.
+Retention passed without regressions at 15/20 flag sequences and 9/20 grounded
+documents, improving over the incumbent's 14/20 and 8/20. This supports keeping
+the broad curriculum, but another low-rate continuation is unlikely to clear the
+release plateau. Do not select further schedules against the pipeline suite.
+
+A post-run audit against installed command help found that two new zstd rows used
+unsupported long spellings for output and thread count. The checked-in rows now
+use portable `-o` and `-T0`; `curated-semantic-v7` is the corrected 786-row
+derived dataset for future runs. The rejected candidate used pre-audit v6 and is
+not being re-scored or promoted.

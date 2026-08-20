@@ -589,6 +589,95 @@ Dataset provenance and licence are recorded per source, per record — not per c
 `llama-quantize`. Use **Q6_K or Q8_0**, not Q4 — 0.5B degrades noticeably at Q4, and Q8 is
 still only ~500MB.
 
+#### 7.1 Post-SFT tuning plan — capacity before complexity
+
+**Measured starting point (2026-08-20).** The curated semantic corpus is now 786
+rows across 17 files. Twelve general pipeline-contract rows remain ordinary
+training data; 48 intent-fidelity rows add four contrasts for each of 12 command
+families disjoint from the frozen release and retention gates. Low-rate
+continuations improved retention from 14/20 to 15/20 exact flag sequences and
+8/20 to 9/20 grounded documents, but plateaued at 12/35 and 7/35 on the release
+gate. No candidate was exported or served. Use corrected derived dataset
+`curated-semantic-v7`; the rejected candidate used pre-audit v6.
+
+**Do not confuse cheap training sweeps with an unbiased evaluation.** Repeating
+new rows at weights 1x, 2x, 4x, and 8x is mechanically cheap, but selecting many
+variants against the same 35 release cases eventually tunes to those cases. The
+existing release suite is now a development/model-selection set. Before a broad
+sweep, freeze a new command-disjoint shadow release suite and consult it only
+after choosing one candidate on development plus retention. The eight-row
+pipeline suite has already participated in model selection and is final
+confirmation only.
+
+**First experiment: LoRA capacity on the deployable 0.5B base.** Rank is the
+adapter's low-rank update capacity, not a mixture-of-experts router. Current
+rank 16 adapts q/k/v/o and gate/up/down, with 8,798,208 trainable parameters.
+Adapter parameters and optimizer memory scale approximately linearly with rank;
+the frozen base and activations do not. Parameterize `--model-id`, `--rank`, and
+`--alpha` consistently in train, evaluate, checkpoint, and export paths, then
+run ranks 16, 32, and 64 from the same base, data order, steps, seed, and
+curriculum weight. Keep effective LoRA scale controlled (`alpha / rank`) so rank
+is the changed variable; separately consider rank-stabilized LoRA scaling rather
+than confounding it with the first comparison. Require release-development and
+retention gates, then evaluate only the winning configuration on the shadow
+release suite. Use multiple seeds only after a rank shows a meaningful margin.
+
+**Second experiment: verifier-backed data and preferences on 0.5B.** For each prompt,
+sample several semantic documents and score properties that generalize across
+commands: schema/envelope validity, AST lowering, indexed command/flag facts,
+literal grounding, producer/consumer record framing, and task outcome on safe
+generated fixtures where available. Do not add a one-prompt runtime special
+case. Start with rejection-sampling SFT: retain verified successful generations
+as reviewed training candidates. If several candidates expose useful near-miss
+pairs, add offline DPO-style records `(prompt, preferred, rejected)` and optimize
+relative likelihood against a frozen supervised reference. Preserve the 786-row
+curriculum through replay/interleaved SFT loss and require the retention gate;
+the reference/KL term prevents preference training from freely drifting away
+from the supervised model. Online GRPO/RL with verifier rewards is a later step
+only if offline verified data saturates, because online generation and policy
+optimization add substantially more machinery.
+
+**Teacher workflow.** Codex currently serves as the stronger, human-directed
+teacher: it proposes generalized examples, contrast cases, and corrections after
+reviewing small-model failures. Conversation text is not training data and no
+learning happens automatically; only reviewed records checked into the corpus
+enter a local training run. Teacher output is never authoritative by itself.
+Every proposed command must pass available deterministic syntax, semantic
+round-trip, portability, option, and task checks, followed by human review where
+the checks cannot establish intent. This manual loop should become the first
+rejection-sampling pipeline before DPO: teacher proposes multiple candidates,
+verifiers reject bad ones, reviewed winners become SFT rows, and useful verified
+near misses may later become preference pairs. The corrected zstd rows are the
+standing example of why teacher plus verifier is required.
+
+**Deferred escalation: 1.5B base capacity.** The laptop deployment budget makes
+a roughly 3x larger resident model undesirable, so do not make 1.5B a normal
+runtime candidate while 0.5B capacity and verifier-guided options remain. A
+complete local `Qwen/Qwen2.5-1.5B-Instruct` snapshot exists (3.09GB safetensors
+versus 0.99GB for `Qwen/Qwen2.5-Coder-0.5B-Instruct`), but it is the general
+Instruct model, not the Coder 1.5B variant. Only after the 0.5B experiments
+saturate should the code be generalized and a one-step batch-1 memory/parity
+smoke run. Even then, prefer using 1.5B offline as a teacher that generates
+verified training/preferences for the served 0.5B model. Deploying 1.5B requires
+an explicit later decision that its quality gain justifies permanent laptop RAM,
+GGUF size, and latency costs.
+
+**Mixture of LoRA experts is not the first capacity experiment.** Multiple
+adapters plus a learned router can isolate genuinely different domains, but it
+splits this already small dataset, adds routing failure modes, and cannot be
+merged into a single GGUF while preserving conditional routing. Reconsider only
+if a controlled high-rank adapter shows measurable command-family interference;
+until then, one larger-rank adapter is the simpler test of the same capacity
+hypothesis.
+
+**Execution order:** parameterize and test 0.5B rank/alpha configuration → freeze
+shadow release suite → 0.5B rank 16/32/64 comparison → verified
+rejection-sampling data for 0.5B → offline DPO only if verified preference pairs
+add signal → consider a 1.5B offline-teacher smoke only after those paths
+saturate. Do not deploy 1.5B without a separate explicit decision. Every
+experiment emits an immutable manifest with base snapshot, dataset hash,
+selected IDs, rank/alpha, seed, schedule, peak memory, and all gate reports.
+
 ### 8. Shell integration
 
 Designed not to fight oh-my-zsh, zsh-autosuggestions, or zsh-syntax-highlighting:
