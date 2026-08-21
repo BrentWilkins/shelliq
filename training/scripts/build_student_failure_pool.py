@@ -35,6 +35,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--manifest', type=Path, required=True)
     parser.add_argument('--source', default='shelliq-curated')
     parser.add_argument('--seed', type=int, default=2026)
+    parser.add_argument(
+        '--quota-scale',
+        type=int,
+        default=1,
+        help='multiply every platform/category quota while retaining strict balance',
+    )
+    parser.add_argument(
+        '--all-eligible',
+        action='store_true',
+        help='select the complete leak-free inventory subject to the per-command diversity cap',
+    )
     return parser.parse_args()
 
 
@@ -81,8 +92,12 @@ def select_pool(
     *,
     source: str,
     seed: int,
+    quota_scale: int = 1,
+    all_eligible: bool = False,
 ) -> list[dict[str, object]]:
-    quotas = dict(PILOT_QUOTAS)
+    if quota_scale <= 0:
+        raise ValueError('quota_scale must be positive')
+    quotas = {key: value * quota_scale for key, value in PILOT_QUOTAS.items()}
     selected: list[dict[str, object]] = []
     command_counts: Counter[tuple[str, str]] = Counter()
     eligible = [
@@ -96,14 +111,15 @@ def select_pool(
     for row in sorted(eligible, key=lambda item: _stable_key(str(item['record_id']), seed)):
         quota = (str(row['platform']), category(row))
         command = (str(row['platform']), str(row['command']))
-        if quotas.get(quota, 0) <= 0 or command_counts[command] >= MAX_RECORDS_PER_COMMAND:
+        if (not all_eligible and quotas.get(quota, 0) <= 0) or command_counts[command] >= MAX_RECORDS_PER_COMMAND:
             continue
         selected.append(row)
-        quotas[quota] -= 1
+        if not all_eligible:
+            quotas[quota] -= 1
         command_counts[command] += 1
-        if not any(quotas.values()):
+        if not all_eligible and not any(quotas.values()):
             break
-    if any(quotas.values()):
+    if not all_eligible and any(quotas.values()):
         raise ValueError(f'corpus cannot satisfy failure-pool quotas: {quotas}')
     return selected
 
@@ -134,6 +150,8 @@ def main() -> None:
         frozen_instructions,
         source=args.source,
         seed=args.seed,
+        quota_scale=args.quota_scale,
+        all_eligible=args.all_eligible,
     )
     args.output.write_text(''.join(json.dumps(row, sort_keys=True, separators=(',', ':')) + '\n' for row in selected))
     args.grounding_output.write_text(json.dumps(grounding_document(selected), indent=2, sort_keys=True) + '\n')
@@ -143,6 +161,8 @@ def main() -> None:
         'evaluation_dir': str(args.evaluation_dir),
         'seed': args.seed,
         'source': args.source,
+        'quota_scale': args.quota_scale,
+        'all_eligible': args.all_eligible,
         'records': len(selected),
         'frozen_record_ids_excluded': len(frozen_ids),
         'frozen_instructions_excluded': len(frozen_instructions),

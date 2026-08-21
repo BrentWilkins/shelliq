@@ -50,6 +50,19 @@ def test_harvest_keeps_valid_correct_command_near_miss(monkeypatch):
     assert selected[0]['verification']['failures'] == ('reference-mismatch',)
 
 
+def test_harvest_can_keep_all_eligible_near_misses(monkeypatch):
+    monkeypatch.setattr('scripts.harvest_student_failures.FAILURE_QUOTAS', {'precise': 1})
+    selected = harvest(
+        [pool_row('record:1'), pool_row('record:2')],
+        [example('record:1'), example('record:2')],
+        [RustValidation(True, 'tool -b', None), RustValidation(True, 'tool -b', None)],
+        seed=2026,
+        all_eligible=True,
+    )
+
+    assert len(selected) == 2
+
+
 def test_harvest_excludes_invalid_and_wrong_command(monkeypatch):
     monkeypatch.setattr('scripts.harvest_student_failures.FAILURE_QUOTAS', {'precise': 1})
     wrong_command = example('record:1', command='wrong')

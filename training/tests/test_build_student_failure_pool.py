@@ -60,6 +60,46 @@ def test_select_pool_rejects_unsatisfied_quota(monkeypatch):
         select_pool([], set(), set(), set(), source='shelliq-curated', seed=2026)
 
 
+def test_select_pool_scales_each_quota(monkeypatch):
+    monkeypatch.setattr(
+        'scripts.build_student_failure_pool.PILOT_QUOTAS',
+        {('linux', 'precise'): 1},
+    )
+    rows = [row(f'candidate:{index}') for index in range(2)]
+
+    selected = select_pool(
+        rows,
+        {str(item['record_id']) for item in rows},
+        set(),
+        set(),
+        source='shelliq-curated',
+        seed=1,
+        quota_scale=2,
+    )
+
+    assert len(selected) == 2
+
+
+def test_select_pool_can_return_all_eligible_rows(monkeypatch):
+    monkeypatch.setattr(
+        'scripts.build_student_failure_pool.PILOT_QUOTAS',
+        {('linux', 'precise'): 1},
+    )
+    rows = [row(f'candidate:{index}') for index in range(3)]
+
+    selected = select_pool(
+        rows,
+        {str(item['record_id']) for item in rows},
+        set(),
+        set(),
+        source='shelliq-curated',
+        seed=1,
+        all_eligible=True,
+    )
+
+    assert len(selected) == 3
+
+
 def test_grounding_document_uses_current_closed_schema():
     assert grounding_document([row('selected:id')]) == {
         'schema_version': 1,

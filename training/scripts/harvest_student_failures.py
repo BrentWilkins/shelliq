@@ -28,6 +28,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--manifest', type=Path, required=True)
     parser.add_argument('--seed', type=int, default=2026)
+    parser.add_argument('--all-eligible', action='store_true')
     return parser.parse_args()
 
 
@@ -41,6 +42,7 @@ def harvest(
     validations: list[object],
     *,
     seed: int,
+    all_eligible: bool = False,
 ) -> list[dict[str, object]]:
     pool_by_id = {str(row['record_id']): row for row in pool_rows}
     candidates: list[dict[str, object]] = []
@@ -92,14 +94,15 @@ def harvest(
     for candidate in sorted(candidates, key=lambda item: _stable_key(str(item['record_id']), seed)):
         group = str(candidate['category'])
         command = (str(candidate['platform']), str(candidate['command']))
-        if quotas[group] <= 0 or command_counts[command] >= 4:
+        if (not all_eligible and quotas[group] <= 0) or command_counts[command] >= 4:
             continue
         selected.append(candidate)
-        quotas[group] -= 1
+        if not all_eligible:
+            quotas[group] -= 1
         command_counts[command] += 1
-        if not any(quotas.values()):
+        if not all_eligible and not any(quotas.values()):
             break
-    if any(quotas.values()):
+    if not all_eligible and any(quotas.values()):
         raise ValueError(f'not enough verified near misses for failure quotas: {quotas}')
     return selected
 
@@ -120,7 +123,7 @@ def main() -> None:
     if not all(isinstance(item, str) for item in generated):
         raise ValueError('evaluation report contains malformed trained output')
     validations = rust_validate_documents(generated, args.validator)
-    selected = harvest(pool_rows, examples, validations, seed=args.seed)
+    selected = harvest(pool_rows, examples, validations, seed=args.seed, all_eligible=args.all_eligible)
     args.output.write_text(''.join(json.dumps(candidate, sort_keys=True, separators=(',', ':')) + '\n' for candidate in selected))
     manifest = {
         'schema_version': 1,
@@ -128,6 +131,7 @@ def main() -> None:
         'evaluation': str(args.evaluation),
         'validator': str(args.validator),
         'seed': args.seed,
+        'all_eligible': args.all_eligible,
         'records': len(selected),
         'category_counts': dict(sorted(Counter(str(item['category']) for item in selected).items())),
         'platform_counts': dict(sorted(Counter(str(item['platform']) for item in selected).items())),
