@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "benchmark": "evaluation/teacher-selection-v2.jsonl",
+  "benchmark_cases": 20,
+  "settings": {
+    "temperature": 0.0,
+    "reasoning_effort": "none",
+    "json_object_constraint": true
+  },
+  "results": [
+    {
+      "model": "qwen3.8:27b-80k",
+      "cases": 20,
+      "json_parse_rate": 1.0,
+      "document_envelope_rate": 1.0,
+      "first_command_accuracy": 1.0,
+      "command_flag_sequence_exact_match": 0.9,
+      "grounded_document_exact_match": 0.6,
+      "latency_seconds": 28.499,
+      "resident_size_gb": 17,
+      "gpu_percent": 100
+    },
+    {
+      "model": "qwen3.6:27b",
+      "cases": 20,
+      "json_parse_rate": 1.0,
+      "document_envelope_rate": 1.0,
+      "first_command_accuracy": 1.0,
+      "command_flag_sequence_exact_match": 0.7,
+      "grounded_document_exact_match": 0.55,
+      "latency_seconds": 45.757,
+      "resident_size_gb": 19,
+      "gpu_percent": 100
+    },
+    {
+      "model": "glm-4.7-flash-coder:latest",
+      "cases": 20,
+      "json_parse_rate": 1.0,
+      "document_envelope_rate": 1.0,
+      "first_command_accuracy": 0.95,
+      "command_flag_sequence_exact_match": 0.6,
+      "grounded_document_exact_match": 0.45,
+      "latency_seconds": 27.107,
+      "resident_size_gb": 21,
+      "gpu_percent": 100
+    },
+    {
+      "model": "qwen3-coder:30b",
+      "cases": 20,
+      "json_parse_rate": 1.0,
+      "document_envelope_rate": 1.0,
+      "first_command_accuracy": 1.0,
+      "command_flag_sequence_exact_match": 0.7,
+      "grounded_document_exact_match": 0.45,
+      "latency_seconds": 32.895,
+      "resident_size_gb": 24,
+      "gpu_percent": 92
+    }
+  ],
+  "non_comparable_smoke": {
+    "model": "gpt-oss:20b",
+    "cases": 8,
+    "reasoning_effort": "low",
+    "command_flag_sequence_exact_match": 0.375,
+    "grounded_document_exact_match": 0.375,
+    "reason": "reasoning_effort=none did not emit final-channel JSON; low-effort smoke was sufficient to eliminate the model"
+  },
+  "qwen3_8_reasoning_sweep": [
+    {
+      "reasoning_effort": "none",
+      "command_flag_sequence_exact_match": 0.9,
+      "grounded_document_exact_match": 0.6,
+      "json_parse_rate": 1.0,
+      "latency_seconds": 28.499
+    },
+    {
+      "reasoning_effort": "low",
+      "command_flag_sequence_exact_match": 0.8,
+      "grounded_document_exact_match": 0.6,
+      "json_parse_rate": 1.0,
+      "latency_seconds": 68.436
+    },
+    {
+      "reasoning_effort": "medium",
+      "command_flag_sequence_exact_match": 0.8,
+      "grounded_document_exact_match": 0.65,
+      "json_parse_rate": 1.0,
+      "latency_seconds": 67.438
+    },
+    {
+      "reasoning_effort": "high",
+      "command_flag_sequence_exact_match": 0.75,
+      "grounded_document_exact_match": 0.65,
+      "json_parse_rate": 0.95,
+      "latency_seconds": 111.592
+    }
+  ],
+  "selected_model": "qwen3.8:27b-80k",
+  "selected_policy": "reasoning none first; retry verifier failures at medium; escalate remaining failures"
+}

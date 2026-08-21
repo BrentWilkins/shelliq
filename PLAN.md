@@ -744,6 +744,17 @@ audited v2 set now provides 20 preliminary ranking cases; keep it small rather
 than padding weak complex references, and separately author the later complex-case
 expansion.
 
+Local v2 tournament selected `qwen3.8:27b-80k`: 100% first-command accuracy,
+90% exact flags, 60% strict document match, 17 GB fully GPU-resident. Qwen 3.6,
+GLM-4.7 Flash Coder, Qwen3-Coder 30B-A3B, and an eight-case GPT-OSS smoke all
+trailed it. Preserve the comparison in
+`training/experiments/teacher-selection-v2-local-v1.{json,md}`. Use Qwen 3.8 for
+bulk proposals, not approval; reserve hosted review for hard disagreements.
+Its reasoning-effort sweep rejects a global "think harder" setting: `none` gives
+the best flags and latency, while `medium` selectively rescues hard compositions.
+Use verifier-directed `none -> medium -> hosted/human` escalation; `high` adds no
+strict document accuracy and can regress output validity.
+
 Do not execute generated commands yet. Static verification is active design
 work; the required Docker-backed command-test harness is not implemented. Docker
 is available in the user's normal terminal; the Codex sandbox alone cannot

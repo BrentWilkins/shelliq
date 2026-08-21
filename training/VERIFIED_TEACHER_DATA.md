@@ -120,6 +120,12 @@ Local requests also use the server's JSON-object constraint. This prevents an
 early stop with unbalanced braces while preserving the server's exact output;
 the pipeline never repairs malformed candidate text after generation.
 
+The Qwen 3.8 v2 sweep supports a verifier-directed cascade, not global reasoning:
+run `none` first, retry only rejected outputs with `medium`, and escalate remaining
+failures. Medium rescued hard `brew` and `jq` cases but regressed a simple required
+flag; high added no strict accuracy, cost almost four times as much as none, and
+produced one malformed response.
+
 ```sh
 uv run python scripts/run_teacher_tournament.py run-local \
   --challenges evaluation/teacher-selection-v2.jsonl \
