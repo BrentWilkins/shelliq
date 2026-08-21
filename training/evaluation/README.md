@@ -57,6 +57,10 @@ instruction-complexity categories. It is selection data only: never merge it int
 teacher-authored training data, and do not treat its score as a student release
 claim.
 
+The initial smoke calibration exposed under-specified operands inherited from
+the source corpus. Treat v1 as a harness fixture, not a teacher-quality ranking
+set; `VERIFIED_TEACHER_DATA.md` records the evidence and v2 acceptance rule.
+
 The set intentionally excludes `tldr-pages`. Those examples are widely published
 and likely to have appeared in foundation-model training corpora, which would bias
 the tournament toward familiarity. The checked-in set comes only from reviewed

@@ -85,10 +85,29 @@ their public availability makes pretraining contamination likely and therefore
 makes them poor evidence for teacher quality. This set may choose a teacher but may
 never become teacher-authored training data or a student release benchmark.
 
+Calibration on 2026-08-21 found that v1 is suitable for exercising the harness
+but not yet for ranking teachers. Its inherited generic instructions omit some
+literal operands present in the frozen expected documents (for example,
+`access.log`, `ubuntu.iso`, and the rsync endpoints), and a few references demand
+options not supported by their supplied context. Quarantine exact-match scores
+from this set. Before a full tournament, author v2 requests whose instruction and
+context jointly determine every expected word, then have a human review each
+request/reference pair. Do not repair v1 in place after recording results.
+
+Teacher candidates receive a versioned, provider-neutral description of the
+project-private `SemanticDocumentV2` wire format plus neutral formatting
+examples. Merely naming the schema is insufficient: an external teacher cannot
+reasonably infer abbreviated keys such as `s[].c[].n.s`. The prompt is hashed
+with every result so a schema-prompt change creates a distinct tournament run.
+
 ### Tournament runbook
 
 Run from `training/`. Start each local candidate with eight prompts and a ten-minute
 ceiling, then run all 48 only if the smoke result is healthy:
+
+The local runner defaults to `reasoning_effort=none`. This task needs precise
+schema translation, and unbounded hidden reasoning can consume the entire output
+budget before emitting JSON. Override it only as a separately labeled experiment.
 
 ```sh
 uv run python scripts/run_teacher_tournament.py run-local \

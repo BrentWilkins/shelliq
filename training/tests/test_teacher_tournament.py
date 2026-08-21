@@ -7,8 +7,9 @@ from dataclasses import replace
 import pytest
 from rich.console import Console
 
-from scripts.run_teacher_tournament import export_batch, import_batch
+from scripts.run_teacher_tournament import export_batch, import_batch, parse_args
 from shelliq_training.data import DatasetFormatError
+from shelliq_training.prompt import TEACHER_SYSTEM_PROMPT_V1
 from shelliq_training.teacher_tournament import (
     CandidateResult,
     TeacherChallenge,
@@ -62,6 +63,31 @@ def test_challenge_schema_is_strict():
     value['surprise'] = True
     with pytest.raises(DatasetFormatError, match='unknown fields'):
         TeacherChallenge.from_dict(value)
+
+
+def test_teacher_prompt_defines_project_private_wire_format():
+    assert '"v":2' in TEACHER_SYSTEM_PROMPT_V1
+    assert '"d":"zsh"' in TEACHER_SYSTEM_PROMPT_V1
+    assert '"t":"p"' in TEACHER_SYSTEM_PROMPT_V1
+    assert '"n":{"s":"COMMAND"}' in TEACHER_SYSTEM_PROMPT_V1
+    assert 'exact zsh lexical spelling' in TEACHER_SYSTEM_PROMPT_V1
+
+
+def test_local_tournament_disables_unbounded_reasoning_by_default(monkeypatch):
+    monkeypatch.setattr(
+        'sys.argv',
+        [
+            'run_teacher_tournament.py',
+            'run-local',
+            '--challenges',
+            'challenges.jsonl',
+            '--model',
+            'local-model',
+            '--output',
+            'results.jsonl',
+        ],
+    )
+    assert parse_args().reasoning_effort == 'none'
 
 
 def test_load_challenges_rejects_duplicate_ids(tmp_path):

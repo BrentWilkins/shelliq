@@ -21,7 +21,11 @@ from rich.table import Table
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from shelliq_training.prompt import PromptContract, format_user_message  # noqa: E402
+from shelliq_training.prompt import (  # noqa: E402
+    TEACHER_SYSTEM_PROMPT_V1,
+    PromptContract,
+    format_user_message,
+)
 from shelliq_training.teacher_tournament import (  # noqa: E402
     CandidateResult,
     TeacherChallenge,
@@ -32,7 +36,7 @@ from shelliq_training.teacher_tournament import (  # noqa: E402
 )
 
 MAX_RESPONSE_BYTES = 1024 * 1024
-DEFAULT_SYSTEM_PROMPT = 'Return only compact SemanticDocumentV2 JSON.'
+DEFAULT_SYSTEM_PROMPT = TEACHER_SYSTEM_PROMPT_V1
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -55,6 +59,12 @@ def parse_args() -> argparse.Namespace:
     local.add_argument('--temperature', type=float, default=0.1)
     local.add_argument('--seed', type=int, default=2026)
     local.add_argument('--sample', type=int, default=0)
+    local.add_argument(
+        '--reasoning-effort',
+        choices=('none', 'low', 'medium', 'high'),
+        default='none',
+        help='OpenAI-compatible reasoning control; none prevents hidden reasoning from dominating local runtime',
+    )
     local.add_argument('--system-prompt', default=DEFAULT_SYSTEM_PROMPT)
 
     export = subparsers.add_parser('export-batch', help='write a provider batch request artifact')
@@ -130,6 +140,7 @@ def _openai_request(
     temperature: float,
     seed: int,
     timeout: float,
+    reasoning_effort: str,
 ) -> tuple[str, str, int | None, int | None]:
     body = {
         'model': model,
@@ -140,6 +151,7 @@ def _openai_request(
         'temperature': temperature,
         'seed': seed,
         'max_tokens': 1024,
+        'reasoning_effort': reasoning_effort,
         'stream': False,
     }
     request = urllib.request.Request(
@@ -196,6 +208,7 @@ def run_local(args: argparse.Namespace, console: Console) -> None:
                     args.temperature,
                     args.seed + index,
                     args.timeout,
+                    args.reasoning_effort,
                 )
                 result = CandidateResult(
                     challenge_id=challenge.challenge_id,
