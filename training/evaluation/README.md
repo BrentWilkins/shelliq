@@ -48,3 +48,26 @@ command, flag, value, operand, and structure must match. The existing 35-row
 release suite is development/model-selection data now. Do not evaluate rank
 variants on the shadow suite; evaluate it once after development and retention
 choose one winner. Never merge either evaluation file into training.
+
+## Teacher-selection tournament
+
+`teacher-selection-v1.jsonl` is a frozen 48-record comparison set for choosing a
+teacher model. It contains 40 Linux and 8 Darwin challenges, balanced across four
+instruction-complexity categories. It is selection data only: never merge it into
+teacher-authored training data, and do not treat its score as a student release
+claim.
+
+The set intentionally excludes `tldr-pages`. Those examples are widely published
+and likely to have appeared in foundation-model training corpora, which would bias
+the tournament toward familiarity. The checked-in set comes only from reviewed
+`shelliq-curated` records. Regenerate it deterministically with:
+
+```sh
+uv run python scripts/build_teacher_selection.py \
+  --semantic-dataset artifacts/distributable-semantic-v2.jsonl \
+  --output evaluation/teacher-selection-v1.jsonl
+```
+
+The builder refuses TLDR even if requested explicitly. Future revisions should
+prefer newly authored, project-specific challenges so teacher selection measures
+generalization rather than exposure to any existing corpus.

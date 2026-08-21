@@ -79,6 +79,57 @@ an API dependency until the exporter is implemented; if one is needed, add it
 with `uv add` rather than editing `pyproject.toml` by hand. Never check an API key
 into the repository or put it in a command-execution container.
 
+The initial teacher tournament uses the frozen
+`evaluation/teacher-selection-v1.jsonl` set. It excludes TLDR-derived questions:
+their public availability makes pretraining contamination likely and therefore
+makes them poor evidence for teacher quality. This set may choose a teacher but may
+never become teacher-authored training data or a student release benchmark.
+
+### Tournament runbook
+
+Run from `training/`. Start each local candidate with eight prompts and a ten-minute
+ceiling, then run all 48 only if the smoke result is healthy:
+
+```sh
+uv run python scripts/run_teacher_tournament.py run-local \
+  --challenges evaluation/teacher-selection-v1.jsonl \
+  --endpoint http://127.0.0.1:8080/v1/chat/completions \
+  --model local-candidate-exact-name \
+  --output artifacts/teacher-local-smoke.jsonl \
+  --limit 8 \
+  --max-total-seconds 600
+
+uv run python scripts/run_teacher_tournament.py run-local \
+  --challenges evaluation/teacher-selection-v1.jsonl \
+  --endpoint http://127.0.0.1:8080/v1/chat/completions \
+  --model local-candidate-exact-name \
+  --output artifacts/teacher-local-full.jsonl \
+  --max-total-seconds 3600
+
+uv run python scripts/run_teacher_tournament.py score \
+  --challenges evaluation/teacher-selection-v1.jsonl \
+  --results artifacts/teacher-local-full.jsonl \
+  --output artifacts/teacher-local-full.score.json
+```
+
+The local runner accepts only an uncredentialed loopback HTTP endpoint. It shows
+Rich progress, records per-row latency and token usage, preserves row-level errors,
+and aborts when projected total runtime exceeds the stated ceiling. Errors remain
+in the metric denominator.
+
+For hosted candidates, `export-batch` requires explicit current input/output prices
+and rejects the request artifact when its worst-case estimate exceeds the default
+$5 cap. It writes a sidecar manifest containing exact model, provider, prompt hashes,
+provider-safe request IDs, original challenge IDs, and the estimate. Anthropic output
+is a submit-ready Message Batches JSON body; OpenAI and Fireworks output their
+documented JSONL dataset formats. `import-batch` converts downloaded JSONL results
+back to the same normalized candidate schema used for local models. The script does
+not submit jobs or read API keys, so billable action remains explicit in the provider
+CLI or dashboard.
+
+Always re-check the provider model identifier, batch support, and prices immediately
+before export. Do not copy example prices from a prior report into a new run.
+
 Track cost and quality per generator: requested rows, valid envelopes, static
 verifier pass rate, human acceptance rate, failure-mode coverage, input/output
 tokens, hosted cost, and reviewer time. Start with a small stratified batch from
