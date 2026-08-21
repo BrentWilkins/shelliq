@@ -13,7 +13,10 @@ from safetensors.flax import load_file
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from shelliq_training.checkpoint import TargetFormat, restore_checkpoint  # noqa: E402
+from shelliq_training.checkpoint import (  # noqa: E402
+    TargetFormat,
+    restore_adapter_checkpoint,
+)
 from shelliq_training.config import Qwen2Config  # noqa: E402
 from shelliq_training.data import Corpus  # noqa: E402
 from shelliq_training.export import (  # noqa: E402
@@ -26,7 +29,6 @@ from shelliq_training.export import (  # noqa: E402
 from shelliq_training.lora import DEFAULT_TARGETS, inject_lora  # noqa: E402
 from shelliq_training.model import Qwen2ForCausalLM  # noqa: E402
 from shelliq_training.prompt import PromptContract  # noqa: E402
-from shelliq_training.training import create_lora_optimizer  # noqa: E402
 from shelliq_training.weights import load_hf_state_dict  # noqa: E402
 
 DEFAULT_MODEL_ID = 'Qwen/Qwen2.5-Coder-0.5B-Instruct'
@@ -60,11 +62,9 @@ def main() -> None:
     load_hf_state_dict(model, load_file(weights_path), jnp.bfloat16)
     targets = tuple(target.strip() for target in args.targets.split(',') if target.strip())
     inject_lora(model, rank=args.rank, alpha=args.alpha, targets=targets, rngs=nnx.Rngs(1))
-    optimizer = create_lora_optimizer(model)
-    checkpoint = restore_checkpoint(
+    checkpoint = restore_adapter_checkpoint(
         args.checkpoint,
         model,
-        optimizer,
         model_id=args.model_id,
         corpus=args.corpus,
         target_format=args.target_format,

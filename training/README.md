@@ -677,8 +677,8 @@ This screen writes compact reports rather than adapter checkpoints and never
 uses the release, retention, pipeline, or shadow evaluations. Retrain and save
 only the recipe selected from its learning curves.
 
-The full-corpus finalist phase trains rank 8 (`alpha=4`, peak LR `2e-4`) and
-rank 16 (`alpha=16`, peak LR `5e-5`) on all 23,646 usable training-split rows.
+The completed full-corpus finalist phase offered all 23,646 usable training-split
+rows to rank 8 (`alpha=4`, peak LR `2e-4`) and rank 16 (`alpha=16`, peak LR `5e-5`).
 Each run gets at most two deterministically reshuffled epochs (11,823 steps per
 epoch), uses 500-step warmup followed by cosine decay to 10% of peak LR, and
 cannot early-stop before completing one epoch. The corpus validation split is
@@ -691,8 +691,22 @@ uv run --frozen python scripts/run_full_corpus_finalists.py --execute
 uv run --frozen python scripts/run_full_corpus_finalists.py --execute --resume
 ```
 
-This remains an SFT optimization comparison. Its manifest prohibits release,
-retention, pipeline, and shadow evaluation until one recipe is selected.
+Both runs selected step 10,000, at validation loss 0.2698 for rank 8 and 0.2664
+for rank 16. Both worsened after the first-epoch boundary while training loss
+continued falling. The retained checkpoints had consumed 20,000 rows (84.6% of
+the first randomized pass). Exact curves are in
+`experiments/lora-full-corpus-finalists-v1.{json,md}`.
+
+Evaluate both retained checkpoints on corpus test loss, release development,
+and retention with visible Rich progress:
+
+```sh
+uv run --frozen python scripts/run_full_corpus_evaluation.py
+uv run --frozen python scripts/run_full_corpus_evaluation.py --execute
+uv run --frozen python scripts/run_full_corpus_evaluation.py --execute --resume
+```
+
+The evaluation manifest prohibits pipeline and shadow evaluation.
 
 The reviewed chosen/rejected data contract and verifier lifecycle for the next
 training phase are specified in [`PREFERENCE_DATA.md`](PREFERENCE_DATA.md).

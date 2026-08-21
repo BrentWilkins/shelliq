@@ -1,12 +1,16 @@
+import json
+
 import jax
 import jax.numpy as jnp
 import pytest
 from flax import nnx
 
+from shelliq_training import checkpoint as checkpoint_module
 from shelliq_training.checkpoint import (
     CheckpointError,
     CheckpointMetadata,
     TargetFormat,
+    restore_adapter_checkpoint,
     restore_checkpoint,
     save_checkpoint,
 )
@@ -83,6 +87,61 @@ def test_checkpoint_restores_adapters_optimizer_and_next_step(tmp_path):
     resumed_loss = train_step(resumed_model, resumed_optimizer, batch())
     assert jnp.array_equal(loss, resumed_loss)
     assert_trees_equal(nnx.state(model, nnx.LoRAParam), nnx.state(resumed_model, nnx.LoRAParam))
+
+
+def test_checkpoint_can_restore_adapters_without_optimizer_state(tmp_path, monkeypatch):
+    resumed_model, _ = training_pair()
+    restored_adapters = nnx.to_pure_dict(
+        jax.tree.map(
+            lambda value: value + 1,
+            nnx.state(resumed_model, nnx.LoRAParam),
+        )
+    )
+    checkpoint_path = tmp_path / 'scheduled-step-7'
+    (checkpoint_path / 'metadata').mkdir(parents=True)
+    (checkpoint_path / 'state').mkdir()
+    metadata = CheckpointMetadata(
+        step=7,
+        model_id='tiny-qwen',
+        corpus=Corpus.DISTRIBUTABLE,
+        target_format=TargetFormat.SEMANTIC_DOCUMENT_V2,
+        prompt_contract=PromptContract.CONTEXT_AUTHORITATIVE_V1,
+        rank=4,
+        alpha=8.0,
+        targets=checkpoint_module.DEFAULT_TARGETS,
+    )
+    (checkpoint_path / 'metadata' / 'metadata').write_text(json.dumps(metadata.to_dict()))
+
+    class FakeCheckpointer:
+        def __init__(self, handler):
+            self.handler = handler
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def restore(self, path, *, args):
+            assert path == checkpoint_path / 'state'
+            assert args.partial_restore is True
+            return {'adapters': restored_adapters}
+
+    monkeypatch.setattr(checkpoint_module.ocp, 'Checkpointer', FakeCheckpointer)
+    metadata = restore_adapter_checkpoint(
+        checkpoint_path,
+        resumed_model,
+        model_id='tiny-qwen',
+        corpus=Corpus.DISTRIBUTABLE,
+        target_format=TargetFormat.SEMANTIC_DOCUMENT_V2,
+        prompt_contract=PromptContract.CONTEXT_AUTHORITATIVE_V1,
+    )
+
+    assert metadata.step == 7
+    assert_trees_equal(
+        restored_adapters,
+        nnx.to_pure_dict(nnx.state(resumed_model, nnx.LoRAParam)),
+    )
 
 
 def test_checkpoint_refuses_pipeline_mismatch(tmp_path):

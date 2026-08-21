@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -191,6 +192,46 @@ def restore_checkpoint(
         raise CheckpointError(f'checkpoint state does not match active model: {error}') from error
     nnx.update(model, adapter_state)
     nnx.update(optimizer, optimizer_state)
+    return metadata
+
+
+def restore_adapter_checkpoint(
+    directory: str | Path,
+    model: Qwen2ForCausalLM,
+    *,
+    model_id: str,
+    corpus: Corpus,
+    target_format: TargetFormat,
+    prompt_contract: PromptContract,
+) -> CheckpointMetadata:
+    """Restore LoRA weights without coupling inference to optimizer structure."""
+    path = Path(directory).resolve()
+    if not path.is_dir():
+        raise FileNotFoundError(f'checkpoint does not exist: {path}')
+
+    raw_metadata = json.loads((path / 'metadata' / 'metadata').read_text())
+    metadata = CheckpointMetadata.from_dict(raw_metadata)
+    _validate_compatibility(
+        metadata,
+        model,
+        model_id=model_id,
+        corpus=corpus,
+        target_format=target_format,
+        prompt_contract=prompt_contract,
+    )
+
+    adapter_state = nnx.state(model, nnx.LoRAParam)
+    target = {'adapters': nnx.to_pure_dict(adapter_state)}
+    with ocp.Checkpointer(ocp.PyTreeCheckpointHandler()) as checkpointer:
+        restored = checkpointer.restore(
+            path / 'state',
+            args=ocp.args.PyTreeRestore(item=target, partial_restore=True),
+        )
+    try:
+        nnx.replace_by_pure_dict(adapter_state, restored['adapters'])
+    except ValueError as error:
+        raise CheckpointError(f'checkpoint state does not match model: {error}') from error
+    nnx.update(model, adapter_state)
     return metadata
 
 

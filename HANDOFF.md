@@ -118,20 +118,32 @@ training/artifacts/pipeline-refine-lr2e6-s200-w4-v1.*.json
 
 ## Next work
 
-The active next phase is full-corpus SFT, not more 4,000-row subset sweeping
-and not preference training yet. Commit and run
-`training/scripts/run_full_corpus_finalists.py` from the user's interactive
-terminal. It advances the tied rank-8 (`alpha=4`, peak LR `2e-4`) and rank-16
+The completed full-corpus SFT phase selected rank 16 step 10,000 at validation
+`0.2664` and rank 8 step 10,000 at `0.2698`. Both degraded after the 11,823-step
+epoch boundary while training loss continued falling, so this is overfitting,
+not an unfinished run. Rank 16's small margin and 89.9% clipping rate do not
+establish a winner. Exact curves are committed in
+`training/experiments/lora-full-corpus-finalists-v1.{json,md}`. The active next
+phase is `training/scripts/run_full_corpus_evaluation.py`: corpus test loss,
+then unchanged release-development and retention gates for both checkpoints.
+It is resumable and must not evaluate pipeline or shadow suites.
+
+The retained step-10,000 checkpoints consumed 20,000 rows (84.6% of the first
+random permutation). The one-epoch early-stopping floor prevented termination,
+not selection of an earlier checkpoint. If behavioral gates are promising,
+follow with an exact-step-11,823 coverage check using a gentler LR tail and two
+shuffle seeds rather than several ordinary extra epochs.
+
+The just-completed phase was full-corpus SFT, not another subset sweep. It used
+`training/scripts/run_full_corpus_finalists.py` and advanced the tied rank-8
+(`alpha=4`, peak LR `2e-4`) and rank-16
 (`alpha=16`, peak LR `5e-5`) recipes across all 23,646 usable training rows.
-Each gets at most two reshuffled epochs (23,646 batch-2 steps total), 500-step
+Each was allowed at most two reshuffled epochs (23,646 batch-2 steps total), 500-step
 warmup plus cosine decay, corpus-validation checks every 1,000 steps with the
 corpus test split untouched, and at least one full epoch before early stopping.
-The trainer retains one actual best checkpoint per
-run and removes superseded generated checkpoints only after the replacement is
-successfully saved. This phase still forbids release, retention, pipeline, and
-shadow evaluation. Use `--resume` to skip a completed finalist; an interrupted
-configuration with retained checkpoint data intentionally requires explicit
-operator handling rather than silently overwriting it.
+The trainer retained one actual best checkpoint per run and removed superseded
+generated checkpoints only after the replacement was successfully saved. That
+phase forbade release, retention, pipeline, and shadow evaluation.
 
 The short rank/alpha/LR optimization screen has now completed all 30 runs.
 Rank 8, `alpha / rank = 1`, learning rate `1e-4` led at held-out loss `0.3371`,

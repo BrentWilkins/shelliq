@@ -23,7 +23,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.evaluate_checkpoint import _generate  # noqa: E402
 from scripts.smoke_finetune import GENERATION_TOKENS, MODEL_ID, select_examples  # noqa: E402
-from shelliq_training.checkpoint import TargetFormat, restore_checkpoint  # noqa: E402
+from shelliq_training.checkpoint import (  # noqa: E402
+    TargetFormat,
+    restore_adapter_checkpoint,
+)
 from shelliq_training.config import Qwen2Config  # noqa: E402
 from shelliq_training.data import (  # noqa: E402
     IGNORE_INDEX,
@@ -43,7 +46,6 @@ from shelliq_training.semantic_evaluation import (  # noqa: E402
     evaluate_semantic_predictions,
     load_grounding_audit,
 )
-from shelliq_training.training import create_lora_optimizer  # noqa: E402
 from shelliq_training.weights import load_hf_state_dict  # noqa: E402
 
 
@@ -165,7 +167,6 @@ def main() -> None:
     weights_path = hf_hub_download(MODEL_ID, 'model.safetensors', local_files_only=True)
     load_hf_state_dict(model, load_file(weights_path), param_dtype=jnp.bfloat16)
     inject_lora(model, rank=args.rank, alpha=args.alpha, rngs=nnx.Rngs(1))
-    optimizer = create_lora_optimizer(model)
 
     baseline_predictions, baseline_texts = _generate(
         model,
@@ -175,10 +176,9 @@ def main() -> None:
         sequence_length=args.sequence_length,
         label='base evaluation',
     )
-    metadata = restore_checkpoint(
+    metadata = restore_adapter_checkpoint(
         args.checkpoint,
         model,
-        optimizer,
         model_id=MODEL_ID,
         corpus=Corpus.DISTRIBUTABLE,
         target_format=TargetFormat.SEMANTIC_DOCUMENT_V2,

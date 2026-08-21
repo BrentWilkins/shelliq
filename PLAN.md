@@ -686,19 +686,27 @@ do not consult release, retention, pipeline, or shadow evaluations. Repeat only
 the finalists across seeds, then retrain the selected best-step recipe with a
 checkpoint for behavioral gates.
 
-**Full-corpus finalist phase.** The short convergence curves are diagnostic,
-not final training: their 4,000-row subset is only part of the 30,412-row
-expanded corpus. Advance rank 8 (`alpha=4`, peak LR `2e-4`) and rank 16
-(`alpha=16`, peak LR `5e-5`) to `run_full_corpus_finalists.py`. The fixed split
-contains 23,646 usable training rows, or 11,823 batch-2 steps per epoch. Permit
-two epochs, reshuffle deterministically between epochs, warm up for 500 steps,
-then cosine-decay to 10% of peak LR. Use the corpus validation split every
-1,000 steps while preserving the corpus test split, require at least one
-complete epoch before early stopping, and retain only the lowest-validation-
-loss checkpoint for each finalist. Select between these SFT finalists before adding
-rejection-sampling or preference data; otherwise data and optimization
-improvements are confounded. Do not invoke behavioral holdouts during this
-phase.
+**Full-corpus finalist result (2026-08-20).** Rank 16 (`alpha=16`, peak LR
+`5e-5`) selected step 10,000 at validation loss `0.2664`; rank 8 (`alpha=4`,
+peak LR `2e-4`) also selected step 10,000 at `0.2698`. Rank 16's margin is only
+`0.00336` (about 1.25% relative). Both worsened after the 11,823-step epoch
+boundary while training loss kept falling: at early stop step 15,000, rank 16
+was train/validation `0.1392/0.2841` and rank 8 was `0.1341/0.2832`. This is
+overfitting, not incomplete convergence. Rank 16 clipped 89.9% of updates versus
+28.0% for rank 8, so validation loss alone does not promote it. Exact curves
+are committed in `training/experiments/lora-full-corpus-finalists-v1.{json,md}`.
+Next run `run_full_corpus_evaluation.py`: compare both retained checkpoints on
+the corpus test split, then unchanged release-development and retention gates.
+The runner must not consult pipeline or shadow suites. Select between these SFT
+finalists before adding rejection-sampling or preference data; otherwise data
+and optimization improvements are confounded.
+
+The retained step-10,000 checkpoints had consumed 20,000 rows, 84.6% of the
+first deterministic random permutation. The minimum-epoch setting constrained
+termination, not checkpoint eligibility. If behavioral gates justify more SFT
+optimization, run a narrow coverage check with evaluation exactly at step
+11,823, a gentler LR tail, and two shuffle seeds; do not default to several more
+ordinary epochs after validation has already turned upward.
 
 **Second experiment: verifier-backed data and preferences on 0.5B.** For each prompt,
 sample several semantic documents and score properties that generalize across
