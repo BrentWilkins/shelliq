@@ -1,5 +1,6 @@
 import jax
 import jax.numpy as jnp
+import pytest
 from flax import nnx
 
 from shelliq_training.config import Qwen2Config
@@ -11,6 +12,7 @@ from shelliq_training.training import (
     next_token_loss,
     train_step,
     train_step_with_gradient_norm,
+    warmup_cosine_schedule,
 )
 
 
@@ -107,3 +109,16 @@ def test_diagnostic_train_step_reports_finite_preclip_gradient_norm():
     assert bool(jnp.isfinite(loss))
     assert bool(jnp.isfinite(gradient_norm))
     assert float(gradient_norm) > 0
+
+
+def test_warmup_cosine_schedule_reaches_peak_and_end_values():
+    schedule = warmup_cosine_schedule(
+        peak_learning_rate=1e-4,
+        total_steps=100,
+        warmup_steps=10,
+        end_learning_rate=1e-5,
+    )
+
+    assert float(schedule(0)) == 0.0
+    assert float(schedule(10)) == pytest.approx(1e-4)
+    assert float(schedule(100)) == pytest.approx(1e-5)

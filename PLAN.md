@@ -686,6 +686,20 @@ do not consult release, retention, pipeline, or shadow evaluations. Repeat only
 the finalists across seeds, then retrain the selected best-step recipe with a
 checkpoint for behavioral gates.
 
+**Full-corpus finalist phase.** The short convergence curves are diagnostic,
+not final training: their 4,000-row subset is only part of the 30,412-row
+expanded corpus. Advance rank 8 (`alpha=4`, peak LR `2e-4`) and rank 16
+(`alpha=16`, peak LR `5e-5`) to `run_full_corpus_finalists.py`. The fixed split
+contains 23,646 usable training rows, or 11,823 batch-2 steps per epoch. Permit
+two epochs, reshuffle deterministically between epochs, warm up for 500 steps,
+then cosine-decay to 10% of peak LR. Use the corpus validation split every
+1,000 steps while preserving the corpus test split, require at least one
+complete epoch before early stopping, and retain only the lowest-validation-
+loss checkpoint for each finalist. Select between these SFT finalists before adding
+rejection-sampling or preference data; otherwise data and optimization
+improvements are confounded. Do not invoke behavioral holdouts during this
+phase.
+
 **Second experiment: verifier-backed data and preferences on 0.5B.** For each prompt,
 sample several semantic documents and score properties that generalize across
 commands: schema/envelope validity, AST lowering, indexed command/flag facts,

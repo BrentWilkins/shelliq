@@ -10,10 +10,11 @@ import argparse
 import hashlib
 import json
 import math
+import shutil
 import sys
 import time
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -53,6 +54,7 @@ from shelliq_training.training import (
     eval_step,
     train_step,
     train_step_with_gradient_norm,
+    warmup_cosine_schedule,
 )
 from shelliq_training.tuning import EarlyStoppingTracker, LossObservation, best_observation
 from shelliq_training.weights import load_hf_state_dict
@@ -68,19 +70,30 @@ def parse_args() -> argparse.Namespace:
     dataset.add_argument('--semantic-dataset', type=Path)
     parser.add_argument('--sequence-length', type=int, default=128)
     parser.add_argument('--train-examples', type=int, default=4)
+    parser.add_argument('--all-train-examples', action='store_true')
     parser.add_argument('--eval-examples', type=int, default=4)
+    parser.add_argument('--eval-split', type=Split, choices=Split, default=Split.TEST)
+    parser.add_argument('--train-loss-eval-examples', type=int, default=0)
     parser.add_argument('--batch-size', type=int, default=2)
     parser.add_argument('--steps', type=int, default=80)
+    parser.add_argument('--epochs', type=int)
     parser.add_argument('--learning-rate', type=float, default=1e-3)
+    parser.add_argument('--lr-schedule', choices=('constant', 'warmup-cosine'), default='constant')
+    parser.add_argument('--warmup-steps', type=int, default=0)
+    parser.add_argument('--end-learning-rate', type=float, default=0.0)
     parser.add_argument('--eval-interval', type=int, default=0)
     parser.add_argument('--early-stopping-patience', type=int, default=0)
     parser.add_argument('--early-stopping-min-delta', type=float, default=0.0)
+    parser.add_argument('--early-stopping-min-epochs', type=float, default=0.0)
     parser.add_argument('--max-grad-norm', type=float, default=1.0)
     parser.add_argument('--gradient-diagnostics', action='store_true')
+    parser.add_argument('--shuffle-each-epoch', action='store_true')
     parser.add_argument('--rank', type=int, default=16)
     parser.add_argument('--alpha', type=float, default=32.0)
     parser.add_argument('--seed', type=int, default=2026)
+    parser.add_argument('--split-seed', type=int)
     parser.add_argument('--checkpoint', type=Path)
+    parser.add_argument('--best-checkpoint-root', type=Path)
     parser.add_argument('--resume-checkpoint', type=Path)
     parser.add_argument('--report', type=Path)
     parser.add_argument('--heldout-probe', action='store_true')
@@ -154,6 +167,37 @@ def select_examples(
         add_record(record, require_new_command=True)
     if len(examples) < count:
         raise ValueError(f'only found {len(examples)} usable examples; requested {count}')
+    return selected_records, examples
+
+
+def select_all_examples(
+    records: Sequence[SFTRecord],
+    tokenizer: object,
+    *,
+    max_length: int,
+    seed: int,
+    prompt_contract: PromptContract = PromptContract.LEGACY_USER_V1,
+) -> tuple[list[SFTRecord], list[TokenizedExample]]:
+    """Tokenize every usable row in deterministic order without command deduplication."""
+    selected_records = []
+    examples = []
+    for record in _ordered_records(records, seed):
+        try:
+            example = tokenize_record(
+                record,
+                tokenizer,  # type: ignore[arg-type]
+                max_length=max_length,
+                prompt_contract=prompt_contract,
+            )
+        except SequenceTooLongError:
+            continue
+        prompt_length = next(index for index, label in enumerate(example.labels) if label != IGNORE_INDEX)
+        if prompt_length + GENERATION_TOKENS > max_length:
+            continue
+        selected_records.append(record)
+        examples.append(example)
+    if not examples:
+        raise ValueError('no usable training examples found')
     return selected_records, examples
 
 
@@ -311,14 +355,34 @@ def main() -> None:
         raise SystemExit(f'--sequence-length must exceed {GENERATION_TOKENS + 1}')
     if args.steps <= 0:
         raise SystemExit('--steps must be positive')
+    if args.batch_size <= 0:
+        raise SystemExit('--batch-size must be positive')
+    if args.train_loss_eval_examples < 0:
+        raise SystemExit('--train-loss-eval-examples must be non-negative')
+    if args.train_loss_eval_examples % args.batch_size:
+        raise SystemExit('--train-loss-eval-examples must be divisible by batch size')
+    if args.epochs is not None and args.epochs <= 0:
+        raise SystemExit('--epochs must be positive')
+    if args.warmup_steps < 0:
+        raise SystemExit('--warmup-steps must be non-negative')
+    if not math.isfinite(args.end_learning_rate) or args.end_learning_rate < 0:
+        raise SystemExit('--end-learning-rate must be finite and non-negative')
+    if args.lr_schedule == 'constant' and (args.warmup_steps or args.end_learning_rate):
+        raise SystemExit('warmup/end learning rates require --lr-schedule warmup-cosine')
     if args.eval_interval < 0:
         raise SystemExit('--eval-interval must be non-negative')
     if args.early_stopping_patience < 0:
         raise SystemExit('--early-stopping-patience must be non-negative')
     if args.early_stopping_patience and not args.eval_interval:
         raise SystemExit('--early-stopping-patience requires --eval-interval')
+    if args.best_checkpoint_root is not None and not args.eval_interval:
+        raise SystemExit('--best-checkpoint-root requires --eval-interval')
+    if args.best_checkpoint_root is not None and args.best_checkpoint_root.exists():
+        raise SystemExit(f'best-checkpoint root already exists: {args.best_checkpoint_root}')
     if not math.isfinite(args.early_stopping_min_delta) or args.early_stopping_min_delta < 0:
         raise SystemExit('--early-stopping-min-delta must be finite and non-negative')
+    if not math.isfinite(args.early_stopping_min_epochs) or args.early_stopping_min_epochs < 0:
+        raise SystemExit('--early-stopping-min-epochs must be finite and non-negative')
     if not math.isfinite(args.max_grad_norm) or args.max_grad_norm <= 0:
         raise SystemExit('--max-grad-norm must be finite and positive')
     if args.rank <= 0:
@@ -345,17 +409,27 @@ def main() -> None:
         default_prompt_contract = PromptContract.LEGACY_USER_V1
     prompt_contract = args.prompt_contract or default_prompt_contract
     total_records = len(clean_records) + len(rejected)
-    splits = split_records(clean_records, corpus=Corpus.DISTRIBUTABLE, seed=args.seed)
+    split_seed = args.seed if args.split_seed is None else args.split_seed
+    splits = split_records(clean_records, corpus=Corpus.DISTRIBUTABLE, seed=split_seed)
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, local_files_only=True)
-    train_records, train_examples = select_examples(
-        splits[Split.TRAIN],
-        tokenizer,
-        count=args.train_examples,
-        max_length=args.sequence_length,
-        seed=args.seed,
-        priority_source=args.priority_source,
-        prompt_contract=prompt_contract,
-    )
+    if args.all_train_examples:
+        train_records, train_examples = select_all_examples(
+            splits[Split.TRAIN],
+            tokenizer,
+            max_length=args.sequence_length,
+            seed=args.seed,
+            prompt_contract=prompt_contract,
+        )
+    else:
+        train_records, train_examples = select_examples(
+            splits[Split.TRAIN],
+            tokenizer,
+            count=args.train_examples,
+            max_length=args.sequence_length,
+            seed=args.seed,
+            priority_source=args.priority_source,
+            prompt_contract=prompt_contract,
+        )
     unique_train_records = train_records
     train_records, train_examples = apply_rehearsal_weight(
         train_records,
@@ -364,12 +438,16 @@ def main() -> None:
         weight=args.rehearsal_weight,
         seed=args.seed,
     )
+    if args.all_train_examples:
+        usable_count = len(train_examples) - (len(train_examples) % args.batch_size)
+        train_records = train_records[:usable_count]
+        train_examples = train_examples[:usable_count]
     eval_records, eval_examples = select_examples(
-        splits[Split.TEST],
+        splits[args.eval_split],
         tokenizer,
         count=args.eval_examples,
         max_length=args.sequence_length,
-        seed=args.seed + 1,
+        seed=split_seed + 1,
         priority_source=args.priority_source,
         prompt_contract=prompt_contract,
     )
@@ -386,6 +464,16 @@ def main() -> None:
         sequence_length=args.sequence_length,
         pad_token_id=pad_id,
     )
+    train_loss_batches = train_batches
+    if args.train_loss_eval_examples:
+        train_loss_batch_count = args.train_loss_eval_examples // args.batch_size
+        train_loss_batches = train_batches[:train_loss_batch_count]
+        if len(train_loss_batches) != train_loss_batch_count:
+            raise SystemExit('--train-loss-eval-examples exceeds selected training examples')
+    total_steps = args.steps if args.epochs is None else args.epochs * len(train_batches)
+    early_stopping_min_steps = math.ceil(args.early_stopping_min_epochs * len(train_batches))
+    if args.warmup_steps >= total_steps:
+        raise SystemExit('--warmup-steps must be less than total training steps')
 
     print(
         f'corpus: {total_records:,} records; automated preflight accepted {len(clean_records):,}, '
@@ -403,9 +491,17 @@ def main() -> None:
     weights_path = hf_hub_download(MODEL_ID, 'model.safetensors', local_files_only=True)
     load_hf_state_dict(model, load_file(weights_path), param_dtype=jnp.bfloat16)
     inject_lora(model, rank=args.rank, alpha=args.alpha, rngs=nnx.Rngs(1))
+    learning_rate: float | Callable[[jax.Array], jax.Array] = args.learning_rate
+    if args.lr_schedule == 'warmup-cosine':
+        learning_rate = warmup_cosine_schedule(
+            peak_learning_rate=args.learning_rate,
+            total_steps=total_steps,
+            warmup_steps=args.warmup_steps,
+            end_learning_rate=args.end_learning_rate,
+        )
     optimizer = create_lora_optimizer(
         model,
-        learning_rate=args.learning_rate,
+        learning_rate=learning_rate,
         max_grad_norm=args.max_grad_norm,
     )
     resumed_metadata = None
@@ -423,7 +519,7 @@ def main() -> None:
     print(f'parameters: {parameter_count(model, nnx.Param):,} total; {parameter_count(model, nnx.LoRAParam):,} trainable LoRA')
 
     started = time.perf_counter()
-    initial_train_loss = mean_loss(model, train_batches)
+    initial_train_loss = mean_loss(model, train_loss_batches)
     initial_eval_loss = mean_loss(model, eval_batches)
     baseline_generation = greedy_completion(
         model,
@@ -444,7 +540,7 @@ def main() -> None:
     if baseline_heldout_generation is not None:
         _print_generation('heldout-before', eval_records[0], baseline_heldout_generation)
 
-    report_every = max(args.steps // 4, 1)
+    report_every = max(total_steps // 4, 1)
     show_progress = interactive_progress()
     observations: list[LossObservation] = []
     early_stopping = None
@@ -470,14 +566,21 @@ def main() -> None:
     stopped_early = False
     interval_loss_sum = 0.0
     interval_loss_steps = 0
+    best_checkpoint: Path | None = None
+    batch_orders: list[np.ndarray] = []
+    if args.shuffle_each_epoch:
+        epoch_count = math.ceil(total_steps / len(train_batches))
+        batch_orders = [np.random.default_rng(args.seed + epoch).permutation(len(train_batches)) for epoch in range(epoch_count)]
     with training_progress() as progress:
         task = progress.add_task(
             f'rank {args.rank} training',
-            total=args.steps,
+            total=total_steps,
             loss='—',
         )
-        for step in range(args.steps):
-            batch = train_batches[step % len(train_batches)]
+        for step in range(total_steps):
+            epoch, offset = divmod(step, len(train_batches))
+            batch_index = int(batch_orders[epoch][offset]) if batch_orders else offset
+            batch = train_batches[batch_index]
             if args.gradient_diagnostics:
                 loss, gradient_norm = train_step_with_gradient_norm(model, optimizer, batch)
                 gradient_norm_value = float(np.asarray(gradient_norm))
@@ -491,9 +594,9 @@ def main() -> None:
             interval_loss_sum += loss_value
             interval_loss_steps += 1
             progress.update(task, advance=1, loss=f'{loss_value:.4f}')
-            if not show_progress and (step == 0 or (step + 1) % report_every == 0 or step + 1 == args.steps):
-                print(f'step {step + 1}/{args.steps}: loss={loss_value:.4f}')
-            should_evaluate = args.eval_interval and (completed_steps % args.eval_interval == 0 or completed_steps == args.steps)
+            if not show_progress and (step == 0 or (step + 1) % report_every == 0 or step + 1 == total_steps):
+                print(f'step {step + 1}/{total_steps}: loss={loss_value:.4f}')
+            should_evaluate = args.eval_interval and (completed_steps % args.eval_interval == 0 or completed_steps == total_steps)
             if should_evaluate:
                 heldout_loss = mean_loss(model, eval_batches)
                 observation = LossObservation(
@@ -502,17 +605,35 @@ def main() -> None:
                     train_loss=interval_loss_sum / interval_loss_steps,
                     heldout_loss=heldout_loss,
                 )
+                is_new_best = observation.heldout_loss < min(previous.heldout_loss for previous in observations)
                 observations.append(observation)
                 interval_loss_sum = 0.0
                 interval_loss_steps = 0
                 progress.console.print(f'validation step {completed_steps}: heldout={heldout_loss:.4f}')
-                if early_stopping is not None and early_stopping.observe(observation):
+                if is_new_best and args.best_checkpoint_root is not None:
+                    checkpoint_path = args.best_checkpoint_root / f'step-{completed_steps:08d}'
+                    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+                    save_checkpoint(
+                        checkpoint_path,
+                        model,
+                        optimizer,
+                        model_id=MODEL_ID,
+                        corpus=Corpus.DISTRIBUTABLE,
+                        target_format=target_format,
+                        prompt_contract=prompt_contract,
+                    )
+                    if best_checkpoint is not None:
+                        shutil.rmtree(best_checkpoint)
+                    best_checkpoint = checkpoint_path
+                    progress.console.print(f'best checkpoint: {best_checkpoint}')
+                should_stop = early_stopping is not None and early_stopping.observe(observation)
+                if should_stop and completed_steps >= early_stopping_min_steps and completed_steps < total_steps:
                     stopped_early = True
                     progress.console.print(f'early stop at step {completed_steps}; best step {early_stopping.best.step}')
                     progress.update(task, total=completed_steps, completed=completed_steps)
                     break
 
-    final_train_loss = mean_loss(model, train_batches)
+    final_train_loss = mean_loss(model, train_loss_batches)
     final_eval_loss = mean_loss(model, eval_batches)
     trained_generation = greedy_completion(
         model,
@@ -552,7 +673,7 @@ def main() -> None:
     best_loss_observation = best_observation(observations) if observations else None
     if args.report is not None:
         report = {
-            'report_schema_version': 2,
+            'report_schema_version': 3,
             'model_id': MODEL_ID,
             'adapter': {
                 'rank': args.rank,
@@ -575,6 +696,7 @@ def main() -> None:
             },
             'selection': {
                 'seed': args.seed,
+                'split_seed': split_seed,
                 'priority_source': args.priority_source,
                 'train_examples': len(unique_train_records),
                 'train_record_ids_sha256': _record_id_sha256(unique_train_records),
@@ -589,6 +711,7 @@ def main() -> None:
                 'rehearsal_record_prefix': args.rehearsal_record_prefix,
                 'rehearsal_weight': args.rehearsal_weight,
                 'eval_examples': len(eval_records),
+                'eval_split': args.eval_split.value,
                 'eval_record_ids_sha256': _record_id_sha256(eval_records),
                 'eval_source_counts': dict(Counter(record.source for record in eval_records)),
             },
@@ -598,16 +721,24 @@ def main() -> None:
                 'sequence_length': args.sequence_length,
                 'batch_size': args.batch_size,
                 'steps': completed_steps,
-                'max_steps': args.steps,
+                'max_steps': total_steps,
+                'epochs': args.epochs,
+                'all_train_examples': args.all_train_examples,
+                'shuffle_each_epoch': args.shuffle_each_epoch,
                 'stopped_early': stopped_early,
                 'generation_tokens': GENERATION_TOKENS,
                 'learning_rate': args.learning_rate,
+                'lr_schedule': args.lr_schedule,
+                'warmup_steps': args.warmup_steps,
+                'end_learning_rate': args.end_learning_rate,
                 'eval_interval': args.eval_interval,
                 'early_stopping_patience': args.early_stopping_patience,
                 'early_stopping_min_delta': args.early_stopping_min_delta,
+                'early_stopping_min_epochs': args.early_stopping_min_epochs,
                 'max_grad_norm': args.max_grad_norm,
                 'initial_train_loss': initial_train_loss,
                 'final_train_loss': final_train_loss,
+                'train_loss_eval_examples': len(train_loss_batches) * args.batch_size,
                 'initial_heldout_loss': initial_eval_loss,
                 'final_heldout_loss': final_eval_loss,
                 'loss_observations': [
@@ -627,6 +758,7 @@ def main() -> None:
                     'train_loss': best_loss_observation.train_loss,
                     'heldout_loss': best_loss_observation.heldout_loss,
                 },
+                'best_checkpoint': None if best_checkpoint is None else str(best_checkpoint),
                 'gradient_diagnostics': None
                 if not args.gradient_diagnostics
                 else {

@@ -1,3 +1,5 @@
+import math
+from collections.abc import Callable
 from typing import TypedDict
 
 import jax
@@ -53,7 +55,7 @@ def eval_step(model: Qwen2ForCausalLM, batch: CausalLMBatch) -> jax.Array:
 def create_lora_optimizer(
     model: Qwen2ForCausalLM,
     *,
-    learning_rate: float = 2e-4,
+    learning_rate: float | Callable[[jax.Array], jax.Array] = 2e-4,
     weight_decay: float = 0.0,
     max_grad_norm: float = 1.0,
 ) -> nnx.Optimizer:
@@ -62,6 +64,36 @@ def create_lora_optimizer(
         optax.adamw(learning_rate, weight_decay=weight_decay),
     )
     return nnx.Optimizer(model, transform, wrt=nnx.LoRAParam)
+
+
+def warmup_cosine_schedule(
+    *,
+    peak_learning_rate: float,
+    total_steps: int,
+    warmup_steps: int,
+    end_learning_rate: float,
+) -> Callable[[jax.Array], jax.Array]:
+    """Create a bounded warmup/cosine schedule for a complete training run."""
+    if total_steps <= 0:
+        raise ValueError('total steps must be positive')
+    if warmup_steps < 0 or warmup_steps >= total_steps:
+        raise ValueError('warmup steps must be non-negative and less than total steps')
+    if (
+        not math.isfinite(peak_learning_rate)
+        or not math.isfinite(end_learning_rate)
+        or peak_learning_rate <= 0
+        or end_learning_rate < 0
+    ):
+        raise ValueError('learning rates must be non-negative and peak must be positive')
+    if end_learning_rate > peak_learning_rate:
+        raise ValueError('end learning rate cannot exceed peak learning rate')
+    return optax.warmup_cosine_decay_schedule(
+        init_value=0.0,
+        peak_value=peak_learning_rate,
+        warmup_steps=warmup_steps,
+        decay_steps=total_steps,
+        end_value=end_learning_rate,
+    )
 
 
 @nnx.jit

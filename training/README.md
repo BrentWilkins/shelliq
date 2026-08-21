@@ -677,6 +677,23 @@ This screen writes compact reports rather than adapter checkpoints and never
 uses the release, retention, pipeline, or shadow evaluations. Retrain and save
 only the recipe selected from its learning curves.
 
+The full-corpus finalist phase trains rank 8 (`alpha=4`, peak LR `2e-4`) and
+rank 16 (`alpha=16`, peak LR `5e-5`) on all 23,646 usable training-split rows.
+Each run gets at most two deterministically reshuffled epochs (11,823 steps per
+epoch), uses 500-step warmup followed by cosine decay to 10% of peak LR, and
+cannot early-stop before completing one epoch. The corpus validation split is
+checked every 1,000 steps, the corpus test split remains untouched, and only
+the lowest-validation-loss checkpoint is retained:
+
+```sh
+uv run --frozen python scripts/run_full_corpus_finalists.py
+uv run --frozen python scripts/run_full_corpus_finalists.py --execute
+uv run --frozen python scripts/run_full_corpus_finalists.py --execute --resume
+```
+
+This remains an SFT optimization comparison. Its manifest prohibits release,
+retention, pipeline, and shadow evaluation until one recipe is selected.
+
 The reviewed chosen/rejected data contract and verifier lifecycle for the next
 training phase are specified in [`PREFERENCE_DATA.md`](PREFERENCE_DATA.md).
 `shelliq_training.preference_data` provides the strict initial loader; it does
