@@ -73,6 +73,22 @@ def _ids_sha256(record_ids: list[str]) -> str:
     return hashlib.sha256('\n'.join(record_ids).encode()).hexdigest()
 
 
+def load_evaluation_split(
+    path: Path,
+    *,
+    split: Split,
+    split_seed: int,
+):
+    """Load and split semantic records through the semantic loader contract."""
+    clean_records, rejected = automatic_preflight(load_semantic_jsonl(path))
+    splits = split_records(
+        clean_records,
+        corpus=Corpus.DISTRIBUTABLE,
+        seed=split_seed,
+    )
+    return splits[split], rejected
+
+
 def main() -> None:
     args = parse_args()
     if args.output.exists():
@@ -84,11 +100,14 @@ def main() -> None:
     if args.batch_size <= 0:
         raise SystemExit('--batch-size must be positive')
 
-    clean_records, rejected = automatic_preflight(load_semantic_jsonl(args.semantic_dataset, corpus=Corpus.DISTRIBUTABLE))
-    splits = split_records(clean_records, corpus=Corpus.DISTRIBUTABLE, seed=args.split_seed)
+    split_records_for_evaluation, rejected = load_evaluation_split(
+        args.semantic_dataset,
+        split=args.split,
+        split_seed=args.split_seed,
+    )
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, local_files_only=True)
     records, examples = select_all_examples(
-        splits[args.split],
+        split_records_for_evaluation,
         tokenizer,
         max_length=args.sequence_length,
         seed=args.seed,
