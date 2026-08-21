@@ -1,0 +1,25 @@
+{
+  "excluded": 32,
+  "exclusion_reasons": {
+    "ambiguous-requirement": 2,
+    "task-equivalent": 24,
+    "underspecified-operands": 6
+  },
+  "failure_modes": {
+    "changed-operand": 3,
+    "extra-flag": 4,
+    "invented-operand": 1,
+    "missing-flag": 7,
+    "missing-operand": 5,
+    "wrong-command": 2,
+    "wrong-flag": 2,
+    "wrong-option-binding": 5,
+    "wrong-option-value": 4,
+    "wrong-ordering": 1,
+    "wrong-pipeline": 8,
+    "wrong-subcommand": 1
+  },
+  "included": 32,
+  "reviewed": 64,
+  "schema_version": 1
+}

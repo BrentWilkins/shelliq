@@ -1,5 +1,33 @@
 # Verified teacher and contrastive data plan
 
+## 2026-08-21 implementation checkpoint
+
+The first end-to-end pilot is complete. A balanced 128-case rank-8 failure
+pool produced 64 structurally valid, correct-command near misses. Manual review
+accepted 32 preference pairs and rejected 32: 24 task-equivalent, 6 dependent
+on hidden or underspecified operands, and 2 ambiguous. The accepted corpus is
+`corpus/reviewed-preference-v1.jsonl`; the complete audit ledger is
+`reviews/student-failure-v2.decisions.jsonl`.
+
+The local Qwen teacher cascade was useful diagnostically but is not training
+data. Generic corpus prompts often omit concrete sample operands present in the
+reviewed target, so asking a teacher to recreate the exact target tests hidden-
+operand guessing. Future teachers should either adjudicate supplied
+chosen/rejected answers or author the grounded instruction/context/answer trio
+together.
+
+A matched 75-step pilot compared chosen-answer SFT plus replay against cached-
+reference DPO plus the same replay. DPO preserved existing release and
+retention metrics but made no release improvement and added one wrong-command
+regression. It fit training preferences without improving the seven held-out
+command families. Chosen-only SFT catastrophically overfit. Exact results and
+the stop decision are in `experiments/preference-pilot-v1.md`.
+
+Next: expand diverse reviewed rank-8 failures before tuning the optimizer. Do
+not sweep beta, learning rate, or epochs against the current 32 pairs. Keep the
+same SFT control, cached-reference DPO, curated replay, command-family split,
+development release, and retention comparison when the corpus is larger.
+
 ## Why this is the next phase
 
 The full-corpus rank-8 checkpoint is the best supervised starting point, but it

@@ -42,6 +42,7 @@ medium or high.
 
 The disagreement review also identified verifier work. `git clean -n -d -x` and
 `git clean -ndx`, or `df -i -h` and `df -ih`, should compare as equivalent option
-sequences. Quote-only differences around a regex word can also preserve the same
-rendered shell command. These normalizations must be explicit and tested; never
-repair malformed teacher JSON after generation.
+sequences. Quote normalization is safe only for words without shell
+metacharacters: unquoted `python.*server.py` can glob-expand in zsh and is a real
+failure. These rules must be explicit and tested; never repair malformed teacher
+JSON after generation.

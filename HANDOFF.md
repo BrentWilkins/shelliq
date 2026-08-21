@@ -1,5 +1,27 @@
 # Current development handoff
 
+## Current checkpoint — 2026-08-21 preference pilot
+
+Verifier-backed preference plumbing is implemented. The first manually
+reviewed corpus contains 32 accepted rank-8 near-miss pairs from 64 candidates;
+the other half were excluded rather than teaching arbitrary operands or
+equivalent spellings. See `training/experiments/preference-pilot-v1.md` and
+`training/VERIFIED_TEACHER_DATA.md`.
+
+The matched pilot used the rank-8 step-10,000 baseline, cached reference scores
+(no second resident model), 128-example curated replay, 25 command-family-
+disjoint train pairs, and 7 validation pairs. DPO exactly retained 14/20 flag
+and 10/20 grounded retention, but did not improve release (12/35 flags, 10/35
+grounded) and introduced one `readlink-canonical` wrong-command regression.
+Chosen-answer SFT collapsed behavior and is rejected. The shadow suite was not
+evaluated and nothing is promotable.
+
+Do not tune DPO hyperparameters on 32 pairs. The next task is expanding and
+manually reviewing diverse rank-8 near misses, then repeating the same matched
+SFT/DPO control. The Qwen generation cascade is diagnostic only: exact-match
+failures largely reflect generic prompts with hidden concrete target operands.
+Use teachers to adjudicate supplied pairs or author fully grounded triples.
+
 Updated 2026-08-20.
 
 ## Current goal

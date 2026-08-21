@@ -1,0 +1,64 @@
+{"record_id":"curated:git-workflows:linux:log-not-in-main","decision":"include","failure_modes":["wrong-command"],"evidence":"The rejected response rebases history instead of inspecting commits absent from main."}
+{"record_id":"curated:pipelines:linux:strings-binary-search","decision":"exclude","reason":"underspecified-operands"}
+{"record_id":"curated:modern-tools:linux:systemctl-failed","decision":"include","failure_modes":["extra-flag"],"evidence":"The rejected --user flag restricts results to the per-user manager instead of all system units requested."}
+{"record_id":"curated:modern-tools:linux:pnpm-filter-build","decision":"exclude","reason":"underspecified-operands"}
+{"record_id":"curated:zsh-native:linux:glob-null-safe","decision":"include","failure_modes":["missing-flag"],"evidence":"The rejected glob lacks zsh's N qualifier, so no matches cause expansion failure rather than a harmless no-op."}
+{"record_id":"curated:safety:linux:chown-no-dereference","decision":"exclude","reason":"underspecified-operands"}
+{"record_id":"curated:files-and-processes:linux:ps-sort-memory","decision":"include","failure_modes":["wrong-option-value"],"evidence":"The rejected response sorts by percentage rather than resident bytes and requests ten lines including the header, yielding only nine processes."}
+{"record_id":"curated:networking:linux:dig-reverse-lookup","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:dev-toolchains:linux:python-unbuffered","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:networking:linux:ssh-run-remote-command","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:flag-case-pitfalls:darwin:curl-output-file","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:git-workflows:linux:rebase-onto","decision":"include","failure_modes":["wrong-ordering","changed-operand"],"evidence":"The rejected revision ordering does not transplant feature commits after old-base onto main."}
+{"record_id":"curated:git-workflows:darwin:log-search-content","decision":"exclude","reason":"underspecified-operands"}
+{"record_id":"curated:zsh-native:linux:glob-executable-files","decision":"include","failure_modes":["missing-flag"],"evidence":"The rejected glob omits the regular-file qualifier and can include executable directories."}
+{"record_id":"curated:dev-toolchains:darwin:brew-uses-dependents","decision":"include","failure_modes":["wrong-subcommand"],"evidence":"The rejected response does not use brew uses --installed and therefore does not answer which installed formulae depend on the target."}
+{"record_id":"curated:pipelines:linux:ps-sort-memory","decision":"include","failure_modes":["wrong-pipeline"],"evidence":"The rejected plain numeric sort orders whole ps lines by their leading PID rather than sorting the RSS field."}
+{"record_id":"curated:gnu-vs-bsd:darwin:ls-color","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:gnu-vs-bsd:darwin:sed-in-place","decision":"include","failure_modes":["wrong-option-binding"],"evidence":"BSD sed requires the explicit empty backup suffix after -i; the rejected form consumes the program as that suffix."}
+{"record_id":"curated:networking:linux:curl-unix-socket","decision":"exclude","reason":"underspecified-operands"}
+{"record_id":"curated:networking:linux:ssh-config-alias","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:files-and-processes:linux:mount-show-options","decision":"include","failure_modes":["missing-operand","wrong-option-binding"],"evidence":"The rejected findmnt invocation omits both the OPTIONS column argument and the mount target."}
+{"record_id":"curated:text-processing:linux:awk-print-range","decision":"include","failure_modes":["wrong-option-value"],"evidence":"The rejected fixed record-number test does not print an inclusive marker-delimited range or re-arm for later ranges."}
+{"record_id":"curated:zsh-native:darwin:glob-regular-files","decision":"include","failure_modes":["changed-operand"],"evidence":"The rejected *.txt pattern filters by suffix and does not enforce that every result is a regular file."}
+{"record_id":"curated:modern-tools:linux:kubectl-exec-shell","decision":"exclude","reason":"underspecified-operands"}
+{"record_id":"curated:safety:linux:env-file-permissions","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:files-and-processes:linux:strace-open-files","decision":"include","failure_modes":["wrong-option-binding","invented-operand"],"evidence":"The rejected response repeats -o so operands are consumed as output paths and does not form a valid traced program invocation."}
+{"record_id":"curated:text-processing:linux:tail-from-line","decision":"exclude","reason":"ambiguous-requirement"}
+{"record_id":"curated:git-workflows:linux:rebase-autostash","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:observability:linux:perf-report-stdio","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:safety:linux:rm-no-preserve-root-warning","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:text-processing:linux:paste-join-lines","decision":"include","failure_modes":["extra-flag","missing-operand"],"evidence":"The rejected paste invocation invents unsupported flags and omits the input file whose lines must be joined."}
+{"record_id":"curated:text-processing:linux:sort-ignore-case","decision":"include","failure_modes":["extra-flag"],"evidence":"The rejected -d option discards punctuation from comparison, changing ordering beyond the requested case folding."}
+{"record_id":"curated:safety:darwin:diskutil-list","decision":"include","failure_modes":["wrong-pipeline"],"evidence":"The rejected response pipes device information into dd and writes an image when the task only asks to inspect devices."}
+{"record_id":"curated:git-workflows:linux:archive-export","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:networking:linux:ping-count-timeout","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:safety:linux:kubectl-server-dry-run","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:dev-toolchains:linux:pytest-select-keyword","decision":"include","failure_modes":["missing-operand"],"evidence":"The rejected -k option has no keyword expression and cannot select matching test names."}
+{"record_id":"curated:dev-toolchains:linux:go-mod-why","decision":"include","failure_modes":["missing-flag"],"evidence":"The rejected response omits -m, so go mod why interprets its operand as a package rather than answering why a module is required."}
+{"record_id":"curated:text-processing:linux:sort-stable","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:text-processing:linux:sed-append-after-match","decision":"include","failure_modes":["wrong-flag","changed-operand"],"evidence":"The rejected substitution replaces unrelated text instead of appending a line after each matching marker."}
+{"record_id":"curated:gnu-vs-bsd:darwin:md5","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:dev-toolchains:linux:go-test-coverage","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:observability:linux:journal-kernel-current-boot","decision":"include","failure_modes":["missing-operand"],"evidence":"The rejected -p option lacks its required priority operand, making the command invalid."}
+{"record_id":"curated:pipelines:linux:yes-autoconfirm","decision":"include","failure_modes":["wrong-pipeline"],"evidence":"The rejected response does not pipe the line-buffered program anywhere, so it does not demonstrate or satisfy the requested piped-output workflow."}
+{"record_id":"curated:pipelines:linux:curl-jq-pipeline","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:modern-tools:linux:gh-pr-create","decision":"include","failure_modes":["wrong-option-binding","missing-flag"],"evidence":"The rejected short -b options all bind as body text, leaving the base branch and title requirements unsatisfied."}
+{"record_id":"curated:observability:linux:journal-previous-boot-tail","decision":"exclude","reason":"ambiguous-requirement"}
+{"record_id":"curated:files-and-processes:linux:du-top-directories","decision":"include","failure_modes":["wrong-pipeline"],"evidence":"The rejected response neither sorts directory sizes nor limits output to the largest consumers."}
+{"record_id":"curated:observability:linux:perf-record-callgraph","decision":"include","failure_modes":["extra-flag","wrong-option-binding"],"evidence":"The rejected -a requests system-wide collection and lacks the -- workload boundary before ./app."}
+{"record_id":"curated:text-processing:linux:awk-skip-header","decision":"include","failure_modes":["wrong-option-value"],"evidence":"The rejected awk program prints every record and never excludes the CSV header."}
+{"record_id":"curated:text-processing:linux:cut-complement","decision":"include","failure_modes":["missing-flag"],"evidence":"The rejected command selects only column two instead of using --complement to drop it."}
+{"record_id":"curated:pipelines:linux:tr-word-frequency","decision":"include","failure_modes":["wrong-pipeline","wrong-flag"],"evidence":"The rejected tr invocation is malformed and omits the lowercase, numeric sorting, and top-twenty pipeline stages."}
+{"record_id":"curated:files-and-processes:linux:find-print0-xargs","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:networking:linux:curl-timeouts","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:gnu-vs-bsd:linux:xargs-no-run-if-empty","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:observability:linux:journal-json-fields","decision":"include","failure_modes":["missing-flag","wrong-option-value"],"evidence":"The rejected response omits the api.service unit filter and uses non-journal field names instead of the requested canonical fields."}
+{"record_id":"curated:zsh-native:linux:param-split-lines","decision":"include","failure_modes":["wrong-command","wrong-pipeline"],"evidence":"The rejected command searches log files and never uses zsh's newline-splitting parameter-expansion flag to build the requested array."}
+{"record_id":"curated:files-and-processes:linux:rsync-exclude-from","decision":"include","failure_modes":["missing-flag"],"evidence":"The rejected response does not explicitly exclude version-control metadata and provides no evidence its separate exclude file does so."}
+{"record_id":"curated:networking:linux:curl-retry","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:text-processing:linux:sed-different-delimiter","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:archives-and-encoding:linux:xxd-reverse","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:modern-tools:linux:rg-fixed-string","decision":"exclude","reason":"task-equivalent"}
+{"record_id":"curated:pipelines:linux:awk-group-sum","decision":"include","failure_modes":["wrong-pipeline"],"evidence":"The rejected awk and sort stages do not correctly aggregate byte totals per client or select the twenty largest totals."}
+{"record_id":"curated:pipelines:linux:process-substitution-diff","decision":"include","failure_modes":["missing-operand","wrong-pipeline"],"evidence":"The rejected diff has only one process-substitution operand and therefore cannot compare two sorted directory listings."}
