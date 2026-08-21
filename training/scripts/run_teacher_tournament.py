@@ -152,6 +152,7 @@ def _openai_request(
         'seed': seed,
         'max_tokens': 1024,
         'reasoning_effort': reasoning_effort,
+        'response_format': {'type': 'json_object'},
         'stream': False,
     }
     request = urllib.request.Request(

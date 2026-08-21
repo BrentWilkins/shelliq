@@ -108,6 +108,9 @@ ceiling, then run all 48 only if the smoke result is healthy:
 The local runner defaults to `reasoning_effort=none`. This task needs precise
 schema translation, and unbounded hidden reasoning can consume the entire output
 budget before emitting JSON. Override it only as a separately labeled experiment.
+Local requests also use the server's JSON-object constraint. This prevents an
+early stop with unbalanced braces while preserving the server's exact output;
+the pipeline never repairs malformed candidate text after generation.
 
 ```sh
 uv run python scripts/run_teacher_tournament.py run-local \

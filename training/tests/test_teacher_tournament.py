@@ -7,7 +7,7 @@ from dataclasses import replace
 import pytest
 from rich.console import Console
 
-from scripts.run_teacher_tournament import export_batch, import_batch, parse_args
+from scripts.run_teacher_tournament import _openai_request, export_batch, import_batch, parse_args
 from shelliq_training.data import DatasetFormatError
 from shelliq_training.prompt import TEACHER_SYSTEM_PROMPT_V1
 from shelliq_training.teacher_tournament import (
@@ -88,6 +88,45 @@ def test_local_tournament_disables_unbounded_reasoning_by_default(monkeypatch):
         ],
     )
     assert parse_args().reasoning_effort == 'none'
+
+
+def test_local_request_uses_server_side_json_constraint(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def read(self, _size):
+            return json.dumps(
+                {
+                    'model': 'local-model',
+                    'choices': [{'message': {'content': '{}'}}],
+                    'usage': {'prompt_tokens': 1, 'completion_tokens': 1},
+                }
+            ).encode()
+
+    class Opener:
+        def open(self, request, timeout):
+            captured['body'] = json.loads(request.data)
+            captured['timeout'] = timeout
+            return Response()
+
+    monkeypatch.setattr('urllib.request.build_opener', lambda *_args: Opener())
+    _openai_request(
+        'http://127.0.0.1:11434/v1/chat/completions',
+        'local-model',
+        'system',
+        'user',
+        0.0,
+        2026,
+        10.0,
+        'none',
+    )
+    assert captured['body']['response_format'] == {'type': 'json_object'}
 
 
 def test_load_challenges_rejects_duplicate_ids(tmp_path):
