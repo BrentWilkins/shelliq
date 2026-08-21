@@ -11,13 +11,22 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
+
+V2_INSTRUCTION_OVERRIDES = {
+    'curated:dev-toolchains:linux:uv-sync-frozen': 'Install locked production dependencies in CI without re-resolving.',
+    'curated:files-and-processes:linux:pgrep-full': 'Find PID and command for processes matching python.*server.py.',
+    'curated:safety:linux:git-clean-preview': 'Preview deleting untracked files, directories, and ignored files.',
+    'curated:zsh-native:linux:zmv-dry-run': 'Preview renaming every *.jpeg file to the same basename with .jpg.',
+}
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--semantic-dataset', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--benchmark-version', type=int, choices=(1, 2), default=1)
     parser.add_argument(
         '--source',
         action='append',
@@ -48,6 +57,53 @@ def stable_key(row: dict[str, object]) -> str:
     return hashlib.sha256(str(row['record_id']).encode()).hexdigest()
 
 
+def semantic_words(value: object) -> list[str]:
+    """Return every compact semantic word literal in document order."""
+    if isinstance(value, dict):
+        if set(value) == {'s'} and isinstance(value['s'], str):
+            return [value['s']]
+        words: list[str] = []
+        for child in value.values():
+            words.extend(semantic_words(child))
+        return words
+    if isinstance(value, list):
+        words = []
+        for child in value:
+            words.extend(semantic_words(child))
+        return words
+    return []
+
+
+def word_is_visible(word: str, prompt: str) -> bool:
+    """Conservatively require an expected lexical word to be prompt-supported."""
+    visible = prompt.casefold()
+    literal = word.strip('\'"').casefold()
+    if literal in visible:
+        return True
+    quoted_expression = (
+        len(word) >= 2 and word[0] == word[-1] and word[0] in '\'"' and any(character in literal for character in '$(){}[]*|^\\')
+    )
+    if quoted_expression:
+        return True
+    if re.fullmatch(r'-[a-z]{2,}', literal):
+        return all(f'-{flag}' in visible for flag in literal[1:])
+    if '=' in literal:
+        option, value = literal.split('=', 1)
+        return option in visible and value in visible
+    return False
+
+
+def prompt_determines_expected(row: dict[str, object]) -> bool:
+    """Reject references containing lexical choices hidden from the candidate."""
+    expected = row.get('semantic_target')
+    instruction = row.get('instruction')
+    context = row.get('context')
+    if not isinstance(expected, dict) or not isinstance(instruction, str) or not isinstance(context, str):
+        return False
+    prompt = f'{instruction}\n{context}'
+    return all(word_is_visible(word, prompt) for word in semantic_words(expected))
+
+
 def main() -> None:
     args = parse_args()
     if args.output.exists():
@@ -55,6 +111,11 @@ def main() -> None:
     if not args.output.parent.is_dir():
         raise SystemExit(f'output parent does not exist: {args.output.parent}')
     rows = [json.loads(line) for line in args.semantic_dataset.read_text().splitlines() if line.strip()]
+    if args.benchmark_version == 2:
+        for row in rows:
+            override = V2_INSTRUCTION_OVERRIDES.get(str(row.get('record_id')))
+            if override is not None:
+                row['instruction'] = override
     allowed_sources = set(args.source or ['shelliq-curated'])
     if 'tldr-pages' in allowed_sources:
         raise SystemExit(
@@ -67,20 +128,35 @@ def main() -> None:
         and row.get('source') in allowed_sources
         and row.get('platform') in {'linux', 'darwin'}
         and isinstance(row.get('semantic_target'), dict)
+        and (args.benchmark_version == 1 or prompt_determines_expected(row))
     ]
     chosen: list[dict[str, object]] = []
     seen_commands: set[tuple[str, str]] = set()
-    # The curated source has no Darwin compositional rows. Keep both the 40/8
-    # platform balance and 12/category balance with an explicit feasible matrix.
-    quotas = {
-        ('linux', 'precise'): 9,
-        ('darwin', 'precise'): 3,
-        ('linux', 'multi-constraint'): 9,
-        ('darwin', 'multi-constraint'): 3,
-        ('linux', 'pipeline'): 10,
-        ('darwin', 'pipeline'): 2,
-        ('linux', 'compositional'): 12,
-    }
+    # The curated source has no Darwin compositional rows. V1 preserves the
+    # original 48-case matrix. V2 is deliberately smaller: strict prompt
+    # determination leaves too few trustworthy complex rows for a balanced 48,
+    # and padding it would recreate the hidden-reference defect found in v1.
+    quotas = (
+        {
+            ('linux', 'precise'): 9,
+            ('darwin', 'precise'): 3,
+            ('linux', 'multi-constraint'): 9,
+            ('darwin', 'multi-constraint'): 3,
+            ('linux', 'pipeline'): 10,
+            ('darwin', 'pipeline'): 2,
+            ('linux', 'compositional'): 12,
+        }
+        if args.benchmark_version == 1
+        else {
+            ('linux', 'precise'): 6,
+            ('darwin', 'precise'): 2,
+            ('linux', 'multi-constraint'): 6,
+            ('darwin', 'multi-constraint'): 2,
+            ('linux', 'pipeline'): 2,
+            ('linux', 'compositional'): 2,
+        }
+    )
+    target_size = sum(quotas.values())
     for row in sorted(eligible, key=stable_key):
         platform = str(row['platform'])
         group = category(row)
@@ -91,16 +167,16 @@ def main() -> None:
         chosen.append(row)
         seen_commands.add(command_key)
         quotas[quota_key] -= 1
-        if len(chosen) == 48:
+        if len(chosen) == target_size:
             break
-    if len(chosen) != 48 or any(quotas.values()):
+    if len(chosen) != target_size or any(quotas.values()):
         raise SystemExit(f'dataset cannot satisfy benchmark quotas: {quotas}')
     output_rows = []
     for index, row in enumerate(chosen, start=1):
         output_rows.append(
             {
                 'schema_version': 1,
-                'challenge_id': f'teacher-selection:v1:{row["platform"]}:{index:03d}',
+                'challenge_id': f'teacher-selection:v{args.benchmark_version}:{row["platform"]}:{index:03d}',
                 'category': category(row),
                 'platform': row['platform'],
                 'command': row['command'],

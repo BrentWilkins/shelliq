@@ -61,6 +61,12 @@ The initial smoke calibration exposed under-specified operands inherited from
 the source corpus. Treat v1 as a harness fixture, not a teacher-quality ranking
 set; `VERIFIED_TEACHER_DATA.md` records the evidence and v2 acceptance rule.
 
+`teacher-selection-v2.jsonl` is the audited 20-case preliminary ranking set: 8
+precise, 8 multi-constraint, 2 pipeline, and 2 compositional cases. Every concrete
+expected word must be visible in its instruction/context; quoted shell-language
+expressions remain subject to manual review. Its smaller size preserves evidence
+quality while newly authored complex cases are developed.
+
 The set intentionally excludes `tldr-pages`. Those examples are widely published
 and likely to have appeared in foundation-model training corpora, which would bias
 the tournament toward familiarity. The checked-in set comes only from reviewed
@@ -69,7 +75,8 @@ the tournament toward familiarity. The checked-in set comes only from reviewed
 ```sh
 uv run python scripts/build_teacher_selection.py \
   --semantic-dataset artifacts/distributable-semantic-v2.jsonl \
-  --output evaluation/teacher-selection-v1.jsonl
+  --output evaluation/teacher-selection-v2.jsonl \
+  --benchmark-version 2
 ```
 
 The builder refuses TLDR even if requested explicitly. Future revisions should

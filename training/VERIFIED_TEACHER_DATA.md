@@ -94,6 +94,14 @@ from this set. Before a full tournament, author v2 requests whose instruction an
 context jointly determine every expected word, then have a human review each
 request/reference pair. Do not repair v1 in place after recording results.
 
+`evaluation/teacher-selection-v2.jsonl` is the resulting 20-case calibration
+set. Its builder requires concrete expected words to be visible in the prompt,
+allows only quoted shell-language expressions to be derived, and applies four
+reviewed instruction corrections for implications the lexical audit cannot see.
+It contains 8 precise, 8 multi-constraint, 2 pipeline, and 2 compositional cases,
+including 4 Darwin cases. The smaller size is intentional: the existing corpus
+cannot supply 48 trustworthy complex references without weakening the audit.
+
 Teacher candidates receive a versioned, provider-neutral description of the
 project-private `SemanticDocumentV2` wire format plus neutral formatting
 examples. Merely naming the schema is insufficient: an external teacher cannot
@@ -103,7 +111,7 @@ with every result so a schema-prompt change creates a distinct tournament run.
 ### Tournament runbook
 
 Run from `training/`. Start each local candidate with eight prompts and a ten-minute
-ceiling, then run all 48 only if the smoke result is healthy:
+ceiling, then run all 20 v2 cases only if the smoke result is healthy:
 
 The local runner defaults to `reasoning_effort=none`. This task needs precise
 schema translation, and unbounded hidden reasoning can consume the entire output
@@ -114,7 +122,7 @@ the pipeline never repairs malformed candidate text after generation.
 
 ```sh
 uv run python scripts/run_teacher_tournament.py run-local \
-  --challenges evaluation/teacher-selection-v1.jsonl \
+  --challenges evaluation/teacher-selection-v2.jsonl \
   --endpoint http://127.0.0.1:8080/v1/chat/completions \
   --model local-candidate-exact-name \
   --output artifacts/teacher-local-smoke.jsonl \
@@ -122,14 +130,14 @@ uv run python scripts/run_teacher_tournament.py run-local \
   --max-total-seconds 600
 
 uv run python scripts/run_teacher_tournament.py run-local \
-  --challenges evaluation/teacher-selection-v1.jsonl \
+  --challenges evaluation/teacher-selection-v2.jsonl \
   --endpoint http://127.0.0.1:8080/v1/chat/completions \
   --model local-candidate-exact-name \
   --output artifacts/teacher-local-full.jsonl \
   --max-total-seconds 3600
 
 uv run python scripts/run_teacher_tournament.py score \
-  --challenges evaluation/teacher-selection-v1.jsonl \
+  --challenges evaluation/teacher-selection-v2.jsonl \
   --results artifacts/teacher-local-full.jsonl \
   --output artifacts/teacher-local-full.score.json
 ```

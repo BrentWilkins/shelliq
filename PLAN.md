@@ -739,8 +739,10 @@ Teacher-tournament calibration found two necessary controls before comparing
 models: external teachers must receive the full project-private SemanticDocumentV2
 wire specification, and selection requests must expose every literal operand
 present in their reference. The inherited teacher-selection v1 set violates the
-second rule, so its exact scores are quarantined as harness-only evidence; author
-and review v2 before the 48-case tournament.
+second rule, so its exact scores are quarantined as harness-only evidence. The
+audited v2 set now provides 20 preliminary ranking cases; keep it small rather
+than padding weak complex references, and separately author the later complex-case
+expansion.
 
 Do not execute generated commands yet. Static verification is active design
 work; the required Docker-backed command-test harness is not implemented. Docker
