@@ -722,6 +722,29 @@ The original generated release analysis misleadingly reported `passed: true`
 because gate computation was coupled to CLI exit mode; metrics were valid and
 the corrected gate was recomputed. Gate calculation is now unconditional.
 
+The next-phase design and rationale are specified in
+`training/VERIFIED_TEACHER_DATA.md`. Use Codex for a small human-directed pilot,
+Luna as the default low-cost bulk draft generator, and optionally a local model
+for additional diversity. Use the available Fireworks account and a stronger
+hosted reasoning/coding model only for ambiguous cases, new risky command
+families, disagreements, and a fixed random audit sample. All sources use a
+provider-neutral JSONL artifact. Canonical answers are proposals only;
+deterministic checks and human review are authoritative, and a generator never
+approves its own records. Generate most rejected candidates from the rank-8
+student so preference pairs reflect its real high-probability mistakes. Start
+with an SFT-only chosen-answer control; add offline DPO only after enough verified
+useful near misses exist.
+
+Do not execute generated commands yet. Static verification is active design
+work; the required Docker-backed command-test harness is not implemented. Docker
+is available in the user's normal terminal; the Codex sandbox alone cannot
+access its daemon. Before functional evidence can be claimed, require a fresh
+non-interactive shell in a fresh disposable container per candidate, a pinned
+image, no network, host mounts, Docker socket, or credentials, one writable
+synthetic fixture directory, capability/seccomp/resource limits, and adversarial
+containment tests. Unsafe classes remain static-plus-human review even after the
+harness exists.
+
 **Second experiment: verifier-backed data and preferences on 0.5B.** For each prompt,
 sample several semantic documents and score properties that generalize across
 commands: schema/envelope validity, AST lowering, indexed command/flag facts,

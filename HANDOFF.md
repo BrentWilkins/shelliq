@@ -147,6 +147,25 @@ replay and the rank-8 retention gate. The initial release analysis files said
 without CLI exit mode; the saved metrics were correct and the gate was
 recomputed. Gate calculation is now unconditional.
 
+The detailed next-phase plan is `training/VERIFIED_TEACHER_DATA.md`. Pilot with
+Codex, use Luna as the default low-cost bulk draft generator, and optionally use
+a local model for diversity. Reserve the available Fireworks account and a
+stronger hosted reviewer for ambiguous cases, new risky command families,
+disagreements, and a fixed random audit sample. All sources use a
+provider-neutral JSONL artifact, no generator approves its own records, and
+deterministic verification plus human corpus acceptance remain authoritative.
+Most rejected candidates should be actual rank-8 samples. Train an SFT-only
+chosen-answer control before DPO so data value is separated from
+preference-optimizer value.
+
+No generated command is currently authorized for execution. Docker is available
+in the user's normal terminal and is the intended backend; only the restricted
+Codex process is denied daemon access. The required Docker-backed harness has
+not been built. Functional tests eventually require a fresh `zsh -f` inside a
+fresh disposable container per candidate, no network/host mounts, Docker socket,
+or credentials, one synthetic writable fixture, a pinned image, strict resource
+limits, and hostile containment fixtures. Unsafe commands remain static-only.
+
 The just-completed phase was full-corpus SFT, not another subset sweep. It used
 `training/scripts/run_full_corpus_finalists.py` and advanced the tied rank-8
 (`alpha=4`, peak LR `2e-4`) and rank-16

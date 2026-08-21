@@ -1,5 +1,11 @@
 # Verifier-backed preference data
 
+The operational teacher-source, candidate-generation, verification, and command
+execution safety plan is in [`VERIFIED_TEACHER_DATA.md`](VERIFIED_TEACHER_DATA.md).
+That plan is authoritative about what may be executed. At present no generated
+command is authorized for functional execution because the disposable sandbox
+harness has not been implemented and accepted.
+
 Preference training targets the case where the model can produce a plausible
 semantic document but ranks a subtly wrong one above the correct one. It is not
 a replacement for supervised examples that teach missing commands or concepts.

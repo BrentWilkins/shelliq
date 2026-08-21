@@ -720,6 +720,13 @@ The reviewed chosen/rejected data contract and verifier lifecycle for the next
 training phase are specified in [`PREFERENCE_DATA.md`](PREFERENCE_DATA.md).
 `shelliq_training.preference_data` provides the strict initial loader; it does
 not yet authorize a DPO run or treat model/teacher output as reviewed data.
+The concrete teacher acquisition, contrast construction, verifier tiers, and
+fresh-sandbox execution boundary are in
+[`VERIFIED_TEACHER_DATA.md`](VERIFIED_TEACHER_DATA.md). No generated command is
+currently authorized for functional execution; the sandbox harness is a
+separate required milestone. The available Fireworks account is the intended
+hosted-teacher scale path, and Docker in the user's normal terminal is the
+intended per-candidate functional-test backend.
 
 ## Checkpoints
 
