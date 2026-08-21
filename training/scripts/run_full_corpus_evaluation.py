@@ -16,6 +16,13 @@ from rich.console import Console
 from rich.table import Table
 
 TRAINING_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(TRAINING_ROOT))
+
+from shelliq_training.semantic_error_analysis import (  # noqa: E402
+    PromotionThresholds,
+    gate_metrics,
+)
+
 ARTIFACTS = TRAINING_ROOT / 'artifacts'
 DATASET = ARTIFACTS / 'distributable-semantic-v2.jsonl'
 TRAINING_RUN_ROOT = ARTIFACTS / 'lora-full-corpus-finalists-v1'
@@ -235,7 +242,16 @@ def _run_stage(stage: Stage, *, resume: bool, console: Console) -> None:
 
 def _print_results(output_root: Path, console: Console) -> None:
     table = Table(title='Full-corpus finalist evaluation')
-    for heading in ('rank', 'test loss', 'release flags', 'release grounded', 'retention flags', 'retention grounded'):
+    for heading in (
+        'rank',
+        'test loss',
+        'release flags',
+        'release grounded',
+        'release gate',
+        'retention flags',
+        'retention grounded',
+        'retention gate',
+    ):
         table.add_column(heading, justify='right')
     for finalist in FINALISTS:
         root = output_root / finalist.name
@@ -249,13 +265,17 @@ def _print_results(output_root: Path, console: Console) -> None:
         test_loss = json.loads(needed[0].read_text())['mean_loss']
         release = json.loads(needed[1].read_text())['trained']['overall']
         retention = json.loads(needed[2].read_text())['trained']['overall']
+        release_passed = not gate_metrics(release, PromotionThresholds())
+        retention_analysis = json.loads((root / 'retention.analysis.json').read_text())
         table.add_row(
             str(finalist.rank),
             f'{test_loss:.4f}',
             f'{release["command_flag_sequence_exact_match"]:.3f}',
             f'{release["grounded_document_exact_match"]:.3f}',
+            'pass' if release_passed else 'FAIL',
             f'{retention["command_flag_sequence_exact_match"]:.3f}',
             f'{retention["grounded_document_exact_match"]:.3f}',
+            'pass' if retention_analysis['gate']['passed'] else 'FAIL',
         )
     console.print(table)
 

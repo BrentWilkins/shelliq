@@ -708,6 +708,14 @@ uv run --frozen python scripts/run_full_corpus_evaluation.py --execute --resume
 
 The evaluation manifest prohibits pipeline and shadow evaluation.
 
+The completed evaluation selected rank 8 as the better, but non-promotable,
+starting point. Rank 8 scored corpus test loss 0.2591, release flags/grounded
+12/35 and 10/35, and retention flags/grounded 14/20 and 10/20. Rank 16 had
+slightly lower test loss (0.2564) but worse grounded release and retention, and
+failed the retention gate. Neither checkpoint passed the release gate. Exact
+results and corrected gate status are in
+`experiments/lora-full-corpus-finalists-v1-evaluation.{json,md}`.
+
 The reviewed chosen/rejected data contract and verifier lifecycle for the next
 training phase are specified in [`PREFERENCE_DATA.md`](PREFERENCE_DATA.md).
 `shelliq_training.preference_data` provides the strict initial loader; it does

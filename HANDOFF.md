@@ -134,6 +134,19 @@ not selection of an earlier checkpoint. If behavioral gates are promising,
 follow with an exact-step-11,823 coverage check using a gentler LR tail and two
 shuffle seeds rather than several ordinary extra epochs.
 
+Behavioral evaluation is complete. Rank 8 scored test loss `0.2591`, release
+flags/grounded `12/35` and `10/35`, and retention `14/20` and `10/20`; it passes
+retention but fails release. Rank 16 scored test loss `0.2564`, release `13/35`
+and `8/35`, and retention `11/20` and `8/20`; it fails both gates. Select rank 8
+as the non-promotable SFT starting point. Exact results are committed in
+`training/experiments/lora-full-corpus-finalists-v1-evaluation.{json,md}`.
+Do not evaluate shadow or pipeline. The next work is verified teacher/rejection
+data for missing flags, extra flags, and invalid envelopes, retaining curriculum
+replay and the rank-8 retention gate. The initial release analysis files said
+`passed: true` only because the analyzer incorrectly skipped gate calculation
+without CLI exit mode; the saved metrics were correct and the gate was
+recomputed. Gate calculation is now unconditional.
+
 The just-completed phase was full-corpus SFT, not another subset sweep. It used
 `training/scripts/run_full_corpus_finalists.py` and advanced the tied rank-8
 (`alpha=4`, peak LR `2e-4`) and rank-16

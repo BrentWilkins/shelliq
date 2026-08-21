@@ -708,6 +708,20 @@ optimization, run a narrow coverage check with evaluation exactly at step
 11,823, a gentler LR tail, and two shuffle seeds; do not default to several more
 ordinary epochs after validation has already turned upward.
 
+**Full-corpus behavioral result (2026-08-21).** Rank 8 test loss `0.2591`,
+release flags/grounded `12/35` and `10/35`, retention flags/grounded `14/20`
+and `10/20`; it passes retention but fails release. Rank 16 test loss `0.2564`,
+release `13/35` and `8/35`, retention `11/20` and `8/20`; it fails both gates.
+The small test-loss advantage therefore points in the wrong direction for
+behavioral selection. Keep rank 8 (`alpha=4`, step 10,000) as the non-promotable
+SFT starting point. Do not consult shadow or pipeline. Next prioritize verified
+teacher candidates and useful rejected contrasts for rank 8's missing/extra
+flags and format failures, with supervised retention replay. Exact results are
+in `training/experiments/lora-full-corpus-finalists-v1-evaluation.{json,md}`.
+The original generated release analysis misleadingly reported `passed: true`
+because gate computation was coupled to CLI exit mode; metrics were valid and
+the corrected gate was recomputed. Gate calculation is now unconditional.
+
 **Second experiment: verifier-backed data and preferences on 0.5B.** For each prompt,
 sample several semantic documents and score properties that generalize across
 commands: schema/envelope validity, AST lowering, indexed command/flag facts,

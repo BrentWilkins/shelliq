@@ -36,12 +36,16 @@ def main() -> None:
         raise SystemExit(f'output parent does not exist: {args.output.parent}')
     document = analysis_document(args.baseline, args.candidate, load_grounding_audit(args.grounding_audit))
     metrics = document['candidate']['metrics']
-    failures = gate_metrics(metrics, PromotionThresholds()) if args.gate else []
-    document['promotion_gate'] = {'passed': not failures, 'failures': failures}
+    failures = gate_metrics(metrics, PromotionThresholds())
+    document['promotion_gate'] = {
+        'evaluated': True,
+        'passed': not failures,
+        'failures': failures,
+    }
     args.output.write_text(json.dumps(document, indent=2, sort_keys=True) + '\n')
     print(json.dumps({'metrics': metrics, 'failure_counts': document['candidate']['failure_counts']}, sort_keys=True))
     print(f'report: {args.output}')
-    if failures:
+    if args.gate and failures:
         raise SystemExit('promotion gate failed: ' + '; '.join(failures))
 
 

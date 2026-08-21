@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "evaluated_checkpoint_step": 10000,
+  "release_thresholds": {
+    "json_parse_rate": 1.0,
+    "document_envelope_rate": 1.0,
+    "first_command_accuracy": 0.8857142857142857,
+    "command_flag_sequence_exact_match_must_exceed": 0.37142857142857144,
+    "grounded_document_exact_match_must_exceed": 0.2
+  },
+  "runs": [
+    {
+      "rank": 8,
+      "alpha": 4.0,
+      "corpus_test_loss": 0.2590991260532534,
+      "corpus_test_examples": 3138,
+      "release": {
+        "json_parse_rate": 0.9428571428571428,
+        "document_envelope_rate": 0.9428571428571428,
+        "first_command_accuracy": 0.9142857142857143,
+        "command_flag_sequence_exact_match": 0.34285714285714286,
+        "grounded_document_exact_match": 0.2857142857142857,
+        "gate_passed": false,
+        "failure_counts": {
+          "invalid_json": 2,
+          "invalid_envelope": 2,
+          "wrong_command": 3,
+          "missing_flags": 16,
+          "extra_flags": 13,
+          "operand_or_structure_mismatch": 2
+        }
+      },
+      "retention": {
+        "first_command_accuracy": 1.0,
+        "command_flag_sequence_exact_match": 0.7,
+        "grounded_document_exact_match": 0.5,
+        "gate_passed": true
+      }
+    },
+    {
+      "rank": 16,
+      "alpha": 16.0,
+      "corpus_test_loss": 0.2564381630530307,
+      "corpus_test_examples": 3138,
+      "release": {
+        "json_parse_rate": 0.9714285714285714,
+        "document_envelope_rate": 0.9714285714285714,
+        "first_command_accuracy": 0.9714285714285714,
+        "command_flag_sequence_exact_match": 0.37142857142857144,
+        "grounded_document_exact_match": 0.22857142857142856,
+        "gate_passed": false,
+        "failure_counts": {
+          "invalid_json": 1,
+          "invalid_envelope": 1,
+          "wrong_command": 1,
+          "missing_flags": 18,
+          "extra_flags": 12,
+          "operand_or_structure_mismatch": 5
+        }
+      },
+      "retention": {
+        "first_command_accuracy": 0.95,
+        "command_flag_sequence_exact_match": 0.55,
+        "grounded_document_exact_match": 0.4,
+        "gate_passed": false
+      }
+    }
+  ],
+  "selection": {
+    "winner": "rank-8_alpha-4_step-10000",
+    "promotable": false,
+    "reason": "rank 8 passes retention and has better grounded behavior; neither finalist passes release"
+  }
+}
