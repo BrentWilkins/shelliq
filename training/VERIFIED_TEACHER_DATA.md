@@ -18,10 +18,20 @@ its `chosen` classification achieved 82.8% precision and 75% recall, missing 8
 useful pairs and falsely selecting 5 ambiguous or hidden-operand comparisons.
 This is adequate for review ordering, not corpus admission or exclusion.
 
-The fixed-recipe v2 SFT/DPO comparison is active. Keep all v1 hyperparameters
-unchanged to isolate the effect of corpus expansion. Its results, release-
-development evaluation, and retention evaluation remain pending; shadow is
-still forbidden.
+The fixed-recipe v2 SFT/DPO comparison completed with all v1 hyperparameters
+unchanged, isolating the effect of corpus expansion. Across 72 train and 27
+command-family-disjoint validation pairs, DPO reached 71/72 reference-relative
+train wins and 15/27 validation wins. Its held-out mean reference-margin delta
+was `+1.470`, the first positive held-out preference signal; replay probe loss
+was `0.00721`. The matched chosen-only SFT control was nearly flat on validation
+(`0.5185`, margin delta `-0.0799`) and regressed release-development behavior.
+
+DPO itself preserved release first-command and flag metrics but lost one
+grounded match. It also lost one first-command, flag, and grounded match on
+retention, so it fails the gate and is not promotable. This is evidence that
+the larger reviewed corpus helps DPO learn distinctions, not that it yet
+improves generated commands. Exact behavioral results are in
+`experiments/preference-pilot-v2.md`. Shadow remains forbidden.
 
 The first end-to-end pilot is complete. A balanced 128-case rank-8 failure
 pool produced 64 structurally valid, correct-command near misses. Manual review

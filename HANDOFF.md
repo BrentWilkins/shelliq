@@ -2,7 +2,7 @@
 
 ## Current checkpoint — 2026-08-21 preference pilot
 
-### Expanded preference corpus and active v2 pilot
+### Expanded preference corpus v2 pilot complete
 
 The next data pass evaluated the rank-8 baseline on all 280 eligible curated
 training records allowed by the four-per-command diversity cap. Rank 8 emitted
@@ -23,11 +23,21 @@ missed 8 useful pairs and falsely preferred 5 hidden-operand or ambiguous pairs.
 No Qwen prescreen label was accepted or rejected automatically.
 
 `training/corpus/reviewed-preference-v2.jsonl` and the complete new decision
-ledger are committed in `e35815c`. The fixed v1 recipe is now running against
-v2: rank 8 / alpha 4, 3 epochs, LR `1e-5`, beta `0.1`, replay weight `0.2`, 128
+ledger are committed in `e35815c`. The fixed v1 recipe completed on
+v2: rank 8 / alpha 4, 3 epochs (216 updates), LR `1e-5`, beta `0.1`, replay
+weight `0.2`, 128
 curated replay examples, matched chosen-SFT and cached-reference DPO conditions.
-Results are pending. After completion, run the same release-development and
-retention evaluations; do not evaluate shadow.
+The expanded DPO run produced the first positive command-family-held-out
+preference signal: 15/27 reference-relative wins and mean reference-margin
+delta `+1.470`. It did not improve behavior. Release-development preserved
+32/35 first command and 12/35 flags but fell from 10/35 to 9/35 grounded.
+Retention fell from 20/20 to 19/20 first command, 14/20 to 13/20 flags, and
+10/20 to 9/20 grounded. It fails the retention gate and is not promotable.
+
+Chosen-only SFT again overfit, falling to 28/35 first command, 9/35 flags, and
+6/35 grounded on release and 14/20, 10/20, and 5/20 on retention. Exact results
+and case-level changes are in `training/experiments/preference-pilot-v2.md`.
+Shadow was not evaluated.
 
 Verifier-backed preference plumbing is implemented. The first manually
 reviewed corpus contains 32 accepted rank-8 near-miss pairs from 64 candidates;
