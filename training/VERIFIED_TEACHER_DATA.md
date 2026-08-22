@@ -59,6 +59,23 @@ not sweep beta, learning rate, or epochs against the current 32 pairs. Keep the
 same SFT control, cached-reference DPO, curated replay, command-family split,
 development release, and retention comparison when the corpus is larger.
 
+### Targeted contrast pass v1
+
+The leak-checked 100-row `targeted-finishing` family was used as a second
+candidate source rather than repeated as ordinary SFT. It is command-family
+disjoint from every frozen evaluation suite. The rank-8 checkpoint produced 40
+valid, correct-command semantic near misses from a 48-row eligible pool; manual
+review retained 28 and rejected 12 (8 still hid material operands or endpoints,
+4 were task-equivalent). `corpus/reviewed-preference-v3.jsonl` therefore carries
+forward all 99 v2 pairs and adds only those 28 reviewed, explicit-target pairs.
+
+The pilot runner now supports `--replay-mode stream`: each preference update
+uses a fresh deterministic `shelliq-curated` training record instead of cycling
+a fixed 128-example replay subset. This is a preservation experiment, not a
+claim that a sampled replay loss is a retention gate. Run the matched SFT/DPO
+comparison on v3 with this mode before any beta, learning-rate, rank, or
+base-model sweep; release and retention remain the only behavioral gates.
+
 ## Why this is the next phase
 
 The full-corpus rank-8 checkpoint is the best supervised starting point, but it

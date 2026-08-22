@@ -72,6 +72,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--beta', type=float, default=0.1)
     parser.add_argument('--replay-weight', type=float, default=0.2)
     parser.add_argument('--replay-examples', type=int, default=128)
+    parser.add_argument(
+        '--replay-mode',
+        choices=('fixed', 'stream'),
+        default='fixed',
+        help=(
+            'fixed cycles a deterministic replay subset; stream consumes one '
+            'fresh full-corpus training record per preference update'
+        ),
+    )
     parser.add_argument('--rank', type=int, default=8)
     parser.add_argument('--alpha', type=float, default=4.0)
     parser.add_argument('--seed', type=int, default=2026)
@@ -153,6 +162,9 @@ def main() -> None:
     pad_id = tokenizer_pad_id(tokenizer)
     train_batches = _pair_batches(train_preferences, sequence_length=args.sequence_length, pad_token_id=pad_id)
     validation_batches = _pair_batches(validation_preferences, sequence_length=args.sequence_length, pad_token_id=pad_id)
+    replay_count = args.replay_examples
+    if args.replay_mode == 'stream':
+        replay_count = args.epochs * len(train_batches)
 
     clean_semantic, rejected_semantic = automatic_preflight(load_semantic_jsonl(args.semantic_dataset))
     semantic_splits = split_records(clean_semantic, corpus=Corpus.DISTRIBUTABLE, seed=args.split_seed)
@@ -170,10 +182,10 @@ def main() -> None:
         except SequenceTooLongError:
             continue
         replay_batches.append(collate_sft([example], sequence_length=args.sequence_length, pad_token_id=pad_id))
-        if len(replay_batches) == args.replay_examples:
+        if len(replay_batches) == replay_count:
             break
-    if len(replay_batches) < args.replay_examples:
-        raise ValueError(f'only {len(replay_batches)} usable curated replay examples')
+    if len(replay_batches) < replay_count:
+        raise ValueError(f'only {len(replay_batches)} usable curated replay examples; need {replay_count}')
 
     model = Qwen2ForCausalLM(Qwen2Config(), param_dtype=jnp.bfloat16, rngs=nnx.Rngs(0))
     weights_path = hf_hub_download(MODEL_ID, 'model.safetensors', local_files_only=True)
@@ -238,7 +250,8 @@ def main() -> None:
                     progress.update(task, advance=1, loss=f'{scalar_values[0]:.4f}')
         train_scores = _score_pairs(model, train_batches)
         validation_scores = _score_pairs(model, validation_batches)
-        replay_loss = float(np.asarray(eval_step(model, replay_batches[0])))
+        replay_probe_batches = replay_batches[: min(16, len(replay_batches))]
+        replay_loss = float(np.mean([float(np.asarray(eval_step(model, batch))) for batch in replay_probe_batches]))
         checkpoint = args.output_root / condition
         metadata = save_checkpoint(
             checkpoint,
@@ -255,6 +268,7 @@ def main() -> None:
             'elapsed_seconds': time.perf_counter() - started,
             'final_objective': observations[-1][0],
             'replay_probe_loss': replay_loss,
+            'replay_probe_examples': len(replay_probe_batches),
             'train': _score_summary(train_scores, reference_train),
             'validation': _score_summary(validation_scores, reference_validation),
         }
@@ -273,6 +287,7 @@ def main() -> None:
         'train_pairs': len(train_records),
         'validation_pairs': len(validation_records),
         'replay_examples': len(replay_batches),
+        'replay_mode': args.replay_mode,
         'semantic_preflight_rejections': rejected_semantic,
         'epochs': args.epochs,
         'steps': total_steps,

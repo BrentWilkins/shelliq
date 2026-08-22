@@ -1,0 +1,28 @@
+{
+  "carried_forward": 99,
+  "excluded": 12,
+  "exclusion_reasons": {
+    "task-equivalent": 4,
+    "underspecified-operands": 8
+  },
+  "failure_modes": {
+    "changed-operand": 11,
+    "extra-flag": 10,
+    "invented-operand": 10,
+    "missing-flag": 34,
+    "missing-operand": 20,
+    "unsupported-platform-spelling": 4,
+    "wrong-command": 3,
+    "wrong-flag": 20,
+    "wrong-option-binding": 24,
+    "wrong-option-value": 31,
+    "wrong-ordering": 3,
+    "wrong-pipeline": 14,
+    "wrong-redirection": 1,
+    "wrong-separator": 1,
+    "wrong-subcommand": 5
+  },
+  "included": 127,
+  "reviewed": 40,
+  "schema_version": 1
+}
