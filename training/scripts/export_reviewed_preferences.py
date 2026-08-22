@@ -18,7 +18,8 @@ from shelliq_training.teacher_verification import rust_validate_documents  # noq
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--queue', type=Path, required=True)
-    parser.add_argument('--decisions', type=Path, required=True)
+    parser.add_argument('--decisions', type=Path, nargs='+', required=True)
+    parser.add_argument('--prior-preferences', type=Path, nargs='*', default=[])
     parser.add_argument('--validator', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--summary', type=Path, required=True)
@@ -99,7 +100,7 @@ def export_records(
 
 def main() -> None:
     args = parse_args()
-    for path in (args.queue, args.decisions, args.validator):
+    for path in (args.queue, *args.decisions, *args.prior_preferences, args.validator):
         if not path.is_file():
             raise FileNotFoundError(path)
     for path in (args.output, args.summary):
@@ -108,9 +109,29 @@ def main() -> None:
         if not path.parent.is_dir():
             raise FileNotFoundError(path.parent)
     queue = _load_jsonl(args.queue)
+    queue_ids = {str(row['record_id']) for row in queue}
+    all_decisions = [row for path in args.decisions for row in _load_jsonl(path)]
+    decisions = [row for row in all_decisions if str(row['record_id']) in queue_ids]
     documents = [json.dumps(row[key], separators=(',', ':')) for row in queue for key in ('chosen', 'rejected')]
     validations = rust_validate_documents(documents, args.validator)
-    exported, summary = export_records(queue, _load_jsonl(args.decisions), validations)
+    exported, summary = export_records(queue, decisions, validations)
+    prior_rows = [row for path in args.prior_preferences for row in _load_jsonl(path)]
+    for path in args.prior_preferences:
+        load_preference_jsonl(path)
+    combined = {str(row['pair_id']): row for row in prior_rows}
+    if len(combined) != len(prior_rows):
+        raise ValueError('prior preference pair IDs must be unique')
+    carried_forward = set(combined) - {str(row['pair_id']) for row in exported}
+    for row in exported:
+        pair_id = str(row['pair_id'])
+        prior = combined.get(pair_id)
+        if prior is not None and prior != row:
+            raise ValueError(f'prior preference pair changed: {pair_id}')
+        combined[pair_id] = row
+    exported = [combined[pair_id] for pair_id in sorted(combined)]
+    summary['included'] = len(exported)
+    summary['carried_forward'] = len(carried_forward)
+    summary['failure_modes'] = dict(sorted(Counter(mode for row in exported for mode in row['failure_modes']).items()))
     args.output.write_text(''.join(json.dumps(row, sort_keys=True, separators=(',', ':')) + '\n' for row in exported))
     load_preference_jsonl(args.output)
     args.summary.write_text(json.dumps(summary, indent=2, sort_keys=True) + '\n')
