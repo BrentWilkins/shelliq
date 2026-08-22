@@ -2,6 +2,33 @@
 
 ## Current checkpoint — 2026-08-21 preference pilot
 
+### Expanded preference corpus and active v2 pilot
+
+The next data pass evaluated the rank-8 baseline on all 280 eligible curated
+training records allowed by the four-per-command diversity cap. Rank 8 emitted
+valid SemanticDocumentV2 for 271/280, selected the correct first command for
+246/280, and exactly grounded 47/280. Static harvesting retained 190 valid,
+correct-command, non-equivalent near misses.
+
+Manual Codex review reused 59 prior decisions and adjudicated 131 new cases.
+The complete result is 99 accepted preference pairs: 72 train and 27 command-
+family-disjoint validation pairs. Of 190 reviewed candidates, 93 were excluded:
+46 task-equivalent, 41 dependent on underspecified operands, 4 ambiguous, and
+2 bad existing targets. The exporter explicitly carried forward two accepted
+v1 pairs that fell outside the expanded pool's command cap, so v2 is a superset.
+
+Local Qwen was used only to order review. Calibration against 64 completed
+manual decisions gave 82.8% precision and 75% recall for its `chosen` label; it
+missed 8 useful pairs and falsely preferred 5 hidden-operand or ambiguous pairs.
+No Qwen prescreen label was accepted or rejected automatically.
+
+`training/corpus/reviewed-preference-v2.jsonl` and the complete new decision
+ledger are committed in `e35815c`. The fixed v1 recipe is now running against
+v2: rank 8 / alpha 4, 3 epochs, LR `1e-5`, beta `0.1`, replay weight `0.2`, 128
+curated replay examples, matched chosen-SFT and cached-reference DPO conditions.
+Results are pending. After completion, run the same release-development and
+retention evaluations; do not evaluate shadow.
+
 Verifier-backed preference plumbing is implemented. The first manually
 reviewed corpus contains 32 accepted rank-8 near-miss pairs from 64 candidates;
 the other half were excluded rather than teaching arbitrary operands or

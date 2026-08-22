@@ -2,6 +2,27 @@
 
 ## 2026-08-21 implementation checkpoint
 
+### Expanded reviewed corpus
+
+The second pass used the complete eligible curated inventory under a four-row
+per-command cap: 280 rank-8 evaluations yielded 190 structurally valid,
+correct-command near misses. Manual review retained 99 preference pairs with a
+72/27 command-family-disjoint train/validation split. It excluded 46 task-
+equivalent answers, 41 hidden-operand comparisons, 4 ambiguous requirements,
+and 2 bad existing targets. Two accepted v1 pairs outside the new pool were
+carried forward explicitly, making `corpus/reviewed-preference-v2.jsonl` a
+strict superset rather than replacing evidence accidentally.
+
+Qwen prescreening is advisory only. On the already-reviewed calibration set,
+its `chosen` classification achieved 82.8% precision and 75% recall, missing 8
+useful pairs and falsely selecting 5 ambiguous or hidden-operand comparisons.
+This is adequate for review ordering, not corpus admission or exclusion.
+
+The fixed-recipe v2 SFT/DPO comparison is active. Keep all v1 hyperparameters
+unchanged to isolate the effect of corpus expansion. Its results, release-
+development evaluation, and retention evaluation remain pending; shadow is
+still forbidden.
+
 The first end-to-end pilot is complete. A balanced 128-case rank-8 failure
 pool produced 64 structurally valid, correct-command near misses. Manual review
 accepted 32 preference pairs and rejected 32: 24 task-equivalent, 6 dependent
