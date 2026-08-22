@@ -61,6 +61,25 @@ Use teachers to adjudicate supplied pairs or author fully grounded triples.
 
 Updated 2026-08-20.
 
+### Preference pilot v3 stop decision
+
+The next 28 manually reviewed, explicit-target contrasts were added to v2,
+creating the 127-pair `training/corpus/reviewed-preference-v3.jsonl`. Matched
+SFT and cached-reference DPO used fresh broad-corpus replay at every update
+rather than cycling 128 examples. DPO again improved held-out preference
+margins (18/31, `+1.910`) but not command behavior: release remained 32/35
+first command and 12/35 flags while grounding fell to 9/35 and JSON/envelope
+fell to 32/35; retention was 20/20 first command, 13/20 flags, and 9/20
+grounded. SFT regressed much further. Neither is promotable; shadow was not
+evaluated. See `training/experiments/preference-pilot-v3-stream.md`.
+
+Stop DPO/SFT preference hyperparameter, rank, replay-shape, and more-of-the-
+same harvested-pair sweeps. They are improving the pairwise surrogate without
+a retention-safe behavioral gain. The next model decision is architectural:
+clarification/result state to remove inherently unanswerable commands, then
+reconsider the target representation or base-model capacity for fully specified
+multi-constraint commands.
+
 ## Planned clarification and execution-state contract
 
 The current `context-authoritative-v1` contract requires an executable

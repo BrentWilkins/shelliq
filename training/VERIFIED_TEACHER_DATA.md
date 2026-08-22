@@ -76,6 +76,20 @@ claim that a sampled replay loss is a retention gate. Run the matched SFT/DPO
 comparison on v3 with this mode before any beta, learning-rate, rank, or
 base-model sweep; release and retention remain the only behavioral gates.
 
+### V3 result and stop condition
+
+The v3 stream-replay matched run reached the strongest held-out preference
+margin so far for DPO: 18/31 reference-relative wins and `+1.910`. It still
+failed behavior gates: release was unchanged on first-command and flag matches
+(32/35 and 12/35), lost one grounded match and three JSON/envelope matches;
+retention preserved first-command accuracy but fell to 13/20 flags and 9/20
+grounded. The same chosen-answer SFT control regressed much more severely.
+
+This repeats the v2 pattern after both additional explicit-target data and
+fresh broad-corpus replay. Stop preference beta/LR/rank/replay sweeps and do
+not treat a rising preference margin as a promotion signal. Exact results are
+in `experiments/preference-pilot-v3-stream.md`; shadow remains forbidden.
+
 ## Why this is the next phase
 
 The full-corpus rank-8 checkpoint is the best supervised starting point, but it
