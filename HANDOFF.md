@@ -61,6 +61,16 @@ Use teachers to adjudicate supplied pairs or author fully grounded triples.
 
 Updated 2026-08-20.
 
+### One-epoch SFT coverage result
+
+Rank-8 full-partition SFT at a lower `1e-4` peak LR reached every 23,646 frozen
+training row once and improved fixed corpus validation loss from `0.26980` to
+`0.26548`. It regressed behavior: release 33/35 first command but 9/35 flags
+and 6/35 grounded; retention 20/20 first command, 13/20 flags, 8/20 grounded.
+It is not promotable. This rules out the simple explanation that the incumbent
+only needed the remaining 15% of its training-partition rows. Details:
+`training/experiments/lora-rank8-coverage-lr1e-4-v1.md`.
+
 ### Preference pilot v3 stop decision
 
 The next 28 manually reviewed, explicit-target contrasts were added to v2,
