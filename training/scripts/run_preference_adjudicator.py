@@ -27,7 +27,7 @@ Verdicts:
 - rejected: the answer labelled rejected is actually better or chosen is wrong.
 
 When verdict is chosen, provide one or more failure_modes from the supplied allowed list.
-For every other verdict, failure_modes must be empty.
+For other verdicts, failure_modes may identify observed differences but remain advisory.
 Return exactly one JSON object: {"verdict":"...","failure_modes":[...],"reason":"..."}.
 Be conservative: do not prefer arbitrary filenames, hosts, versions, counts, or option order when both work.
 """
@@ -77,8 +77,8 @@ def parse_adjudication(generated: str) -> dict[str, object]:
     allowed = {mode.value for mode in FailureMode}
     if len(modes) != len(set(modes)) or not set(modes) <= allowed:
         raise ValueError('invalid or duplicate failure mode')
-    if (verdict == 'chosen') != bool(modes):
-        raise ValueError('chosen verdict requires modes; other verdicts forbid them')
+    if verdict == 'chosen' and not modes:
+        raise ValueError('chosen verdict requires failure modes')
     if not isinstance(reason, str) or not reason.strip():
         raise ValueError('reason must be non-empty')
     return {'verdict': verdict, 'failure_modes': modes, 'reason': reason.strip()}
@@ -113,6 +113,10 @@ def main() -> None:
                 continue
             message = user_message(candidate)
             started = time.monotonic()
+            generated = None
+            actual_model = args.model
+            input_tokens = None
+            output_tokens = None
             try:
                 generated, actual_model, input_tokens, output_tokens = _openai_request(
                     endpoint,
@@ -127,10 +131,6 @@ def main() -> None:
                 adjudication = parse_adjudication(generated)
                 error = None
             except Exception as caught:  # preserve row-level errors so the run remains resumable
-                generated = None
-                actual_model = args.model
-                input_tokens = None
-                output_tokens = None
                 adjudication = None
                 error = f'{type(caught).__name__}: {caught}'
             row = {

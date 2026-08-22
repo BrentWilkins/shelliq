@@ -26,11 +26,15 @@ def test_parse_adjudication_accepts_tie_without_failure_modes() -> None:
     assert result['verdict'] == 'tie'
 
 
+def test_parse_adjudication_retains_advisory_modes_on_non_chosen_verdict() -> None:
+    result = parse_adjudication('{"verdict":"tie","failure_modes":["wrong-flag"],"reason":"Both still satisfy the task."}')
+    assert result['failure_modes'] == ['wrong-flag']
+
+
 @pytest.mark.parametrize(
     'value',
     [
         {'verdict': 'chosen', 'failure_modes': [], 'reason': 'missing modes'},
-        {'verdict': 'tie', 'failure_modes': ['wrong-flag'], 'reason': 'forbidden modes'},
         {'verdict': 'maybe', 'failure_modes': [], 'reason': 'unknown'},
     ],
 )
