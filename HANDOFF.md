@@ -61,6 +61,30 @@ Use teachers to adjudicate supplied pairs or author fully grounded triples.
 
 Updated 2026-08-20.
 
+## Planned clarification and execution-state contract
+
+The current `context-authoritative-v1` contract requires an executable
+`SemanticDocumentV2`, so it cannot correctly answer an underspecified request
+with a question. This is a product and data-quality gap, not evidence that the
+model should guess operands. Add a versioned response envelope with two safe
+outcomes: a command document or one focused clarification question. The shell
+widget must display a clarification and never put it in the editable command
+buffer.
+
+Follow-ups should use compact, typed execution provenance rather than an
+unbounded chat or shell-history scrape. After a user-run command successfully
+produces one recognized path, a later request such as "how many lines are in
+that file?" may use that path. A suggested-but-not-run command, a failed
+command, or multiple candidate paths must cause clarification instead.
+
+This work improves safety and lets us retain otherwise underspecified examples
+as clarification data, but it cannot fix wrong flags or invalid pipelines in a
+fully specified request. Do not make it the next LoRA tuning axis. First build
+and evaluate the fully grounded controlled-contrast pack and conservative
+full-corpus mixture described in `training/experiments/preference-pilot-v2.md`.
+Then implement the clarification contract as a small vertical slice with its
+own held-out evaluation; do not mix its results into command-quality metrics.
+
 ## Current goal
 
 Improve the model so it does not produce functionally invalid pipelines such as:
