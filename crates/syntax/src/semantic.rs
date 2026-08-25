@@ -11,6 +11,9 @@ use tree_sitter::Node;
 
 use super::{ShellDialect, SyntaxDocumentV1, SyntaxError, parse_zsh};
 
+/// Versioned semantic-action codec and grammar used by compact local decoders.
+pub mod action;
+
 /// Serialized semantic-AST contract currently emitted and accepted by shelliq.
 pub const SEMANTIC_SCHEMA_VERSION: u8 = 1;
 
