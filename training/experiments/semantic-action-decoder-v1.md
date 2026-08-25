@@ -1,6 +1,6 @@
 # Semantic-action decoder v1
 
-Status: codec gate passed; model gate pending.
+Status: codec and model-plumbing gates passed; inner-development gate pending.
 
 This experiment pairs the official CodeT5-small encoder at revision
 `b1ee9570c289f21b5922b9c768a1ce12957bf968` with a compact, project-owned
@@ -66,3 +66,28 @@ field order, and deterministic malformed-token fuzzing. `tree-sitter-zsh`
 0.63.4 does not parse the otherwise modeled `<>` redirect, so that action is
 covered as a grammar transition but cannot pass the pre-existing final
 render/re-lower boundary until the upstream grammar supports it.
+
+## Model-plumbing gate evidence
+
+The frozen manifest uses the existing outer split unchanged and creates an
+exact command-disjoint inner split of 518 training and 92 validation records
+with seed `20260826`. No source or action sequence is truncated: the observed
+maxima are 181 CodeT5 tokens and 147 actions.
+
+The instantiated model has 35,316,480 pretrained encoder parameters and
+17,079,296 project-owned decoder parameters, for 52,395,776 total. A real CPU
+forward/backward pass produced finite loss and gradients, while the focused
+portable test exercised grammar-masked greedy generation. The Python manifest
+interpreter also accepted a full real Rust target through its complete state.
+
+On the local RTX 4090, the deterministic eight-record gate reached all stopping
+criteria at step 100 of the 2,000-step cap:
+
+- Exact actions: 8/8
+- Rust-valid decode and render/re-lower: 8/8
+- First command: 8/8
+- Reference acceptance: 8/8
+- Loss: 12.146155 initial to 0.000988 final
+
+The raw checkpoint, generations, and detailed reports remain ignored under
+`training/artifacts/semantic-action-decoder-v1/`.
