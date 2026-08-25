@@ -1,6 +1,6 @@
 # Semantic-action lexical candidate v1
 
-Status: neural plumbing and candidate-oracle gates passed; training gates in progress.
+Status: stopped after the preregistered inner-development gate failed.
 
 This experiment follows the stopped `semantic-action-span-v1`. The earlier model
 could copy a correctly selected source span atomically, but its independently
@@ -69,3 +69,55 @@ generator fallback remains necessary for derived operands and redirects.
 The real CodeT5 CPU gate also passed with finite action, candidate-selection,
 gate, and total losses and finite gradients. Bounded greedy generation stayed
 inside every transition allowed by the Rust manifest.
+
+## Training outcomes
+
+The strict eight-record CUDA overfit gate passed at the first evaluation point,
+step 100 of the 2,000-step cap:
+
+- Exact actions: 8/8.
+- Rust-valid render/re-lower: 8/8.
+- First command: 8/8.
+- Reference acceptance: 8/8.
+- Combined loss: 10.822040 initially and 0.030433 finally.
+
+The 50-epoch inner-development run selected epoch 17 solely by its lowest
+teacher-forced validation action loss, 1.554655. It did not pass the frozen
+semantic gates:
+
+- Exact actions: 0/92.
+- Rust-valid render/re-lower: 76/92 (82.61%; required 90%).
+- First-command match: 68/92 (73.91%; required 80%).
+- Reference acceptance: 0/92 (required 5%).
+- Incomplete at the 192-action ceiling: 12/92.
+- Other Rust-invalid output: 4/92.
+
+Manual error decomposition found that 22 of the 24 officially missed command
+words were present in the deterministic candidate inventory. All 16 Rust-invalid
+sequences began with the expected command bytes, but the official semantic
+metric cannot credit a command in an invalid document. The remaining failure is
+mostly repeated argument structure and runaway generator fallback, not corrupted
+command-span boundaries.
+
+After the frozen gate failed, a diagnostic sweep on the already-open inner split
+varied only the candidate-copy threshold. It is diagnostic evidence, not a
+retroactive gate change:
+
+| Copy threshold | Rust-valid | First command | Accepted |
+| ---: | ---: | ---: | ---: |
+| 0.00 (candidate-only) | 82/92 | 75/92 | 0/92 |
+| 0.25 | 79/92 | 71/92 | 0/92 |
+| 0.50 (preregistered) | 76/92 | 68/92 | 0/92 |
+| 0.75 | 78/92 | 69/92 | 0/92 |
+| 1.01 (generator-only) | 81/92 | 1/92 | 0/92 |
+
+Candidate-only decoding crosses the command threshold and comes within one
+example of the validity threshold, while disabling candidates destroys command
+selection. This confirms that deterministic lexical choices are useful and the
+learned generator/copy gate is not. Zero acceptance at every threshold also
+shows that threshold tuning cannot solve full sequence composition.
+
+Per protocol, outer validation and the comparison test were not evaluated. A
+future experiment should retain deterministic candidates, remove the fallback
+gate, and test sequence-level candidate/structure search or explicit semantic
+slot decisions. It should not return to free byte-boundary prediction.
