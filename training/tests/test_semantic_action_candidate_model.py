@@ -7,6 +7,7 @@ from torch import nn
 
 from shelliq_training.semantic_action_candidate_model import (
     CandidateActionBatch,
+    CandidateActionOutput,
     SemanticActionCandidateModel,
 )
 from shelliq_training.semantic_action_model import ActionDecoderConfig
@@ -52,6 +53,40 @@ def grammar() -> ActionGrammar:
                 {'id': 0, 'name': 'start', 'fixed': [{'token': 1, 'next_state': 1}], 'byte_payload': None},
                 {'id': 1, 'name': 'end', 'fixed': [{'token': 2, 'next_state': 2}], 'byte_payload': None},
                 {'id': 2, 'name': 'complete', 'fixed': [], 'byte_payload': None},
+            ],
+        }
+    )
+
+
+def word_grammar() -> ActionGrammar:
+    return ActionGrammar(
+        {
+            'schema_version': 1,
+            'vocab_size': 320,
+            'start_state': 0,
+            'complete_state': 3,
+            'tokens': [
+                {'id': 1, 'name': 'BOS'},
+                {'id': 2, 'name': 'EOS'},
+                {'id': 23, 'name': 'WORD_END'},
+            ],
+            'states': [
+                {'id': 0, 'name': 'start', 'fixed': [{'token': 1, 'next_state': 1}], 'byte_payload': None},
+                {
+                    'id': 1,
+                    'name': 'word',
+                    'fixed': [],
+                    'byte_payload': {
+                        'byte_offset': 64,
+                        'byte_count': 256,
+                        'end_token': 23,
+                        'next_state': 2,
+                        'require_nonempty': True,
+                        'require_valid_utf8': True,
+                    },
+                },
+                {'id': 2, 'name': 'end', 'fixed': [{'token': 2, 'next_state': 3}], 'byte_payload': None},
+                {'id': 3, 'name': 'complete', 'fixed': [], 'byte_payload': None},
             ],
         }
     )
@@ -116,3 +151,41 @@ def test_candidate_pooling_uses_fixed_span_boundaries() -> None:
     candidates = model._candidate_keys(value, byte_keys)
     assert torch.allclose(candidates[0, 0], byte_keys[0, :2].mean(dim=0))
     assert torch.allclose(candidates[0, 1], byte_keys[0, 2])
+
+
+def test_candidate_beam_emits_atomic_best_span_deterministically() -> None:
+    config = ActionDecoderConfig(
+        d_model=8,
+        num_heads=2,
+        num_layers=1,
+        feedforward_size=16,
+        dropout=0,
+        max_target_length=8,
+    )
+    model = SemanticActionCandidateModel(TinyEncoder(8), TinyDecoder(), config, maximum_source_bytes=4)
+
+    def distributions(value, hidden, memory):
+        del value, memory
+        action_logits = torch.zeros((*hidden.shape[:2], 320), device=hidden.device)
+        candidate_logits = torch.tensor([[[2.0, 1.0]]], device=hidden.device)
+        gate_logits = torch.zeros(hidden.shape[:2], device=hidden.device)
+        return CandidateActionOutput(action_logits, candidate_logits, gate_logits)
+
+    model.distributions = distributions  # type: ignore[method-assign]
+    expected = (1, 64 + ord('h'), 64 + ord('i'), 23, 2)
+    assert model.generate_beam(batch(), word_grammar(), beam_width=2, max_new_tokens=7) == [expected]
+    assert model.generate_beam(batch(), word_grammar(), beam_width=2, max_new_tokens=7) == [expected]
+
+
+def test_candidate_beam_returns_best_bounded_incomplete_hypothesis() -> None:
+    config = ActionDecoderConfig(
+        d_model=8,
+        num_heads=2,
+        num_layers=1,
+        feedforward_size=16,
+        dropout=0,
+        max_target_length=4,
+    )
+    model = SemanticActionCandidateModel(TinyEncoder(8), TinyDecoder(), config, maximum_source_bytes=4)
+    generated = model.generate_beam(batch(), word_grammar(), beam_width=2, max_new_tokens=2)
+    assert generated == [(1, 64 + ord('!'), 23)]

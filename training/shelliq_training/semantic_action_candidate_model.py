@@ -12,7 +12,7 @@ from torch.nn import functional
 
 from shelliq_training.semantic_action_model import LABEL_IGNORE_INDEX, ActionDecoderConfig
 from shelliq_training.semantic_action_pointer_model import _action_embedding_initialization
-from shelliq_training.semantic_actions import ActionGrammar
+from shelliq_training.semantic_actions import ActionGrammar, GrammarCursor
 
 CANDIDATE_IGNORE_INDEX = -100
 
@@ -56,6 +56,13 @@ class CandidateActionOutput:
     action_logits: torch.Tensor
     candidate_logits: torch.Tensor
     gate_logits: torch.Tensor
+
+
+@dataclass(frozen=True, slots=True)
+class _BeamHypothesis:
+    actions: tuple[int, ...]
+    cursor: GrammarCursor
+    score: float
 
 
 class SemanticActionCandidateModel(nn.Module):
@@ -283,3 +290,108 @@ class SemanticActionCandidateModel(nn.Module):
         if self.config.eos_token_id in row:
             row = row[: row.index(self.config.eos_token_id) + 1]
         return [tuple(row)]
+
+    @torch.no_grad()
+    def generate_beam(
+        self,
+        batch: CandidateActionBatch,
+        grammar: ActionGrammar,
+        *,
+        beam_width: int = 8,
+        max_new_tokens: int | None = None,
+    ) -> list[tuple[int, ...]]:
+        """Decode fixed lexical candidates and structure with a bounded beam."""
+        if beam_width <= 0:
+            raise ValueError('beam_width must be positive')
+        limit = max_new_tokens or self.config.max_target_length - 1
+        if not 1 <= limit < self.config.max_target_length:
+            raise ValueError('max_new_tokens leaves no room for BOS')
+        if batch.source_ids.shape[0] != 1:
+            raise ValueError('candidate beam generation requires batch size one')
+        memory = self.encode(batch)
+        cursor = grammar.cursor()
+        cursor.advance(self.config.bos_token_id)
+        initial = _BeamHypothesis((self.config.bos_token_id,), cursor, 0.0)
+        active = [initial]
+        completed: list[_BeamHypothesis] = []
+        bounded: list[_BeamHypothesis] = []
+        maximum_length = min(self.config.max_target_length, limit + 1)
+
+        while active:
+            if completed and completed[0].score >= active[0].score:
+                break
+            expanded: dict[tuple[int, ...], _BeamHypothesis] = {}
+            for hypothesis in active:
+                produced = False
+                hidden = self.decode_hidden(
+                    torch.tensor([hypothesis.actions], dtype=torch.long, device=batch.source_ids.device),
+                    torch.ones((1, len(hypothesis.actions)), dtype=torch.bool, device=batch.source_ids.device),
+                    memory,
+                    batch.source_attention_mask,
+                )
+                output = self.distributions(batch, hidden[:, -1:], memory)
+                payload = grammar.states[hypothesis.cursor.state].byte_payload
+                if payload is not None:
+                    candidate_scores = output.candidate_logits[0, -1].log_softmax(dim=-1)
+                    choices = candidate_scores.topk(min(beam_width, int(batch.candidate_mask[0].sum()))).indices
+                    for choice_tensor in choices:
+                        choice = int(choice_tensor)
+                        start = int(batch.candidate_starts[0, choice])
+                        end = int(batch.candidate_ends[0, choice])
+                        raw = bytes(batch.source_bytes[0, start:end].tolist())
+                        addition = tuple(payload.byte_offset + byte for byte in raw) + (payload.end_token,)
+                        if not raw or len(hypothesis.actions) + len(addition) > maximum_length:
+                            continue
+                        next_cursor = _clone_cursor(hypothesis.cursor)
+                        for value in addition:
+                            next_cursor.advance(value)
+                        candidate = _BeamHypothesis(
+                            hypothesis.actions + addition,
+                            next_cursor,
+                            hypothesis.score + float(candidate_scores[choice]),
+                        )
+                        _retain_best(expanded, candidate)
+                        produced = True
+                else:
+                    allowed = hypothesis.cursor.allowed()
+                    allowed_tensor = torch.tensor(allowed, dtype=torch.long, device=batch.source_ids.device)
+                    scores = output.action_logits[0, -1, allowed_tensor].log_softmax(dim=-1)
+                    for index, value in enumerate(allowed):
+                        if len(hypothesis.actions) + 1 > maximum_length:
+                            continue
+                        next_cursor = _clone_cursor(hypothesis.cursor)
+                        next_cursor.advance(value)
+                        candidate = _BeamHypothesis(
+                            hypothesis.actions + (value,),
+                            next_cursor,
+                            hypothesis.score + float(scores[index]),
+                        )
+                        _retain_best(expanded, candidate)
+                        produced = True
+                if not produced:
+                    bounded.append(hypothesis)
+
+            active = []
+            for candidate in expanded.values():
+                if candidate.cursor.complete:
+                    completed.append(candidate)
+                else:
+                    active.append(candidate)
+            active.sort(key=lambda item: (-item.score, item.actions))
+            active = active[:beam_width]
+            completed.sort(key=lambda item: (-item.score, item.actions))
+            completed = completed[:beam_width]
+
+        bounded.sort(key=lambda item: (-item.score, item.actions))
+        winner = completed[0] if completed else (bounded[0] if bounded else initial)
+        return [winner.actions]
+
+
+def _clone_cursor(cursor: GrammarCursor) -> GrammarCursor:
+    return GrammarCursor(cursor.grammar, cursor.state, cursor.payload)
+
+
+def _retain_best(target: dict[tuple[int, ...], _BeamHypothesis], candidate: _BeamHypothesis) -> None:
+    previous = target.get(candidate.actions)
+    if previous is None or candidate.score > previous.score:
+        target[candidate.actions] = candidate
