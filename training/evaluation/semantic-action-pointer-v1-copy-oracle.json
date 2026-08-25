@@ -1,0 +1,157 @@
+{
+  "decision": "implement-pretrained-decoder-pointer-mixture",
+  "experiment": "semantic-action-pointer-v1",
+  "gate": {
+    "minimum_all_word_coverage": 0.5,
+    "minimum_command_word_coverage": 0.95
+  },
+  "gate_passed": true,
+  "phase": "copy-oracle",
+  "schema_version": 1,
+  "splits": {
+    "train": {
+      "byte_coverage": {
+        "all": {
+          "copyable": 7551,
+          "rate": 0.4769755542922115,
+          "total": 15831
+        },
+        "argument_bytes": {
+          "copyable": 5359,
+          "rate": 0.4065700629694257,
+          "total": 13181
+        },
+        "assignment_name_bytes": {
+          "copyable": 5,
+          "rate": 0.5,
+          "total": 10
+        },
+        "assignment_value_bytes": {
+          "copyable": 0,
+          "rate": 0.0,
+          "total": 50
+        },
+        "command_name_bytes": {
+          "copyable": 2134,
+          "rate": 0.882182720132286,
+          "total": 2419
+        },
+        "declaration_option_bytes": {
+          "copyable": 4,
+          "rate": 1.0,
+          "total": 4
+        },
+        "declaration_utility_bytes": {
+          "copyable": 14,
+          "rate": 1.0,
+          "total": 14
+        },
+        "redirect_descriptor_bytes": {
+          "copyable": 2,
+          "rate": 1.0,
+          "total": 2
+        },
+        "redirect_target_bytes": {
+          "copyable": 33,
+          "rate": 0.2185430463576159,
+          "total": 151
+        }
+      },
+      "records": 518,
+      "word_coverage": {
+        "all": {
+          "copyable": 1595,
+          "rate": 0.6279527559055118,
+          "total": 2540
+        },
+        "argument_bytes": {
+          "copyable": 1067,
+          "rate": 0.5545738045738046,
+          "total": 1924
+        },
+        "assignment_name_bytes": {
+          "copyable": 1,
+          "rate": 0.5,
+          "total": 2
+        },
+        "assignment_value_bytes": {
+          "copyable": 0,
+          "rate": 0.0,
+          "total": 2
+        },
+        "command_name_bytes": {
+          "copyable": 516,
+          "rate": 0.8760611205432938,
+          "total": 589
+        },
+        "declaration_option_bytes": {
+          "copyable": 2,
+          "rate": 1.0,
+          "total": 2
+        },
+        "declaration_utility_bytes": {
+          "copyable": 2,
+          "rate": 1.0,
+          "total": 2
+        },
+        "redirect_descriptor_bytes": {
+          "copyable": 2,
+          "rate": 1.0,
+          "total": 2
+        },
+        "redirect_target_bytes": {
+          "copyable": 5,
+          "rate": 0.29411764705882354,
+          "total": 17
+        }
+      }
+    },
+    "validation": {
+      "byte_coverage": {
+        "all": {
+          "copyable": 1393,
+          "rate": 0.3811217510259918,
+          "total": 3655
+        },
+        "argument_bytes": {
+          "copyable": 973,
+          "rate": 0.30434782608695654,
+          "total": 3197
+        },
+        "command_name_bytes": {
+          "copyable": 420,
+          "rate": 0.967741935483871,
+          "total": 434
+        },
+        "redirect_target_bytes": {
+          "copyable": 0,
+          "rate": 0.0,
+          "total": 24
+        }
+      },
+      "records": 92,
+      "word_coverage": {
+        "all": {
+          "copyable": 258,
+          "rate": 0.5608695652173913,
+          "total": 460
+        },
+        "argument_bytes": {
+          "copyable": 167,
+          "rate": 0.4575342465753425,
+          "total": 365
+        },
+        "command_name_bytes": {
+          "copyable": 91,
+          "rate": 0.978494623655914,
+          "total": 93
+        },
+        "redirect_target_bytes": {
+          "copyable": 0,
+          "rate": 0.0,
+          "total": 2
+        }
+      }
+    }
+  }
+}
