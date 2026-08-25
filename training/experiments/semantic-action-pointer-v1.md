@@ -1,6 +1,6 @@
 # Semantic-action pointer v1
 
-Status: copy-oracle and neural-plumbing gates passed; inner development pending.
+Status: stopped after the inner-development gate failed.
 
 This follow-up addresses the failure isolated by `semantic-action-decoder-v1`:
 a randomly initialized 17.1M-parameter byte decoder memorized eight examples but
@@ -87,3 +87,29 @@ eight-record gate passed at step 100 of the 2,000-step cap:
 
 Weights, raw generations, and detailed diagnostic reports remain ignored under
 `training/artifacts/semantic-action-pointer-v1/`.
+
+## Inner-development outcome
+
+The 50-epoch run selected epoch 16 solely by its 1.490414 teacher-forced
+validation action loss. This is a large improvement over v1's selected 2.416366
+loss, but the semantic gate still failed:
+
+- Rust-valid decode and render/re-lower: 75/92 (81.5%; required 90%)
+- First-command match: 41/92 (44.6%; required 80%)
+- Reference acceptance: 0/92 (required 5%)
+- Exact actions: 0/92
+- Incomplete at the 192-action ceiling: 16/92
+- Other Rust-invalid output: 1/92
+
+All 41 first-command successes came from the 90 examples whose command word was
+copyable, but 49 other copyable commands were still misspelled. Inspection
+showed independent byte pointing splicing plausible source characters into
+corrupted words (`pytho3`, `dock`, repeated flags and operands). The model
+learned source-conditioned byte availability without reliably learning a
+contiguous span traversal. This explains both the improvement over v1 and the
+remaining gap.
+
+Per the frozen protocol, outer validation and the 98-record comparison test
+were not evaluated. A further experiment would need an explicit atomic or
+monotonic span-copy action rather than another training-duration change to this
+model.

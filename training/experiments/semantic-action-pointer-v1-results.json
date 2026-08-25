@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "experiment": "semantic-action-pointer-v1",
+  "status": "stopped-inner-gate-failed",
+  "codet5_revision": "b1ee9570c289f21b5922b9c768a1ce12957bf968",
+  "copy_oracle_sha256": "8717c9ed7f599840dea4555913d3931474db9bd81337b47cc405bd1dc352853d",
+  "model": {
+    "encoder_parameters": 35316480,
+    "decoder_pointer_parameters": 17998081,
+    "total_parameters": 53314561,
+    "transferred_decoder_layers": 4,
+    "action_vocab_size": 320
+  },
+  "copy_oracle_gate": {
+    "passed": true,
+    "validation_command_words_copyable": 91,
+    "validation_command_words": 93,
+    "validation_all_words_copyable": 258,
+    "validation_all_words": 460
+  },
+  "model_plumbing_gate": {
+    "passed": true,
+    "cpu_forward_backward": true,
+    "cpu_finite_gradients": true,
+    "overfit_step_limit": 2000,
+    "overfit_completed_steps": 100,
+    "overfit_exact_actions": 8,
+    "overfit_rust_valid": 8,
+    "overfit_reference_accepted": 8
+  },
+  "inner_development_gate": {
+    "passed": false,
+    "seed": 20260826,
+    "train_records": 518,
+    "validation_records": 92,
+    "epochs": 50,
+    "selected_epoch": 16,
+    "selected_teacher_forced_action_loss": 1.4904142886103795,
+    "exact_actions": 0,
+    "rust_valid": 75,
+    "rust_valid_rate": 0.8152173913043478,
+    "first_command_match": 41,
+    "first_command_match_rate": 0.44565217391304346,
+    "reference_accepted": 0,
+    "reference_accepted_rate": 0.0,
+    "incomplete_at_action_limit": 16,
+    "other_rust_invalid": 1,
+    "copyable_command_matches": 41,
+    "copyable_commands": 90,
+    "checkpoint_sha256": "c123bf62f9bde0a1e33bc5be7ef34591f15e4e4d1a842b6a581d4032da4e27d3",
+    "raw_report_sha256": "95593dc5c451297091e7d36ca939cf0b2355410e4a0d0b41aed1e24db0f9bbf0"
+  },
+  "outer_validation_evaluated": false,
+  "comparison_test_evaluated": false,
+  "decision": "stop-byte-pointer-v1"
+}
