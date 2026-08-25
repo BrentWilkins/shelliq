@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "experiment": "semantic-action-span-v1",
+  "status": "stopped-inner-gate-failed",
+  "codet5_revision": "b1ee9570c289f21b5922b9c768a1ce12957bf968",
+  "model": {
+    "encoder_parameters": 35316480,
+    "decoder_pointer_parameters": 18260225,
+    "total_parameters": 53576705,
+    "transferred_decoder_layers": 4,
+    "action_vocab_size": 320
+  },
+  "model_plumbing_gate": {
+    "passed": true,
+    "cpu_forward_backward": true,
+    "cpu_finite_gradients": true,
+    "overfit_step_limit": 2000,
+    "overfit_completed_steps": 200,
+    "overfit_exact_actions": 8,
+    "overfit_rust_valid": 8,
+    "overfit_reference_accepted": 8
+  },
+  "inner_development_gate": {
+    "passed": false,
+    "seed": 20260826,
+    "train_records": 518,
+    "validation_records": 92,
+    "epochs": 50,
+    "selected_epoch": 10,
+    "selected_teacher_forced_action_loss": 1.5610105225669582,
+    "exact_actions": 0,
+    "rust_valid": 62,
+    "rust_valid_rate": 0.6739130434782609,
+    "first_command_match": 41,
+    "first_command_match_rate": 0.44565217391304346,
+    "reference_accepted": 0,
+    "reference_accepted_rate": 0.0,
+    "incomplete_at_action_limit": 8,
+    "other_rust_invalid": 22,
+    "checkpoint_sha256": "41b5f71d557e9bbb09d2015c71ae3d520b92695810318e244c7eb2c1d789475f",
+    "raw_report_sha256": "a154bfb7c657e7ab6d62c0aab48dede5425dea24f416c35ca98a7df00e4e13f6"
+  },
+  "outer_validation_evaluated": false,
+  "comparison_test_evaluated": false,
+  "decision": "stop-learned-span-pointer"
+}

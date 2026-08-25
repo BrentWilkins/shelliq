@@ -1,6 +1,6 @@
 # Semantic-action atomic span v1
 
-Status: neural plumbing passed; inner development pending.
+Status: stopped after the inner-development gate failed.
 
 This experiment replaces independent or monotonic byte copying with an atomic
 source-span decision. At the first byte of a copyable semantic word, the model
@@ -52,3 +52,27 @@ at step 200 of the 2,000-step cap:
 
 Raw checkpoints, generations, and diagnostics remain ignored under
 `training/artifacts/semantic-action-span-v1/`.
+
+## Inner-development outcome
+
+The run selected epoch 10 solely by its 1.561011 teacher-forced validation
+action loss. Atomic copying did not translate its perfect overfit behavior to
+unseen commands and words:
+
+- Rust-valid decode and render/re-lower: 62/92 (67.4%; required 90%)
+- First-command match: 41/92 (44.6%; required 80%)
+- Reference acceptance: 0/92 (required 5%)
+- Exact actions: 0/92
+- Incomplete at the 192-action ceiling: 8/92
+- Other Rust-invalid outputs: 22/92
+
+The model frequently predicted plausible but incorrect span boundaries or fell
+back to corrupted byte generation (`pyth`, `dock`, repeated option fragments).
+Atomic expansion prevents within-span character jumps, but 518 training records
+do not teach the free start/end heads to select reliable unseen lexical spans.
+It regressed validity relative to both independent-byte and monotonic copying.
+
+Per the protocol, outer validation and comparison test were not evaluated. The
+evidence now argues against another learned free-form pointer. A future local
+approach should use deterministic lexical candidates or retrieval, then learn
+only candidate selection and semantic structure.
