@@ -31,7 +31,8 @@ from shelliq_training.semantic_action_copy import (
 from shelliq_training.semantic_action_pointer_model import SemanticActionPointerModel
 from shelliq_training.semantic_actions import ActionGrammar, SemanticActionClient
 
-EXPERIMENT = 'semantic-action-pointer-v1'
+EXPERIMENT = 'semantic-action-monotonic-v1'
+COPY_ORACLE_EXPERIMENT = 'semantic-action-pointer-v1'
 MODEL_ID = v1.CODET5_MODEL_ID
 REVISION = v1.CODET5_REVISION
 PROMPT_CONTRACT = PromptContract.CONTEXT_AUTHORITATIVE_V1
@@ -85,7 +86,7 @@ def build_model(tokenizer: RobertaTokenizer, *, dropout: float = 0.1) -> Semanti
 
 def load_inputs(args: argparse.Namespace):
     copy_oracle = json.loads(args.copy_oracle.read_text())
-    if copy_oracle.get('experiment') != EXPERIMENT or not copy_oracle.get('gate_passed'):
+    if copy_oracle.get('experiment') != COPY_ORACLE_EXPERIMENT or not copy_oracle.get('gate_passed'):
         raise ValueError('copy-oracle gate was not passed')
     experiment_manifest = json.loads(args.manifest.read_text())
     outer = load_comparison_manifest(args.outer_manifest)
@@ -147,7 +148,7 @@ def cpu(args: argparse.Namespace) -> None:
     finite = all(parameter.grad is None or torch.isfinite(parameter.grad).all() for parameter in model.parameters())
     if not finite:
         raise RuntimeError('non-finite CPU pointer gradient')
-    generated = model.generate(batch, grammar, max_new_tokens=8)
+    generated = model.generate(batch, grammar, max_new_tokens=8, monotonic_copy=True)
     cursor = grammar.cursor()
     for token in generated[0]:
         if token not in cursor.allowed():
@@ -381,7 +382,7 @@ def generate(model, examples, tokenizer, grammar, device) -> list[tuple[int, ...
     generated = []
     for offset in range(0, len(examples), 8):
         batch = make_batch(examples[offset : offset + 8], tokenizer).to(device)
-        generated.extend(model.generate(batch, grammar))
+        generated.extend(model.generate(batch, grammar, monotonic_copy=True))
     return generated
 
 

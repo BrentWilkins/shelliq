@@ -223,6 +223,7 @@ class SemanticActionPointerModel(nn.Module):
         grammar: ActionGrammar,
         *,
         max_new_tokens: int | None = None,
+        monotonic_copy: bool = False,
     ) -> list[tuple[int, ...]]:
         limit = max_new_tokens or self.config.max_target_length - 1
         if not 1 <= limit < self.config.max_target_length:
@@ -235,6 +236,7 @@ class SemanticActionPointerModel(nn.Module):
             device=batch.source_ids.device,
         )
         cursors = [grammar.cursor() for _ in range(batch.source_ids.shape[0])]
+        copy_positions: list[int | None] = [None] * batch.source_ids.shape[0]
         for cursor in cursors:
             cursor.advance(self.config.bos_token_id)
         for _ in range(limit):
@@ -253,11 +255,41 @@ class SemanticActionPointerModel(nn.Module):
             constrained = torch.full_like(logits, -torch.inf)
             for row, cursor in enumerate(cursors):
                 allowed = (self.config.pad_token_id,) if cursor.complete else cursor.allowed()
+                payload = grammar.states[cursor.state].byte_payload
+                copy_position = copy_positions[row]
+                gate = float(output.gate_logits[row, -1].sigmoid())
+                if (
+                    monotonic_copy
+                    and payload is not None
+                    and copy_position is not None
+                    and gate >= 0.5
+                    and copy_position + 1 < int(batch.source_byte_mask[row].sum())
+                ):
+                    next_byte = int(batch.source_bytes[row, copy_position + 1]) + payload.byte_offset
+                    allowed = (next_byte, payload.end_token)
+                elif (
+                    monotonic_copy
+                    and copy_position is not None
+                    and (gate < 0.5 or copy_position + 1 >= int(batch.source_byte_mask[row].sum()))
+                ):
+                    copy_positions[row] = None
                 constrained[row, list(allowed)] = logits[row, list(allowed)]
             next_tokens = constrained.argmax(dim=-1)
             generated = torch.cat((generated, next_tokens[:, None]), dim=1)
-            for cursor, value in zip(cursors, next_tokens.tolist(), strict=True):
+            for row, (cursor, value) in enumerate(zip(cursors, next_tokens.tolist(), strict=True)):
                 if not cursor.complete:
+                    payload = grammar.states[cursor.state].byte_payload
+                    if monotonic_copy and payload is not None:
+                        if value == payload.end_token:
+                            copy_positions[row] = None
+                        elif payload.byte_offset <= value < payload.byte_offset + payload.byte_count:
+                            if copy_positions[row] is not None:
+                                copy_positions[row] += 1
+                            elif float(output.gate_logits[row, -1].sigmoid()) >= 0.5:
+                                matching = (batch.source_bytes[row] + payload.byte_offset == value) & batch.source_byte_mask[row]
+                                if bool(matching.any()):
+                                    scores = output.pointer_logits[row, -1].masked_fill(~matching, -torch.inf)
+                                    copy_positions[row] = int(scores.argmax())
                     cursor.advance(value)
         outputs = []
         for row, cursor in zip(generated.tolist(), cursors, strict=True):

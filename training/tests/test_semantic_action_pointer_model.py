@@ -98,7 +98,7 @@ def test_pointer_generator_cpu_forward_backward_and_masked_generation() -> None:
     loss.backward()
     assert torch.isfinite(loss)
     assert model.pointer_query.weight.grad is not None
-    generated = model.generate(value, grammar(), max_new_tokens=2)
+    generated = model.generate(value, grammar(), max_new_tokens=2, monotonic_copy=True)
     assert generated == [(1, 2)]
 
 

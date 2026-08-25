@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "experiment": "semantic-action-monotonic-v1",
+  "status": "stopped-inner-diagnostic-failed",
+  "source_checkpoint_experiment": "semantic-action-pointer-v1",
+  "source_checkpoint_epoch": 16,
+  "source_checkpoint_sha256": "c123bf62f9bde0a1e33bc5be7ef34591f15e4e4d1a842b6a581d4032da4e27d3",
+  "change": "monotonic contiguous source-byte decoding while copy gate remains active",
+  "inner_development_diagnostic": {
+    "examples": 92,
+    "exact_actions": 0,
+    "rust_valid": 79,
+    "rust_valid_rate": 0.8586956521739131,
+    "first_command_match": 53,
+    "first_command_match_rate": 0.5760869565217391,
+    "reference_accepted": 0,
+    "reference_accepted_rate": 0.0
+  },
+  "baseline_pointer_v1": {
+    "rust_valid": 75,
+    "first_command_match": 41,
+    "reference_accepted": 0
+  },
+  "fresh_training_run": false,
+  "outer_validation_evaluated": false,
+  "comparison_test_evaluated": false,
+  "decision": "stop-byte-level-decoding; require-atomic-span-copy"
+}
