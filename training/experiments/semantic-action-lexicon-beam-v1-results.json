@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "experiment": "semantic-action-lexicon-beam-v1",
+  "status": "terminal-inner-gate-failed",
+  "codet5_revision": "b1ee9570c289f21b5922b9c768a1ce12957bf968",
+  "model": {
+    "total_parameters": 54167041,
+    "global_lexicon_size": 1025,
+    "beam_width": 8,
+    "candidate_only": true
+  },
+  "oracle": {
+    "covered_words": 308,
+    "total_words": 460,
+    "fully_covered_examples": 19,
+    "total_examples": 92
+  },
+  "model_plumbing_gate": {
+    "passed": true,
+    "cpu_forward_backward": true,
+    "cpu_finite_gradients": true,
+    "overfit_step_limit": 2000,
+    "overfit_completed_steps": 100,
+    "overfit_lexicon_size": 44,
+    "overfit_exact_actions": 8,
+    "overfit_rust_valid": 8,
+    "overfit_reference_accepted": 8,
+    "overfit_checkpoint_sha256": "2243b49b3732a1d4d71809ad298275a6d3f9de63184a953fc7012a4bdd62dd24",
+    "overfit_report_sha256": "8508849fa5cd7eb847e8184ffd63b9483fe349ba57451742b87337bdb9113928"
+  },
+  "inner_development_gate": {
+    "passed": false,
+    "seed": 20260826,
+    "train_records": 518,
+    "validation_records": 92,
+    "epochs": 50,
+    "selected_epoch": 3,
+    "selected_teacher_forced_total_loss": 4.611166140644625,
+    "exact_actions": 0,
+    "rust_valid": 92,
+    "rust_valid_rate": 1.0,
+    "first_command_match": 0,
+    "first_command_match_rate": 0.0,
+    "reference_accepted": 0,
+    "reference_accepted_rate": 0.0,
+    "checkpoint_sha256": "4671ebd3abbc69a17c29663bceb26bd902cbd7b5681e90d324d053876ef56d05",
+    "raw_report_sha256": "407130a347de7df17df85c78cbd9bf0760759ece515177694c2d4552780c1fc2"
+  },
+  "outer_validation_evaluated": false,
+  "comparison_test_evaluated": false,
+  "decision": "stop-bounded-program-material-reformulation-required"
+}

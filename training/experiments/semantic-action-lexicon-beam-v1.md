@@ -1,6 +1,6 @@
 # Semantic-action global lexicon beam v1
 
-Status: preregistered before implementation and evaluation.
+Status: terminal inner-development failure; bounded program complete.
 
 This is the second and final candidate-only decoder authorized by the bounded
 program. It follows `semantic-action-candidate-beam-v1`, which achieved 92/92
@@ -63,3 +63,42 @@ model and lexicon from all 610 outer-training records, train once, and evaluate
 the protected 78-record outer validation exactly once. It requires 90% valid,
 80% first-command, and 10% acceptance. Failure ends the program. Only an outer
 pass opens the 98-record comparison test exactly once.
+
+## Outcome
+
+CPU plumbing passed with the real 1,025-word lexicon, finite action,
+candidate-selection, and combined losses, finite gradients, and bounded
+grammar-complete beam generation.
+
+The eight-record CUDA overfit lexicon contained 44 words and passed at step 100
+of the 2,000-step cap:
+
+- Exact actions: 8/8.
+- Rust-valid render/re-lower: 8/8.
+- First command: 8/8.
+- Reference acceptance: 8/8.
+- Combined loss: 10.861999 initially and 0.022359 finally.
+
+The 50-epoch inner run selected epoch 3 solely by the lowest teacher-forced
+combined validation loss, 4.611166. Its decoded result failed:
+
+- Rust-valid render/re-lower: 92/92 (100%; required 90%).
+- First-command match: 0/92 (required 80%).
+- Reference acceptance: 0/92 (required 5%).
+- Exact actions: 0/92.
+
+The failure is architectural. During training, command words nearly always have
+a stable global-lexicon label. Command-disjoint evaluation requires withheld
+commands to use a prompt-local label. The shared selector learned the dominant
+global command route and did not transfer to the local route, even though 91/93
+expected commands were available locally. The global inventory fixed neither
+this routing shift nor complete argument selection.
+
+Per the terminal rule, no third decoder was attempted. Outer validation and the
+comparison test remain unopened. The bounded program established three useful
+facts: deterministic local candidates materially solve unseen command spelling;
+grammar beam search solves syntax and termination; and a flat training-derived
+global word inventory does not solve semantic composition or dynamic/global
+routing. Future work requires a materially different formulation, such as
+explicit typed slots or more data, rather than further decoding tweaks on this
+checkpoint.
