@@ -4,7 +4,11 @@ import torch
 from torch import nn
 
 from shelliq_training.semantic_action_model import ActionDecoderConfig
-from shelliq_training.semantic_action_pointer_model import PointerActionBatch, SemanticActionPointerModel
+from shelliq_training.semantic_action_pointer_model import (
+    PointerActionBatch,
+    SemanticActionPointerModel,
+    _best_span,
+)
 from shelliq_training.semantic_actions import ActionGrammar
 
 
@@ -72,6 +76,7 @@ def batch() -> PointerActionBatch:
         decoder_attention_mask=torch.ones(1, 2, dtype=torch.bool),
         labels=torch.tensor([[64 + ord('h'), 2]]),
         copy_labels=torch.tensor([[0, -100]]),
+        span_end_labels=torch.tensor([[0, -100]]),
     )
 
 
@@ -111,3 +116,13 @@ def test_pointer_probability_only_copies_source_bytes() -> None:
     copied_actions = {64 + ord('h'), 64 + ord('i'), 64 + ord('!')}
     assert torch.isfinite(output.pointer_logits).all()
     assert copied_actions.issubset(set(range(output.log_probabilities.shape[-1])))
+
+
+def test_atomic_span_selects_a_bounded_complete_utf8_range() -> None:
+    source = torch.tensor(list('xxcafé yy'.encode()))
+    start = torch.full((len(source),), -10.0)
+    end = torch.full((len(source),), -10.0)
+    start[2] = 10
+    end[6] = 10
+    assert _best_span(start, end, source, torch.ones_like(source, dtype=torch.bool), maximum_length=8) == (2, 6)
+    assert _best_span(start, end, source, torch.ones_like(source, dtype=torch.bool), maximum_length=4) is None

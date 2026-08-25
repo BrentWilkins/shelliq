@@ -27,6 +27,7 @@ class PointerActionBatch:
     decoder_attention_mask: torch.Tensor
     labels: torch.Tensor
     copy_labels: torch.Tensor
+    span_end_labels: torch.Tensor
 
     def to(self, device: torch.device) -> PointerActionBatch:
         return PointerActionBatch(
@@ -39,6 +40,7 @@ class PointerActionBatch:
             self.decoder_attention_mask.to(device),
             self.labels.to(device),
             self.copy_labels.to(device),
+            self.span_end_labels.to(device),
         )
 
 
@@ -46,6 +48,7 @@ class PointerActionBatch:
 class PointerActionOutput:
     log_probabilities: torch.Tensor
     pointer_logits: torch.Tensor
+    span_end_logits: torch.Tensor
     gate_logits: torch.Tensor
 
 
@@ -82,6 +85,7 @@ class SemanticActionPointerModel(nn.Module):
         self.source_byte_positions = nn.Embedding(maximum_source_bytes, config.d_model)
         self.pointer_key = nn.Linear(config.d_model, config.d_model, bias=False)
         self.pointer_query = nn.Linear(config.d_model, config.d_model, bias=False)
+        self.span_end_query = nn.Linear(config.d_model, config.d_model, bias=False)
         self.pointer_norm = nn.LayerNorm(config.d_model)
         self.copy_gate = nn.Linear(config.d_model, 1)
         for module in (
@@ -89,6 +93,7 @@ class SemanticActionPointerModel(nn.Module):
             self.source_byte_positions,
             self.pointer_key,
             self.pointer_query,
+            self.span_end_query,
         ):
             for parameter in module.parameters():
                 if parameter.dim() > 1:
@@ -163,6 +168,10 @@ class SemanticActionPointerModel(nn.Module):
             self.config.d_model
         )
         pointer_logits = pointer_logits.masked_fill(~source_byte_mask[:, None, :], -torch.inf)
+        span_end_logits = torch.einsum('btd,bsd->bts', self.span_end_query(hidden), self.pointer_key(byte_keys)) / math.sqrt(
+            self.config.d_model
+        )
+        span_end_logits = span_end_logits.masked_fill(~source_byte_mask[:, None, :], -torch.inf)
         pointer_probabilities = pointer_logits.softmax(dim=-1)
         copied = torch.zeros((*hidden.shape[:2], self.config.vocab_size), dtype=hidden.dtype, device=hidden.device)
         byte_actions = source_bytes[:, None, :].expand(hidden.shape[0], hidden.shape[1], -1) + 64
@@ -173,7 +182,7 @@ class SemanticActionPointerModel(nn.Module):
         gate_logits = self.copy_gate(hidden).squeeze(-1)
         gate = gate_logits.sigmoid().unsqueeze(-1)
         probabilities = generated * (1 - gate) + copied * gate
-        return PointerActionOutput(probabilities.clamp_min(1e-9).log(), pointer_logits, gate_logits)
+        return PointerActionOutput(probabilities.clamp_min(1e-9).log(), pointer_logits, span_end_logits, gate_logits)
 
     def forward(self, batch: PointerActionBatch) -> PointerActionOutput:
         memory = self.encode(batch)
@@ -206,14 +215,20 @@ class SemanticActionPointerModel(nn.Module):
             pointer_loss = functional.cross_entropy(output.pointer_logits[copyable], batch.copy_labels[copyable])
         else:
             pointer_loss = action_loss.new_zeros(())
+        span_copyable = batch.span_end_labels != COPY_IGNORE_INDEX
+        if bool(span_copyable.any()):
+            span_end_loss = functional.cross_entropy(output.span_end_logits[span_copyable], batch.span_end_labels[span_copyable])
+        else:
+            span_end_loss = action_loss.new_zeros(())
         active = batch.labels != LABEL_IGNORE_INDEX
         gate_targets = copyable.to(output.gate_logits.dtype)
         gate_loss = functional.binary_cross_entropy_with_logits(output.gate_logits[active], gate_targets[active])
         return {
             'action': action_loss,
             'pointer': pointer_loss,
+            'span_end': span_end_loss,
             'gate': gate_loss,
-            'total': action_loss + 0.25 * pointer_loss + 0.1 * gate_loss,
+            'total': action_loss + 0.25 * pointer_loss + 0.25 * span_end_loss + 0.1 * gate_loss,
         }
 
     @torch.no_grad()
@@ -224,10 +239,13 @@ class SemanticActionPointerModel(nn.Module):
         *,
         max_new_tokens: int | None = None,
         monotonic_copy: bool = False,
+        atomic_span_copy: bool = False,
     ) -> list[tuple[int, ...]]:
         limit = max_new_tokens or self.config.max_target_length - 1
         if not 1 <= limit < self.config.max_target_length:
             raise ValueError('max_new_tokens must leave room for BOS')
+        if atomic_span_copy and batch.source_ids.shape[0] != 1:
+            raise ValueError('atomic span decoding currently requires batch size one')
         memory = self.encode(batch)
         generated = torch.full(
             (batch.source_ids.shape[0], 1),
@@ -237,10 +255,11 @@ class SemanticActionPointerModel(nn.Module):
         )
         cursors = [grammar.cursor() for _ in range(batch.source_ids.shape[0])]
         copy_positions: list[int | None] = [None] * batch.source_ids.shape[0]
+        maximum_generated_length = min(self.config.max_target_length, limit + 1)
         for cursor in cursors:
             cursor.advance(self.config.bos_token_id)
         for _ in range(limit):
-            if all(cursor.complete for cursor in cursors):
+            if all(cursor.complete for cursor in cursors) or generated.shape[1] >= maximum_generated_length:
                 break
             decoder_mask = torch.ones_like(generated, dtype=torch.bool)
             hidden = self.decode_hidden(generated, decoder_mask, memory, batch.source_attention_mask)
@@ -252,6 +271,31 @@ class SemanticActionPointerModel(nn.Module):
                 batch.source_byte_alignment,
             )
             logits = output.log_probabilities[:, -1]
+            if atomic_span_copy:
+                cursor = cursors[0]
+                payload = grammar.states[cursor.state].byte_payload
+                gate = float(output.gate_logits[0, -1].sigmoid())
+                remaining = maximum_generated_length - generated.shape[1]
+                if payload is not None and gate >= 0.95:
+                    span = _best_span(
+                        output.pointer_logits[0, -1],
+                        output.span_end_logits[0, -1],
+                        batch.source_bytes[0],
+                        batch.source_byte_mask[0],
+                        maximum_length=min(128, remaining - 1),
+                    )
+                    if span is not None:
+                        start, end = span
+                        raw = bytes(batch.source_bytes[0, start : end + 1].tolist())
+                        expanded = [payload.byte_offset + byte for byte in raw]
+                        expanded.append(payload.end_token)
+                        for value in expanded:
+                            cursor.advance(value)
+                        generated = torch.cat(
+                            (generated, torch.tensor([expanded], dtype=torch.long, device=generated.device)),
+                            dim=1,
+                        )
+                        continue
             constrained = torch.full_like(logits, -torch.inf)
             for row, cursor in enumerate(cursors):
                 allowed = (self.config.pad_token_id,) if cursor.complete else cursor.allowed()
@@ -298,6 +342,31 @@ class SemanticActionPointerModel(nn.Module):
             else:
                 outputs.append(tuple(row))
         return outputs
+
+
+def _best_span(
+    start_logits: torch.Tensor,
+    end_logits: torch.Tensor,
+    source_bytes: torch.Tensor,
+    source_byte_mask: torch.Tensor,
+    *,
+    maximum_length: int,
+) -> tuple[int, int] | None:
+    """Return the highest-scoring bounded source span with complete UTF-8."""
+    source_length = int(source_byte_mask.sum())
+    if source_length == 0 or maximum_length <= 0:
+        return None
+    start = int(start_logits[:source_length].argmax())
+    end = int(end_logits[:source_length].argmax())
+    length = end - start + 1
+    if not 1 <= length <= maximum_length:
+        return None
+    raw = bytes(source_bytes[start : end + 1].tolist())
+    try:
+        raw.decode('utf-8')
+    except UnicodeDecodeError:
+        return None
+    return start, end
 
 
 def _action_embedding_initialization(shared_embedding: torch.Tensor, tokenizer, config: ActionDecoderConfig) -> torch.Tensor:

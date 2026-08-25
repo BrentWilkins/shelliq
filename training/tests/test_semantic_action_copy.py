@@ -36,6 +36,7 @@ def test_aligns_utf8_bytes_to_exact_source_span() -> None:
     alignment = align_action_bytes_to_source('Run café now.', actions, grammar)
     start = len(b'Run ')
     assert alignment.labels == (COPY_IGNORE_INDEX, start, start + 1, start + 2, start + 3, start + 4, -100, -100)
+    assert alignment.span_end_labels == (COPY_IGNORE_INDEX, start + 4, -100, -100, -100, -100, -100, -100)
     assert alignment.word_counts == {'command_name_bytes': (1, 1)}
     assert alignment.byte_counts == {'command_name_bytes': (5, 5)}
 
@@ -45,5 +46,6 @@ def test_marks_absent_word_as_generator_only() -> None:
     actions = (1, 64 + ord('x'), 23, 2)
     alignment = align_action_bytes_to_source('no match', actions, grammar)
     assert alignment.labels == (-100, -100, -100, -100)
+    assert alignment.span_end_labels == (-100, -100, -100, -100)
     merged = merge_copy_counts([alignment], 'words')
     assert merged['all'] == {'copyable': 0, 'total': 1, 'rate': 0.0}

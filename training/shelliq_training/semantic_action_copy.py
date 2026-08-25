@@ -21,6 +21,7 @@ COPY_IGNORE_INDEX = -100
 @dataclass(frozen=True, slots=True)
 class CopyAlignment:
     labels: tuple[int, ...]
+    span_end_labels: tuple[int, ...]
     roles: tuple[str | None, ...]
     word_counts: dict[str, tuple[int, int]]
     byte_counts: dict[str, tuple[int, int]]
@@ -35,6 +36,7 @@ class PointerActionExample:
     byte_token_indices: tuple[tuple[int, ...], ...]
     action_ids: tuple[int, ...]
     copy_labels: tuple[int, ...]
+    span_end_labels: tuple[int, ...]
 
 
 class AlignedCodeT5Tokenizer:
@@ -66,6 +68,7 @@ def align_action_bytes_to_source(source: str, actions: Sequence[int], grammar: A
     """Align complete action words to their first exact UTF-8 source span."""
     source_bytes = source.encode('utf-8')
     labels = [COPY_IGNORE_INDEX] * len(actions)
+    span_end_labels = [COPY_IGNORE_INDEX] * len(actions)
     roles: list[str | None] = [None] * len(actions)
     word_total: Counter[str] = Counter()
     word_copyable: Counter[str] = Counter()
@@ -101,6 +104,7 @@ def align_action_bytes_to_source(source: str, actions: Sequence[int], grammar: A
             byte_copyable[state.name] += len(raw)
             for offset in range(len(raw)):
                 labels[begin + offset] = source_position + offset
+            span_end_labels[begin] = source_position + len(raw) - 1
         cursor.advance(actions[position])
         position += 1
     if not cursor.complete:
@@ -108,6 +112,7 @@ def align_action_bytes_to_source(source: str, actions: Sequence[int], grammar: A
     role_names = sorted(word_total)
     return CopyAlignment(
         tuple(labels),
+        tuple(span_end_labels),
         tuple(roles),
         {role: (word_copyable[role], word_total[role]) for role in role_names},
         {role: (byte_copyable[role], byte_total[role]) for role in role_names},
@@ -169,6 +174,7 @@ def pointer_action_examples(
                 byte_token_indices,
                 target_ids,
                 copy.labels,
+                copy.span_end_labels,
             )
         )
     return examples
@@ -195,6 +201,7 @@ def collate_pointer_actions(
     decoder_masks = []
     labels = []
     copy_labels = []
+    span_end_labels = []
     for example in examples:
         if (
             len(example.source_ids) > source_length
@@ -207,6 +214,7 @@ def collate_pointer_actions(
         shifted = example.action_ids[:-1]
         expected = example.action_ids[1:]
         expected_copy = example.copy_labels[1:]
+        expected_span_end = example.span_end_labels[1:]
         target_padding = target_length - len(expected)
         source_rows.append(example.source_ids + (source_pad_token_id,) * source_padding)
         source_masks.append((1,) * len(example.source_ids) + (0,) * source_padding)
@@ -221,6 +229,7 @@ def collate_pointer_actions(
         decoder_masks.append((1,) * len(shifted) + (0,) * target_padding)
         labels.append(expected + (LABEL_IGNORE_INDEX,) * target_padding)
         copy_labels.append(expected_copy + (COPY_IGNORE_INDEX,) * target_padding)
+        span_end_labels.append(expected_span_end + (COPY_IGNORE_INDEX,) * target_padding)
     return PointerActionBatch(
         torch.tensor(source_rows, dtype=torch.long),
         torch.tensor(source_masks, dtype=torch.bool),
@@ -231,4 +240,5 @@ def collate_pointer_actions(
         torch.tensor(decoder_masks, dtype=torch.bool),
         torch.tensor(labels, dtype=torch.long),
         torch.tensor(copy_labels, dtype=torch.long),
+        torch.tensor(span_end_labels, dtype=torch.long),
     )

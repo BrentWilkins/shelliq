@@ -31,7 +31,7 @@ from shelliq_training.semantic_action_copy import (
 from shelliq_training.semantic_action_pointer_model import SemanticActionPointerModel
 from shelliq_training.semantic_actions import ActionGrammar, SemanticActionClient
 
-EXPERIMENT = 'semantic-action-monotonic-v1'
+EXPERIMENT = 'semantic-action-span-v1'
 COPY_ORACLE_EXPERIMENT = 'semantic-action-pointer-v1'
 MODEL_ID = v1.CODET5_MODEL_ID
 REVISION = v1.CODET5_REVISION
@@ -148,7 +148,7 @@ def cpu(args: argparse.Namespace) -> None:
     finite = all(parameter.grad is None or torch.isfinite(parameter.grad).all() for parameter in model.parameters())
     if not finite:
         raise RuntimeError('non-finite CPU pointer gradient')
-    generated = model.generate(batch, grammar, max_new_tokens=8, monotonic_copy=True)
+    generated = model.generate(batch, grammar, max_new_tokens=8, atomic_span_copy=True)
     cursor = grammar.cursor()
     for token in generated[0]:
         if token not in cursor.allowed():
@@ -380,9 +380,9 @@ def mean_action_loss(model, examples, tokenizer, batch_size, device) -> float:
 def generate(model, examples, tokenizer, grammar, device) -> list[tuple[int, ...]]:
     model.eval()
     generated = []
-    for offset in range(0, len(examples), 8):
-        batch = make_batch(examples[offset : offset + 8], tokenizer).to(device)
-        generated.extend(model.generate(batch, grammar, monotonic_copy=True))
+    for example in examples:
+        batch = make_batch([example], tokenizer).to(device)
+        generated.extend(model.generate(batch, grammar, atomic_span_copy=True))
     return generated
 
 
