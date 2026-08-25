@@ -1,6 +1,6 @@
 # Semantic-action decoder v1
 
-Status: codec and model-plumbing gates passed; inner-development gate pending.
+Status: stopped after the inner-development gate failed.
 
 This experiment pairs the official CodeT5-small encoder at revision
 `b1ee9570c289f21b5922b9c768a1ce12957bf968` with a compact, project-owned
@@ -91,3 +91,26 @@ criteria at step 100 of the 2,000-step cap:
 
 The raw checkpoint, generations, and detailed reports remain ignored under
 `training/artifacts/semantic-action-decoder-v1/`.
+
+## Inner-development gate outcome
+
+The full 50-epoch run selected epoch 3 solely by the lowest teacher-forced
+inner-validation action loss, as frozen. Its loss was 2.416366; later epochs
+continued lowering training loss while validation loss rose to 3.660949 at
+epoch 50.
+
+The selected checkpoint failed every semantic threshold on the 92 unseen-command
+inner-validation records:
+
+- Rust-valid decode and render/re-lower: 49/92 (53.3%; required 90%)
+- First-command match: 0/92 (required 80%)
+- Reference acceptance: 0/92 (required 5%)
+- Exact actions: 0/92
+- Incomplete at the 192-action ceiling: 43/92
+
+Valid outputs were still semantically wrong and showed byte-level collapse to
+seen commands and repeated punctuation or option fragments. This is evidence
+that the first hybrid recipe can memorize eight examples but does not transfer
+command identity across the deliberately command-disjoint split. Per the
+frozen protocol, outer validation and the 98-record comparison test were not
+evaluated, and no release, runtime export, or quantization work is justified.

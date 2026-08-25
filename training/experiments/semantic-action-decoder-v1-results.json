@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "experiment": "semantic-action-decoder-v1",
+  "status": "stopped-inner-gate-failed",
+  "dataset_sha256": "d5bb17a6e13f95051a0a97971a07ddfb8a806fdf63dc3d47d160cbf47f62d7ca",
+  "experiment_manifest_sha256": "279a4950d73868931a05c7b4cc3232e82239b53f734ccff9ec7f88b77bb49317",
+  "codet5_revision": "b1ee9570c289f21b5922b9c768a1ce12957bf968",
+  "model": {
+    "encoder_parameters": 35316480,
+    "decoder_parameters": 17079296,
+    "total_parameters": 52395776,
+    "action_vocab_size": 320
+  },
+  "codec_gate": {
+    "passed": true,
+    "records": 786,
+    "exact_semantic_round_trips": 786,
+    "rust_valid": 786,
+    "maximum_action_length": 147,
+    "target_length_limit": 192
+  },
+  "model_plumbing_gate": {
+    "passed": true,
+    "cpu_forward_backward": true,
+    "cpu_finite_gradients": true,
+    "overfit_step_limit": 2000,
+    "overfit_completed_steps": 100,
+    "overfit_exact_actions": 8,
+    "overfit_rust_valid": 8,
+    "overfit_reference_accepted": 8
+  },
+  "inner_development_gate": {
+    "passed": false,
+    "seed": 20260826,
+    "train_records": 518,
+    "validation_records": 92,
+    "epochs": 50,
+    "selected_epoch": 3,
+    "selected_teacher_forced_action_loss": 2.4163661097057374,
+    "exact_actions": 0,
+    "rust_valid": 49,
+    "rust_valid_rate": 0.532608695652174,
+    "first_command_match": 0,
+    "first_command_match_rate": 0.0,
+    "reference_accepted": 0,
+    "reference_accepted_rate": 0.0,
+    "incomplete_at_action_limit": 43,
+    "checkpoint_sha256": "6f423d0e4124c3526497fc19280abff87d506efe3bae3253df1ea678dd7c07b1",
+    "raw_report_sha256": "87575455acc8c182347cbadeb4173df0d614da89f62d98608c69f44501f3f5aa"
+  },
+  "outer_validation_evaluated": false,
+  "comparison_test_evaluated": false,
+  "decision": "stop"
+}
