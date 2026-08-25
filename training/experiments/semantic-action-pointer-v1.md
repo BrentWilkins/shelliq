@@ -1,6 +1,6 @@
 # Semantic-action pointer v1
 
-Status: source-copy oracle passed; neural plumbing pending.
+Status: copy-oracle and neural-plumbing gates passed; inner development pending.
 
 This follow-up addresses the failure isolated by `semantic-action-decoder-v1`:
 a randomly initialized 17.1M-parameter byte decoder memorized eight examples but
@@ -57,3 +57,33 @@ The gate passed:
 The lower byte coverage confirms that the byte generator remains essential;
 the high command coverage makes supervised pointing a direct response to the
 observed 0/92 first-command failure.
+
+## Neural-plumbing evidence
+
+The concrete model has 35,316,480 encoder parameters and 17,998,081 transferred
+decoder/pointer parameters, for 53,314,561 total. All four decoder blocks retain
+official CodeT5 self-attention, cross-attention, feed-forward, relative-position,
+and normalization weights. Only the 320-action embeddings/head and pointer
+components begin new.
+
+A real CPU forward/backward pass produced finite action, pointer, gate, and
+combined gradients. Manifest-constrained greedy decoding remained inside every
+allowed Rust transition; focused tiny-model tests also cover completion.
+
+The initial CUDA overfit diagnostic exposed a transfer implementation defect:
+the tied action head omitted CodeT5's required `d_model^-0.5` output scaling.
+The pointer loss had already fallen to 0.00009, but oversized generator logits
+made every output the empty semantic document. Restoring the official T5 scale
+is a plumbing correction, not a recipe change.
+
+From a fresh deterministic initialization after that correction, the strict
+eight-record gate passed at step 100 of the 2,000-step cap:
+
+- Exact actions: 8/8
+- Rust-valid decode and render/re-lower: 8/8
+- First command: 8/8
+- Reference acceptance: 8/8
+- Combined loss: 11.387472 initial to 0.493858 final
+
+Weights, raw generations, and detailed diagnostic reports remain ignored under
+`training/artifacts/semantic-action-pointer-v1/`.
