@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "experiment": "semantic-action-candidate-beam-v1",
+  "status": "stopped-inner-acceptance-gate-failed",
+  "source_experiment": "semantic-action-candidate-v1",
+  "decoder": {
+    "beam_width": 8,
+    "candidate_only": true,
+    "score": "sum-normalized-decision-log-probability",
+    "maximum_actions": 192
+  },
+  "inner_development_gate": {
+    "passed": false,
+    "evaluation_records": 92,
+    "exact_actions": 0,
+    "rust_valid": 92,
+    "rust_valid_rate": 1.0,
+    "first_command_match": 84,
+    "first_command_match_rate": 0.9130434782608695,
+    "reference_accepted": 0,
+    "reference_accepted_rate": 0.0,
+    "raw_report_sha256": "fc1f42a0dcae14bfb1aa9452ee8d94012146de872c43d489f334b7201494c0e5"
+  },
+  "error_decomposition": {
+    "correct_command_sequence": 84,
+    "correct_broad_structure": 89,
+    "correct_argument_counts": 14,
+    "correct_argument_lists": 0
+  },
+  "outer_validation_evaluated": false,
+  "comparison_test_evaluated": false,
+  "decision": "retain-beam-expand-candidate-inventory"
+}

@@ -1,6 +1,6 @@
 # Semantic-action candidate beam v1
 
-Status: preregistered before implementation and evaluation.
+Status: stopped after the inner-development acceptance gate failed.
 
 This is the first of at most two candidate-only sequence-decoding experiments
 authorized after `semantic-action-candidate-v1`. It reuses that experiment's
@@ -55,3 +55,29 @@ then be preregistered and evaluated. Passing freezes this decoder and earns one
 outer-validation attempt after retraining the model for the already-selected 17
 epochs on all 610 outer-training records. The comparison test opens only after
 outer validation passes its existing 90%/80%/10% gates.
+
+## Outcome
+
+The frozen beam produced:
+
+- Rust-valid render/re-lower: 92/92 (100%; required 90%).
+- First-command match: 84/92 (91.30%; required 80%).
+- Reference acceptance: 0/92 (required 5%).
+- Exact actions: 0/92.
+
+The recipe therefore stopped and did not open outer validation or the comparison
+test. The raw inner report SHA-256 is
+`fc1f42a0dcae14bfb1aa9452ee8d94012146de872c43d489f334b7201494c0e5`.
+
+Error decomposition found the complete command sequence correct in 84/92 and
+the broad document structure correct in 89/92. Only 14/92 had the correct
+argument counts and none had the complete correct argument lists. Beam search
+therefore solved syntax, termination, and most command selection, but cannot
+choose target words that its source-only candidate inventory does not contain.
+
+A training-only global word lexicon contains 1,025 distinct semantic words.
+Unioning it with per-prompt lexical candidates raises the inner oracle from
+240/460 to 308/460 target words and fully covers all target words in 19/92
+examples. This evidence motivates the one remaining authorized experiment:
+learned selection over that global lexicon plus dynamic source candidates, with
+the successful grammar beam retained.
