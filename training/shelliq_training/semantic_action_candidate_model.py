@@ -183,6 +183,12 @@ class SemanticActionCandidateModel(nn.Module):
         action_logits = self.output_projection(hidden * self.config.d_model**-0.5)
         return CandidateActionOutput(action_logits, candidate_logits, self.copy_gate(hidden).squeeze(-1))
 
+    def candidate_bytes(self, batch: CandidateActionBatch, choice: int) -> bytes:
+        """Resolve one model candidate to the exact UTF-8 bytes it emits."""
+        start = int(batch.candidate_starts[0, choice])
+        end = int(batch.candidate_ends[0, choice])
+        return bytes(batch.source_bytes[0, start:end].tolist())
+
     def forward(self, batch: CandidateActionBatch) -> CandidateActionOutput:
         memory = self.encode(batch)
         hidden = self.decode_hidden(
@@ -333,12 +339,11 @@ class SemanticActionCandidateModel(nn.Module):
                 payload = grammar.states[hypothesis.cursor.state].byte_payload
                 if payload is not None:
                     candidate_scores = output.candidate_logits[0, -1].log_softmax(dim=-1)
-                    choices = candidate_scores.topk(min(beam_width, int(batch.candidate_mask[0].sum()))).indices
+                    finite_candidates = int(torch.isfinite(candidate_scores).sum())
+                    choices = candidate_scores.topk(min(beam_width, finite_candidates)).indices
                     for choice_tensor in choices:
                         choice = int(choice_tensor)
-                        start = int(batch.candidate_starts[0, choice])
-                        end = int(batch.candidate_ends[0, choice])
-                        raw = bytes(batch.source_bytes[0, start:end].tolist())
+                        raw = self.candidate_bytes(batch, choice)
                         addition = tuple(payload.byte_offset + byte for byte in raw) + (payload.end_token,)
                         if not raw or len(hypothesis.actions) + len(addition) > maximum_length:
                             continue

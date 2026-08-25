@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import torch
 
@@ -92,6 +92,7 @@ def align_actions_to_candidates(
     actions: Sequence[int],
     grammar: ActionGrammar,
     candidates: Sequence[LexicalCandidate],
+    global_words: Sequence[bytes] = (),
 ) -> CandidateAlignment:
     """Supervise one candidate choice at the first byte of each word."""
     labels = [CANDIDATE_IGNORE_INDEX] * len(actions)
@@ -100,6 +101,7 @@ def align_actions_to_candidates(
     copied: Counter[str] = Counter()
     total: Counter[str] = Counter()
     values = [source_bytes[item.start : item.end] for item in candidates]
+    global_indices = {value: index for index, value in enumerate(global_words)}
     cursor = grammar.cursor()
     position = 0
     while position < len(actions):
@@ -121,12 +123,17 @@ def align_actions_to_candidates(
         raw.decode('utf-8')
         word_starts[begin] = True
         total[state.name] += 1
-        try:
-            labels[begin] = values.index(bytes(raw))
-        except ValueError:
-            pass
-        else:
+        value = bytes(raw)
+        if value in global_indices:
+            labels[begin] = global_indices[value]
             copied[state.name] += 1
+        else:
+            try:
+                labels[begin] = len(global_words) + values.index(value)
+            except ValueError:
+                pass
+            else:
+                copied[state.name] += 1
         cursor.advance(actions[position])
         position += 1
     if not cursor.complete:
@@ -138,6 +145,60 @@ def align_actions_to_candidates(
         tuple(roles),
         {role: (copied[role], total[role]) for role in role_names},
     )
+
+
+def action_words(actions: Sequence[int], grammar: ActionGrammar) -> tuple[bytes, ...]:
+    """Return complete semantic word payloads in action order."""
+    words: list[bytes] = []
+    cursor = grammar.cursor()
+    position = 0
+    while position < len(actions):
+        state = grammar.states[cursor.state]
+        payload = state.byte_payload
+        if payload is None:
+            cursor.advance(actions[position])
+            position += 1
+            continue
+        raw = bytearray()
+        while position < len(actions) and payload.byte_offset <= actions[position] < payload.byte_offset + payload.byte_count:
+            raw.append(actions[position] - payload.byte_offset)
+            cursor.advance(actions[position])
+            position += 1
+        if not raw or position == len(actions):
+            raise ValueError(f'incomplete action word in {state.name}')
+        raw.decode('utf-8')
+        words.append(bytes(raw))
+        cursor.advance(actions[position])
+        position += 1
+    if not cursor.complete:
+        raise ValueError('action sequence did not complete grammar')
+    return tuple(words)
+
+
+def global_word_lexicon(sequences: Sequence[Sequence[int]], grammar: ActionGrammar) -> tuple[bytes, ...]:
+    """Build a stable candidate vocabulary from training targets only."""
+    return tuple(sorted({word for actions in sequences for word in action_words(actions, grammar)}))
+
+
+def relabel_with_global_words(
+    examples: Sequence[CandidateActionExample],
+    grammar: ActionGrammar,
+    global_words: Sequence[bytes],
+) -> list[CandidateActionExample]:
+    """Prefer stable global candidates, then exact prompt-local candidates."""
+    return [
+        replace(
+            example,
+            candidate_labels=align_actions_to_candidates(
+                bytes(example.source_bytes),
+                example.action_ids,
+                grammar,
+                example.candidates,
+                global_words,
+            ).labels,
+        )
+        for example in examples
+    ]
 
 
 def merge_candidate_counts(alignments: Sequence[CandidateAlignment]) -> dict[str, dict[str, int | float]]:

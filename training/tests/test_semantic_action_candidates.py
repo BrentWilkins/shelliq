@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from shelliq_training.semantic_action_candidates import (
     CANDIDATE_IGNORE_INDEX,
+    action_words,
     align_actions_to_candidates,
+    global_word_lexicon,
     lexical_candidates,
     merge_candidate_counts,
 )
@@ -71,3 +73,22 @@ def test_candidate_alignment_uses_generator_fallback_for_missing_word() -> None:
     alignment = align_actions_to_candidates(b'source', actions, grammar(), lexical_candidates('source'))
     assert alignment.labels == (-100, -100, -100, -100)
     assert alignment.word_starts[1]
+
+
+def test_global_lexicon_precedes_local_candidates() -> None:
+    source = b'try cafe'
+    candidates = lexical_candidates(source.decode())
+    actions = (1, 64 + ord('c'), 64 + ord('a'), 64 + ord('f'), 64 + ord('e'), 23, 2)
+    assert action_words(actions, grammar()) == (b'cafe',)
+    assert global_word_lexicon([actions], grammar()) == (b'cafe',)
+    alignment = align_actions_to_candidates(source, actions, grammar(), candidates, (b'cafe', b'other'))
+    assert alignment.labels[1] == 0
+
+
+def test_local_candidate_indices_follow_global_lexicon() -> None:
+    source = b'try cafe'
+    candidates = lexical_candidates(source.decode())
+    actions = (1, 64 + ord('c'), 64 + ord('a'), 64 + ord('f'), 64 + ord('e'), 23, 2)
+    alignment = align_actions_to_candidates(source, actions, grammar(), candidates, (b'other',))
+    local = next(index for index, item in enumerate(candidates) if source[item.start : item.end] == b'cafe')
+    assert alignment.labels[1] == 1 + local
