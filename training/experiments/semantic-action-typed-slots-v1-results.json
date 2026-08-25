@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "experiment": "semantic-action-typed-slots-v1",
+  "status": "progress-gate-passed-promotion-gate-failed",
+  "codet5_revision": "b1ee9570c289f21b5922b9c768a1ce12957bf968",
+  "model": {
+    "total_parameters": 53651470,
+    "training_global_words": 1025,
+    "maximum_candidates": 1584,
+    "beam_width": 8,
+    "maximum_arguments": 12
+  },
+  "typed_oracle_gate": {
+    "passed": true,
+    "covered_words": 321,
+    "total_words": 460,
+    "covered_word_rate": 0.6978260869565217,
+    "fully_covered_examples": 23,
+    "total_examples": 92,
+    "command_words": 91,
+    "command_words_total": 93
+  },
+  "model_plumbing_gate": {
+    "passed": true,
+    "cpu_forward_backward": true,
+    "cpu_finite_gradients": true,
+    "overfit_step_limit": 2000,
+    "overfit_completed_steps": 200,
+    "overfit_global_words": 44,
+    "overfit_exact_actions": 8,
+    "overfit_rust_valid": 8,
+    "overfit_reference_accepted": 8,
+    "overfit_checkpoint_sha256": "3f9685af8bf44a146f7719bdbed25458a5b8bc474f6fb6aa049e8fe73625f458",
+    "overfit_report_sha256": "7015d0dffb59139f505abe95fe74d5a660b228b2540172a0f5a5faa89bea0859"
+  },
+  "inner_development_gate": {
+    "progress_passed": true,
+    "promotion_passed": false,
+    "seed": 20260826,
+    "train_records": 518,
+    "validation_records": 92,
+    "epochs": 50,
+    "selected_epoch": 7,
+    "selected_teacher_forced_total_loss": 3.198892918176658,
+    "exact_actions": 1,
+    "rust_valid": 91,
+    "rust_valid_rate": 0.9891304347826086,
+    "first_command_match": 81,
+    "first_command_match_rate": 0.8804347826086957,
+    "reference_accepted": 1,
+    "reference_accepted_rate": 0.010869565217391304,
+    "accepted_record_ids": [
+      "curated:networking:linux:ss-socket-summary"
+    ],
+    "invalid_record_ids": [
+      "curated:dev-toolchains:linux:docker-logs-follow"
+    ],
+    "checkpoint_sha256": "f5811c30afd17eed6655d34cd8fe5e82cca5e275fb48a66702ff479de6f24222",
+    "raw_report_sha256": "663ebc6149dec519668621dd47946a5be52d2bb38384640f055b46d3cf2cf4f2"
+  },
+  "outer_validation_evaluated": false,
+  "comparison_test_evaluated": false,
+  "decision": "retain-typed-slots-progress-demonstrated"
+}

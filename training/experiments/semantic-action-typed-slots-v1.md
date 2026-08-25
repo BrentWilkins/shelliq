@@ -1,6 +1,6 @@
 # Semantic-action typed slots v1
 
-Status: preregistered before implementation and evaluation.
+Status: progress gate passed; promotion gate not yet passed.
 
 This is the first of at most three typed-slot variants. It follows the bounded
 candidate-decoder program: local candidates plus grammar beam achieved perfect
@@ -79,3 +79,45 @@ original promotion target remains at least 5/92 accepted with those same
 validity and command floors. A result below the progress definition stops this
 variant; at most two evidence-driven typed variants may follow. No result in
 this typed-development program opens outer validation or test.
+
+## Outcome
+
+The typed oracle passed at its exact preregistered floor: 321/460 target words
+and every target word in 23/92 inner references were expressible. The real CPU
+path then passed with a 1,025-word training lexicon, at most 1,584 candidates per
+prompt, finite action/candidate/count/combined losses and gradients, and bounded
+grammar-complete generation.
+
+The eight-record CUDA overfit gate passed at step 200 of the 2,000-step cap:
+
+- Exact actions: 8/8.
+- Rust-valid render/re-lower: 8/8.
+- First command: 8/8.
+- Reference acceptance: 8/8.
+- Combined loss: 15.637070 initially and 0.008769 finally.
+
+The 50-epoch inner run selected epoch 7 solely by the lowest teacher-forced
+combined validation loss, 3.198893. Its frozen decode produced:
+
+- Exact actions: 1/92.
+- Rust-valid render/re-lower: 91/92 (98.91%).
+- First-command match: 81/92 (88.04%).
+- Reference acceptance: 1/92 (1.09%).
+
+This passes the typed program's evidence-of-progress definition: acceptance is
+nonzero for the first time while validity remains above 90% and command accuracy
+above 80%. The exact accepted held-out record is
+`curated:networking:linux:ss-socket-summary`. The single invalid record is
+`curated:dev-toolchains:linux:docker-logs-follow`.
+
+The result does not pass the original promotion requirement of at least 5/92
+accepted references. Outer validation and the comparison test therefore remain
+sealed. Because the user asked to work until evidence of progress and that
+evidence now exists, the program stops without consuming its two remaining
+variant allowances.
+
+The improvement isolates useful mechanisms: a deduplicated role-masked
+inventory avoids global/local command-route collapse, and explicit argument
+counts preserve structure while allowing one complete unseen semantic program.
+The remaining gap is candidate ranking and argument identity, not syntax,
+termination, or basic command discovery.
