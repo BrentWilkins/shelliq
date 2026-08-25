@@ -1,0 +1,98 @@
+{
+  "codet5": {
+    "best_epoch": 8,
+    "best_validation_loss": 0.46963276595424486,
+    "checkpoint_sha256": "7d21790f21ca6f89de2f9693267772e0025cf08db1c8aab0fe48f1ce2649251c",
+    "failure_counts": {
+      "first-command-mismatch": 12,
+      "invalid-json": 2,
+      "invalid-semantic-envelope": 2,
+      "reference-mismatch": 98,
+      "semantic-round-trip-failed": 7
+    },
+    "first_command_match": 86,
+    "metrics": {
+      "exact": 0,
+      "exact_rate": 0.0,
+      "examples": 98,
+      "reference_accepted": 0,
+      "reference_accepted_rate": 0.0,
+      "rust_round_trip": 91,
+      "rust_round_trip_rate": 0.9285714285714286
+    },
+    "parameter_count": 60492288,
+    "record_presentations": 30500,
+    "test_elapsed_seconds": 6.485752444015816,
+    "training_elapsed_seconds": 146.9978314950131
+  },
+  "custom": {
+    "best_epoch": 4,
+    "best_validation_loss": 1.92848619996547,
+    "checkpoint_sha256": "d006192fd8a9ddb5ddc09fa897c7e81aec8b7d0d891312e6a50df07dc61bc13b",
+    "failure_counts": {
+      "first-command-mismatch": 98,
+      "invalid-json": 98,
+      "invalid-semantic-envelope": 98,
+      "reference-mismatch": 98,
+      "semantic-round-trip-failed": 98
+    },
+    "first_command_match": 0,
+    "metrics": {
+      "exact": 0,
+      "exact_rate": 0.0,
+      "examples": 98,
+      "reference_accepted": 0,
+      "reference_accepted_rate": 0.0,
+      "rust_round_trip": 0,
+      "rust_round_trip_rate": 0.0
+    },
+    "parameter_count": 60207680,
+    "record_presentations": 30500,
+    "test_elapsed_seconds": 17.268366231932305,
+    "training_elapsed_seconds": 152.56590935203712
+  },
+  "dataset_sha256": "d5bb17a6e13f95051a0a97971a07ddfb8a806fdf63dc3d47d160cbf47f62d7ca",
+  "decision": {
+    "custom_generalization_gate_passed": false,
+    "diagnosis": "custom-no-transfer; codet5-syntax-without-semantic-transfer",
+    "primary_semantic_winner": "none"
+  },
+  "experiment": "semantic-compiler-heldout-v1",
+  "manifest_sha256": "e6f661623b6be106b9419ecdce13a8f68e3130c81ca8e78accf54ed7aa2b272c",
+  "paired": {
+    "exact": {
+      "both": 0,
+      "discordant": 0,
+      "left_only": 0,
+      "mcnemar_exact_two_sided_p": 1.0,
+      "neither": 98,
+      "right_only": 0
+    },
+    "first_command_match": {
+      "both": 0,
+      "discordant": 86,
+      "left_only": 0,
+      "mcnemar_exact_two_sided_p": 2.5849394142282115e-26,
+      "neither": 12,
+      "right_only": 86
+    },
+    "reference_accepted": {
+      "both": 0,
+      "discordant": 0,
+      "left_only": 0,
+      "mcnemar_exact_two_sided_p": 1.0,
+      "neither": 98,
+      "right_only": 0
+    },
+    "rust_round_trip": {
+      "both": 0,
+      "discordant": 91,
+      "left_only": 0,
+      "mcnemar_exact_two_sided_p": 8.077935669463161e-28,
+      "neither": 7,
+      "right_only": 91
+    }
+  },
+  "schema_version": 1,
+  "test_examples": 98
+}

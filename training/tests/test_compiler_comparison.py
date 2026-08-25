@@ -3,6 +3,7 @@ import hashlib
 import pytest
 
 from shelliq_training.compiler_comparison import (
+    analyze_comparison_reports,
     freeze_comparison_manifest,
     load_comparison_manifest,
     paired_binary_counts,
@@ -81,3 +82,76 @@ def test_paired_counts_include_exact_mcnemar_probability():
         'discordant': 3,
         'mcnemar_exact_two_sided_p': 1.0,
     }
+
+
+def test_analysis_reduces_raw_reports_to_paired_outcomes():
+    def train(contender):
+        return {
+            'experiment': 'semantic-compiler-heldout-v1',
+            'contender': contender,
+            'dataset_sha256': 'data',
+            'manifest_sha256': 'manifest',
+            'checkpoint_sha256': f'{contender}-checkpoint',
+            'model': {'parameter_count': 60},
+            'record_presentations': 100,
+            'best_epoch': 2,
+            'best_validation_loss': 0.5,
+            'elapsed_seconds': 3.0,
+        }
+
+    def test(contender, outcomes):
+        return {
+            'experiment': 'semantic-compiler-heldout-v1',
+            'contender': contender,
+            'dataset_sha256': 'data',
+            'manifest_sha256': 'manifest',
+            'checkpoint_sha256': f'{contender}-checkpoint',
+            'elapsed_seconds': 1.0,
+            'metrics': {'examples': 2},
+            'outcomes': outcomes,
+        }
+
+    custom_outcomes = [
+        {
+            'record_id': 'a',
+            'exact': False,
+            'rust_round_trip': False,
+            'reference_accepted': False,
+            'failures': ['first-command-mismatch'],
+        },
+        {
+            'record_id': 'b',
+            'exact': False,
+            'rust_round_trip': False,
+            'reference_accepted': False,
+            'failures': ['first-command-mismatch'],
+        },
+    ]
+    codet5_outcomes = [
+        {
+            'record_id': 'a',
+            'exact': False,
+            'rust_round_trip': True,
+            'reference_accepted': True,
+            'failures': [],
+        },
+        {
+            'record_id': 'b',
+            'exact': False,
+            'rust_round_trip': True,
+            'reference_accepted': False,
+            'failures': ['reference-mismatch'],
+        },
+    ]
+
+    result = analyze_comparison_reports(
+        train('custom'),
+        test('custom', custom_outcomes),
+        train('codet5'),
+        test('codet5', codet5_outcomes),
+    )
+
+    assert result['custom']['first_command_match'] == 0
+    assert result['codet5']['first_command_match'] == 2
+    assert result['paired']['rust_round_trip']['right_only'] == 2
+    assert result['decision']['custom_generalization_gate_passed'] is False

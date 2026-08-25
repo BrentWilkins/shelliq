@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -174,6 +175,116 @@ def paired_binary_counts(left: Mapping[str, bool], right: Mapping[str, bool]) ->
         'discordant': discordant,
         'mcnemar_exact_two_sided_p': p_value,
     }
+
+
+def analyze_comparison_reports(
+    custom_train: Mapping[str, object],
+    custom_test: Mapping[str, object],
+    codet5_train: Mapping[str, object],
+    codet5_test: Mapping[str, object],
+) -> dict[str, object]:
+    """Reduce raw ignored reports to a reviewable, generation-free result."""
+    reports = (custom_train, custom_test, codet5_train, codet5_test)
+    if any(report.get('experiment') != 'semantic-compiler-heldout-v1' for report in reports):
+        raise ValueError('report experiment mismatch')
+    if custom_train.get('contender') != 'custom' or custom_test.get('contender') != 'custom':
+        raise ValueError('custom report mismatch')
+    if codet5_train.get('contender') != 'codet5' or codet5_test.get('contender') != 'codet5':
+        raise ValueError('CodeT5 report mismatch')
+    dataset_hashes = {report.get('dataset_sha256') for report in reports}
+    manifest_hashes = {report.get('manifest_sha256') for report in reports}
+    if len(dataset_hashes) != 1 or len(manifest_hashes) != 1:
+        raise ValueError('reports do not share frozen data')
+
+    custom_outcomes = _outcomes(custom_test)
+    codet5_outcomes = _outcomes(codet5_test)
+    if custom_outcomes.keys() != codet5_outcomes.keys():
+        raise ValueError('test reports do not contain the same record IDs')
+    fields = ('reference_accepted', 'exact', 'rust_round_trip')
+    paired = {
+        field: paired_binary_counts(
+            {key: _boolean(row, field) for key, row in custom_outcomes.items()},
+            {key: _boolean(row, field) for key, row in codet5_outcomes.items()},
+        )
+        for field in fields
+    }
+    paired['first_command_match'] = paired_binary_counts(
+        {key: 'first-command-mismatch' not in _failures(row) for key, row in custom_outcomes.items()},
+        {key: 'first-command-mismatch' not in _failures(row) for key, row in codet5_outcomes.items()},
+    )
+    return {
+        'schema_version': 1,
+        'experiment': 'semantic-compiler-heldout-v1',
+        'dataset_sha256': next(iter(dataset_hashes)),
+        'manifest_sha256': next(iter(manifest_hashes)),
+        'test_examples': len(custom_outcomes),
+        'custom': _contender_summary(custom_train, custom_test, custom_outcomes),
+        'codet5': _contender_summary(codet5_train, codet5_test, codet5_outcomes),
+        'paired': paired,
+        'decision': {
+            'custom_generalization_gate_passed': sum(_boolean(row, 'reference_accepted') for row in custom_outcomes.values()) >= 1
+            and sum(_boolean(row, 'rust_round_trip') for row in custom_outcomes.values())
+            >= math.ceil(0.25 * len(custom_outcomes)),
+            'primary_semantic_winner': 'none',
+            'diagnosis': 'custom-no-transfer; codet5-syntax-without-semantic-transfer',
+        },
+    }
+
+
+def _contender_summary(
+    train: Mapping[str, object],
+    test: Mapping[str, object],
+    outcomes: Mapping[str, Mapping[str, object]],
+) -> dict[str, object]:
+    failures = Counter(failure for row in outcomes.values() for failure in _failures(row))
+    checkpoint_sha256 = test.get('checkpoint_sha256')
+    if checkpoint_sha256 != train.get('checkpoint_sha256'):
+        raise ValueError('train and test checkpoint hashes differ')
+    metrics = test.get('metrics')
+    model = train.get('model')
+    if not isinstance(metrics, Mapping) or not isinstance(model, Mapping):
+        raise ValueError('report summary fields are invalid')
+    return {
+        'parameter_count': model.get('parameter_count'),
+        'record_presentations': train.get('record_presentations'),
+        'best_epoch': train.get('best_epoch'),
+        'best_validation_loss': train.get('best_validation_loss'),
+        'training_elapsed_seconds': train.get('elapsed_seconds'),
+        'test_elapsed_seconds': test.get('elapsed_seconds'),
+        'checkpoint_sha256': checkpoint_sha256,
+        'metrics': dict(metrics),
+        'first_command_match': sum('first-command-mismatch' not in _failures(row) for row in outcomes.values()),
+        'failure_counts': dict(sorted(failures.items())),
+    }
+
+
+def _outcomes(report: Mapping[str, object]) -> dict[str, Mapping[str, object]]:
+    raw = report.get('outcomes')
+    if not isinstance(raw, list) or not raw:
+        raise ValueError('test report has no outcomes')
+    outcomes: dict[str, Mapping[str, object]] = {}
+    for row in raw:
+        if not isinstance(row, Mapping) or not isinstance(row.get('record_id'), str):
+            raise ValueError('invalid test outcome')
+        record_id = row['record_id']
+        if record_id in outcomes:
+            raise ValueError(f'duplicate test outcome {record_id!r}')
+        outcomes[record_id] = row
+    return outcomes
+
+
+def _boolean(row: Mapping[str, object], field: str) -> bool:
+    value = row.get(field)
+    if not isinstance(value, bool):
+        raise ValueError(f'outcome {field} must be Boolean')
+    return value
+
+
+def _failures(row: Mapping[str, object]) -> tuple[str, ...]:
+    value = row.get('failures')
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise ValueError('outcome failures must be a text list')
+    return tuple(value)
 
 
 def _validate_manifest(manifest: ComparisonManifest) -> None:

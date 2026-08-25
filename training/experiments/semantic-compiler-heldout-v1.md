@@ -1,6 +1,6 @@
 # Semantic compiler held-out comparison v1
 
-Status: preregistered; test split sealed.
+Status: complete; neither contender achieved held-out semantic acceptance.
 
 ## Question
 
@@ -105,3 +105,57 @@ stage; no release or promotion decision follows from this development split.
 - Do not execute generated commands.
 - Do not serve, export, or promote either checkpoint.
 - Preserve checkpoints and raw reports only as ignored local artifacts.
+
+## Results
+
+Both contenders completed the fixed 50 epochs and exactly 30,500 training-record
+presentations. The selected checkpoints were locked before the test split was
+decoded.
+
+| Contender | Parameters | Best epoch | Validation loss | Train time |
+| --- | ---: | ---: | ---: | ---: |
+| Custom scratch | 60,207,680 | 4 | 1.92849 | 152.57 s |
+| CodeT5-small | 60,492,288 | 8 | 0.46963 | 147.00 s |
+
+The 98-row sealed command-disjoint test result was:
+
+| Contender | Exact target | Rust-valid | First command | Reference accepted |
+| --- | ---: | ---: | ---: | ---: |
+| Custom scratch | 0/98 | 0/98 | 0/98 | 0/98 |
+| CodeT5-small | 0/98 | 91/98 | 86/98 | 0/98 |
+
+The custom model collapsed to one unterminated `git -n ...` document on every
+test row. It therefore failed the preregistered generalization gate. The earlier
+4/4 overfit result established local memorization only and did not transfer to
+unseen command families.
+
+CodeT5 learned the compact output grammar and usually selected the command named
+by the authoritative context. Its 91 paired Rust-valid wins over custom have an
+exact two-sided McNemar p-value of `8.08e-28`; its 86 first-command wins have
+`p=2.58e-26`. However, every output differed materially from its reviewed
+reference, most often through incorrect, duplicated, or misplaced options and
+operands. Both contenders scored 0/98 on the primary semantic metric, so there
+is no semantic winner.
+
+The checked generation-free result is
+`experiments/semantic-compiler-heldout-v1-results.json`. Raw generations,
+training curves, and the roughly 415 MB checkpoints remain ignored under
+`artifacts/semantic-compiler-heldout-v1/`. Their checkpoint SHA-256 values are:
+
+- custom: `d006192fd8a9ddb5ddc09fa897c7e81aec8b7d0d891312e6a50df07dc61bc13b`;
+- CodeT5: `7d21790f21ca6f89de2f9693267772e0025cf08db1c8aab0fe48f1ce2649251c`.
+
+## Decision
+
+Stop the plain scratch compiler recipe. Do not interpret CodeT5's structural
+validity as task correctness and do not promote either checkpoint. Grammar
+constraining alone is not the next bottleneck because CodeT5 already emits valid
+documents 92.9% of the time.
+
+The next defensible architecture experiment is a hybrid: retain a pretrained
+natural-language encoder but replace free-form JSON generation with a compact,
+project-owned semantic action vocabulary and grammar-masked decoder. That tests
+whether reducing the 32K/152K output spaces and enforcing field structure frees
+capacity for option/operand semantics. It must reuse this frozen split and
+compare against the locked CodeT5 result without reopening the test set for
+model selection.
