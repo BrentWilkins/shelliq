@@ -27,7 +27,12 @@ from huggingface_hub import hf_hub_download
 from safetensors.flax import load_file
 from transformers import AutoTokenizer
 
-from shelliq_training.checkpoint import TargetFormat, restore_checkpoint, save_checkpoint
+from shelliq_training.checkpoint import (
+    TargetFormat,
+    restore_adapter_checkpoint,
+    restore_checkpoint,
+    save_checkpoint,
+)
 from shelliq_training.config import Qwen2Config
 from shelliq_training.corpus_audit import preflight_records
 from shelliq_training.data import (
@@ -69,6 +74,7 @@ def parse_args() -> argparse.Namespace:
     dataset.add_argument('--dataset', type=Path)
     dataset.add_argument('--semantic-dataset', type=Path)
     parser.add_argument('--sequence-length', type=int, default=128)
+    parser.add_argument('--model-id', default=MODEL_ID)
     parser.add_argument('--train-examples', type=int, default=4)
     parser.add_argument('--all-train-examples', action='store_true')
     parser.add_argument('--eval-examples', type=int, default=4)
@@ -94,7 +100,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--split-seed', type=int)
     parser.add_argument('--checkpoint', type=Path)
     parser.add_argument('--best-checkpoint-root', type=Path)
+    parser.add_argument(
+        '--checkpoint-interval-root',
+        type=Path,
+        help='Keep a checkpoint at every evaluation interval.',
+    )
+    parser.add_argument(
+        '--retain-checkpoint-steps',
+        type=_positive_step_set,
+        help='With --checkpoint-interval-root, retain only these comma-separated evaluation steps.',
+    )
     parser.add_argument('--resume-checkpoint', type=Path)
+    parser.add_argument(
+        '--initialize-from-checkpoint',
+        type=Path,
+        help='Load adapter weights with a fresh optimizer and step schedule.',
+    )
     parser.add_argument('--report', type=Path)
     parser.add_argument('--heldout-probe', action='store_true')
     parser.add_argument('--priority-source')
@@ -103,8 +124,41 @@ def parse_args() -> argparse.Namespace:
         help='Repeat selected training rows whose record IDs start with this prefix.',
     )
     parser.add_argument('--rehearsal-weight', type=int, default=1)
+    parser.add_argument(
+        '--rehearsal',
+        action='append',
+        default=[],
+        metavar='PREFIX=WEIGHT',
+        help='Repeat a curriculum slice; may be supplied more than once.',
+    )
+    parser.add_argument('--expected-unique-train-examples', type=int)
+    parser.add_argument('--expected-effective-train-examples', type=int)
+    parser.add_argument('--expected-unique-curated-examples', type=int)
+    parser.add_argument('--selection-only', action='store_true', help='Validate data selection without loading a model.')
+    parser.add_argument(
+        '--curated-data-fraction',
+        type=float,
+        default=1.0,
+        help='Deterministic command-stratified fraction of unique curated training rows.',
+    )
+    parser.add_argument(
+        '--curated-presentations',
+        type=int,
+        help='Exact curated rows after replay; used to equalize data-scaling runs.',
+    )
     parser.add_argument('--prompt-contract', type=PromptContract, choices=PromptContract)
     return parser.parse_args()
+
+
+def _positive_step_set(value: str) -> frozenset[int]:
+    """Parse an ordered-insensitive, duplicate-free set of positive steps."""
+    try:
+        steps = tuple(int(item) for item in value.split(','))
+    except ValueError as error:
+        raise argparse.ArgumentTypeError('steps must be comma-separated integers') from error
+    if not steps or any(step <= 0 for step in steps) or len(set(steps)) != len(steps):
+        raise argparse.ArgumentTypeError('steps must be unique positive integers')
+    return frozenset(steps)
 
 
 def _ordered_records(records: Sequence[SFTRecord], seed: int) -> list[SFTRecord]:
@@ -249,6 +303,161 @@ def apply_rehearsal_weight(
     return [item[0] for item in weighted], [item[1] for item in weighted]
 
 
+def parse_rehearsal_specs(
+    values: Sequence[str],
+    *,
+    legacy_prefix: str | None,
+    legacy_weight: int,
+) -> list[tuple[str, int]]:
+    """Parse repeatable PREFIX=WEIGHT curriculum specifications."""
+    if values and (legacy_prefix is not None or legacy_weight != 1):
+        raise ValueError('--rehearsal cannot be combined with legacy rehearsal options')
+    if not values:
+        return [] if legacy_prefix is None else [(legacy_prefix, legacy_weight)]
+
+    specs: list[tuple[str, int]] = []
+    seen: set[str] = set()
+    for value in values:
+        prefix, separator, raw_weight = value.rpartition('=')
+        if not separator or not prefix or not raw_weight:
+            raise ValueError(f'invalid rehearsal specification {value!r}; expected PREFIX=WEIGHT')
+        try:
+            weight = int(raw_weight)
+        except ValueError as error:
+            raise ValueError(f'invalid rehearsal weight in {value!r}') from error
+        if weight < 1:
+            raise ValueError('rehearsal weight must be positive')
+        if prefix in seen:
+            raise ValueError(f'duplicate rehearsal prefix {prefix!r}')
+        seen.add(prefix)
+        specs.append((prefix, weight))
+    return specs
+
+
+def apply_rehearsal_weights(
+    records: Sequence[SFTRecord],
+    examples: Sequence[TokenizedExample],
+    *,
+    specs: Sequence[tuple[str, int]],
+    seed: int,
+) -> tuple[list[SFTRecord], list[TokenizedExample]]:
+    """Repeat multiple disjoint curriculum slices in one deterministic shuffle."""
+    if len(records) != len(examples):
+        raise ValueError('records and examples must have equal lengths')
+    if not specs:
+        return list(records), list(examples)
+
+    weighted: list[tuple[SFTRecord, TokenizedExample, int]] = []
+    matched = [0] * len(specs)
+    for record, example in zip(records, examples, strict=True):
+        matching = [index for index, (prefix, _) in enumerate(specs) if record.record_id.startswith(prefix)]
+        if len(matching) > 1:
+            prefixes = [specs[index][0] for index in matching]
+            raise ValueError(f'rehearsal prefixes overlap for {record.record_id!r}: {prefixes!r}')
+        repeats = 1
+        if matching:
+            index = matching[0]
+            matched[index] += 1
+            repeats = specs[index][1]
+        weighted.extend((record, example, occurrence) for occurrence in range(repeats))
+
+    for (prefix, _), count in zip(specs, matched, strict=True):
+        if count == 0:
+            raise ValueError(f'no selected training record IDs start with {prefix!r}')
+    weighted.sort(key=lambda item: hashlib.sha256(f'{seed}\0{item[0].record_id}\0{item[2]}'.encode()).digest())
+    return [item[0] for item in weighted], [item[1] for item in weighted]
+
+
+def select_source_fraction(
+    records: Sequence[SFTRecord],
+    examples: Sequence[TokenizedExample],
+    *,
+    source: str,
+    fraction: float,
+    seed: int,
+) -> tuple[list[SFTRecord], list[TokenizedExample]]:
+    """Select an exact, deterministic fraction while preserving every command family."""
+    if len(records) != len(examples):
+        raise ValueError('records and examples must have equal lengths')
+    if not math.isfinite(fraction) or not 0 < fraction <= 1:
+        raise ValueError('source data fraction must be in (0, 1]')
+    source_indices = [index for index, record in enumerate(records) if record.source == source]
+    if not source_indices:
+        raise ValueError(f'no selected training records have source {source!r}')
+    if fraction == 1:
+        return list(records), list(examples)
+
+    by_command: dict[str, list[int]] = {}
+    for index in source_indices:
+        by_command.setdefault(records[index].command, []).append(index)
+    target = max(len(by_command), math.floor(len(source_indices) * fraction + 0.5))
+    target = min(target, len(source_indices))
+
+    ranked_groups = {}
+    selected: set[int] = set()
+    for command, indices in by_command.items():
+        ranked = sorted(
+            indices,
+            key=lambda index: hashlib.sha256(f'{seed}\0{records[index].record_id}'.encode()).digest(),
+        )
+        ranked_groups[command] = ranked
+        selected.add(ranked[0])
+
+    candidates = [index for command in sorted(ranked_groups) for index in ranked_groups[command][1:]]
+    candidates.sort(key=lambda index: hashlib.sha256(f'{seed}\0extra\0{records[index].record_id}'.encode()).digest())
+    selected.update(candidates[: target - len(selected)])
+    keep = [index for index, record in enumerate(records) if record.source != source or index in selected]
+    return [records[index] for index in keep], [examples[index] for index in keep]
+
+
+def apply_source_presentation_target(
+    records: Sequence[SFTRecord],
+    examples: Sequence[TokenizedExample],
+    *,
+    source: str,
+    presentations: int,
+    seed: int,
+) -> tuple[list[SFTRecord], list[TokenizedExample]]:
+    """Replay a source to an exact presentation count with balanced deterministic copies."""
+    if len(records) != len(examples):
+        raise ValueError('records and examples must have equal lengths')
+    if presentations <= 0:
+        raise ValueError('source presentations must be positive')
+    source_rows = [(record, example) for record, example in zip(records, examples, strict=True) if record.source == source]
+    if not source_rows:
+        raise ValueError(f'no selected training records have source {source!r}')
+    if presentations < len(source_rows):
+        raise ValueError('source presentations cannot be less than unique source rows')
+
+    ranked = sorted(
+        source_rows,
+        key=lambda item: hashlib.sha256(f'{seed}\0presentation\0{item[0].record_id}'.encode()).digest(),
+    )
+    base, remainder = divmod(presentations, len(ranked))
+    repeats = {record.record_id: base + (index < remainder) for index, (record, _) in enumerate(ranked)}
+    weighted: list[tuple[SFTRecord, TokenizedExample, int]] = []
+    for record, example in zip(records, examples, strict=True):
+        count = repeats.get(record.record_id, 1)
+        weighted.extend((record, example, occurrence) for occurrence in range(count))
+    weighted.sort(key=lambda item: hashlib.sha256(f'{seed}\0{item[0].record_id}\0{item[2]}'.encode()).digest())
+    return [item[0] for item in weighted], [item[1] for item in weighted]
+
+
+def trim_to_complete_batches(
+    records: Sequence[SFTRecord],
+    examples: Sequence[TokenizedExample],
+    *,
+    batch_size: int,
+) -> tuple[list[SFTRecord], list[TokenizedExample]]:
+    """Drop only the incomplete final batch from a full-corpus selection."""
+    if len(records) != len(examples):
+        raise ValueError('records and examples must have equal lengths')
+    if batch_size <= 0:
+        raise ValueError('batch size must be positive')
+    usable_count = len(examples) - (len(examples) % batch_size)
+    return list(records[:usable_count]), list(examples[:usable_count])
+
+
 def mean_loss(model: Qwen2ForCausalLM, batches: Sequence[CausalLMBatch]) -> float:
     losses = [float(np.asarray(eval_step(model, batch))) for batch in batches]
     return float(np.mean(losses))
@@ -349,7 +558,7 @@ def main() -> None:
         raise SystemExit(f'report already exists: {args.report}')
     if args.report is not None and not args.report.parent.is_dir():
         raise SystemExit(f'report parent does not exist: {args.report.parent}')
-    if jax.default_backend() != 'gpu':
+    if not args.selection_only and jax.default_backend() != 'gpu':
         raise SystemExit('smoke_finetune.py requires a JAX GPU backend')
     if args.sequence_length < GENERATION_TOKENS + 2:
         raise SystemExit(f'--sequence-length must exceed {GENERATION_TOKENS + 1}')
@@ -379,6 +588,14 @@ def main() -> None:
         raise SystemExit('--best-checkpoint-root requires --eval-interval')
     if args.best_checkpoint_root is not None and args.best_checkpoint_root.exists():
         raise SystemExit(f'best-checkpoint root already exists: {args.best_checkpoint_root}')
+    if args.checkpoint_interval_root is not None and not args.eval_interval:
+        raise SystemExit('--checkpoint-interval-root requires --eval-interval')
+    if args.checkpoint_interval_root is not None and args.checkpoint_interval_root.exists():
+        raise SystemExit(f'checkpoint-interval root already exists: {args.checkpoint_interval_root}')
+    if args.retain_checkpoint_steps is not None and args.checkpoint_interval_root is None:
+        raise SystemExit('--retain-checkpoint-steps requires --checkpoint-interval-root')
+    if args.retain_checkpoint_steps is not None and max(args.retain_checkpoint_steps) > args.steps:
+        raise SystemExit('--retain-checkpoint-steps cannot exceed --steps')
     if not math.isfinite(args.early_stopping_min_delta) or args.early_stopping_min_delta < 0:
         raise SystemExit('--early-stopping-min-delta must be finite and non-negative')
     if not math.isfinite(args.early_stopping_min_epochs) or args.early_stopping_min_epochs < 0:
@@ -395,6 +612,18 @@ def main() -> None:
         and args.checkpoint.resolve() == args.resume_checkpoint.resolve()
     ):
         raise SystemExit('--checkpoint and --resume-checkpoint must be different paths')
+    if args.resume_checkpoint is not None and args.initialize_from_checkpoint is not None:
+        raise SystemExit('--resume-checkpoint and --initialize-from-checkpoint are mutually exclusive')
+    if not math.isfinite(args.curated_data_fraction) or not 0 < args.curated_data_fraction <= 1:
+        raise SystemExit('--curated-data-fraction must be in (0, 1]')
+    if args.curated_presentations is not None and args.curated_presentations <= 0:
+        raise SystemExit('--curated-presentations must be positive')
+    if args.curated_data_fraction != 1.0 and args.curated_presentations is None:
+        raise SystemExit('--curated-data-fraction below 1 requires --curated-presentations')
+    if args.curated_presentations is not None and (
+        args.rehearsal or args.rehearsal_record_prefix is not None or args.rehearsal_weight != 1
+    ):
+        raise SystemExit('--curated-presentations cannot be combined with rehearsal options')
 
     if args.semantic_dataset is not None:
         dataset_path = args.semantic_dataset
@@ -411,7 +640,7 @@ def main() -> None:
     total_records = len(clean_records) + len(rejected)
     split_seed = args.seed if args.split_seed is None else args.split_seed
     splits = split_records(clean_records, corpus=Corpus.DISTRIBUTABLE, seed=split_seed)
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, local_files_only=True)
+    tokenizer = AutoTokenizer.from_pretrained(args.model_id, local_files_only=True)
     if args.all_train_examples:
         train_records, train_examples = select_all_examples(
             splits[Split.TRAIN],
@@ -430,18 +659,68 @@ def main() -> None:
             priority_source=args.priority_source,
             prompt_contract=prompt_contract,
         )
-    unique_train_records = train_records
-    train_records, train_examples = apply_rehearsal_weight(
-        train_records,
-        train_examples,
-        record_prefix=args.rehearsal_record_prefix,
-        weight=args.rehearsal_weight,
-        seed=args.seed,
-    )
+    try:
+        train_records, train_examples = select_source_fraction(
+            train_records,
+            train_examples,
+            source='shelliq-curated',
+            fraction=args.curated_data_fraction,
+            seed=args.seed,
+        )
+        unique_train_records = train_records
+        if args.curated_presentations is not None:
+            rehearsal_specs = []
+            train_records, train_examples = apply_source_presentation_target(
+                train_records,
+                train_examples,
+                source='shelliq-curated',
+                presentations=args.curated_presentations,
+                seed=args.seed,
+            )
+        else:
+            rehearsal_specs = parse_rehearsal_specs(
+                args.rehearsal,
+                legacy_prefix=args.rehearsal_record_prefix,
+                legacy_weight=args.rehearsal_weight,
+            )
+            train_records, train_examples = apply_rehearsal_weights(
+                train_records,
+                train_examples,
+                specs=rehearsal_specs,
+                seed=args.seed,
+            )
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
     if args.all_train_examples:
-        usable_count = len(train_examples) - (len(train_examples) % args.batch_size)
-        train_records = train_records[:usable_count]
-        train_examples = train_examples[:usable_count]
+        train_records, train_examples = trim_to_complete_batches(
+            train_records,
+            train_examples,
+            batch_size=args.batch_size,
+        )
+    unique_curated_examples = sum(record.source == 'shelliq-curated' for record in unique_train_records)
+    expected_counts = (
+        ('--expected-unique-train-examples', args.expected_unique_train_examples, len(unique_train_records)),
+        ('--expected-effective-train-examples', args.expected_effective_train_examples, len(train_records)),
+        ('--expected-unique-curated-examples', args.expected_unique_curated_examples, unique_curated_examples),
+    )
+    for option, expected, actual in expected_counts:
+        if expected is not None and expected != actual:
+            raise SystemExit(f'{option} asserted {expected:,}, selected {actual:,}')
+    if args.selection_only:
+        print(
+            json.dumps(
+                {
+                    'unique_train_examples': len(unique_train_records),
+                    'unique_curated_examples': unique_curated_examples,
+                    'effective_train_examples': len(train_records),
+                    'effective_curated_presentations': sum(record.source == 'shelliq-curated' for record in train_records),
+                    'train_record_ids_sha256': _record_id_sha256(unique_train_records),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return
     eval_records, eval_examples = select_examples(
         splits[args.eval_split],
         tokenizer,
@@ -487,10 +766,26 @@ def main() -> None:
     print(f'train selection: {len(train_records):,} rows, sources={dict(Counter(record.source for record in train_records))}')
     print(f'eval selection: {len(eval_records):,} rows, sources={dict(Counter(record.source for record in eval_records))}')
 
-    model = Qwen2ForCausalLM(Qwen2Config(), param_dtype=jnp.bfloat16, rngs=nnx.Rngs(0))
-    weights_path = hf_hub_download(MODEL_ID, 'model.safetensors', local_files_only=True)
+    config_path = hf_hub_download(args.model_id, 'config.json', local_files_only=True)
+    model = Qwen2ForCausalLM(
+        Qwen2Config.from_json(Path(config_path)),
+        param_dtype=jnp.bfloat16,
+        rngs=nnx.Rngs(0),
+    )
+    weights_path = hf_hub_download(args.model_id, 'model.safetensors', local_files_only=True)
     load_hf_state_dict(model, load_file(weights_path), param_dtype=jnp.bfloat16)
     inject_lora(model, rank=args.rank, alpha=args.alpha, rngs=nnx.Rngs(1))
+    initialized_metadata = None
+    if args.initialize_from_checkpoint is not None:
+        initialized_metadata = restore_adapter_checkpoint(
+            args.initialize_from_checkpoint,
+            model,
+            model_id=args.model_id,
+            corpus=Corpus.DISTRIBUTABLE,
+            target_format=target_format,
+            prompt_contract=prompt_contract,
+        )
+        print(f'initialized adapter: {args.initialize_from_checkpoint} at step {initialized_metadata.step}; fresh optimizer')
     learning_rate: float | Callable[[jax.Array], jax.Array] = args.learning_rate
     if args.lr_schedule == 'warmup-cosine':
         learning_rate = warmup_cosine_schedule(
@@ -510,7 +805,7 @@ def main() -> None:
             args.resume_checkpoint,
             model,
             optimizer,
-            model_id=MODEL_ID,
+            model_id=args.model_id,
             corpus=Corpus.DISTRIBUTABLE,
             target_format=target_format,
             prompt_contract=prompt_contract,
@@ -610,6 +905,22 @@ def main() -> None:
                 interval_loss_sum = 0.0
                 interval_loss_steps = 0
                 progress.console.print(f'validation step {completed_steps}: heldout={heldout_loss:.4f}')
+                retain_interval = args.checkpoint_interval_root is not None and (
+                    args.retain_checkpoint_steps is None or completed_steps in args.retain_checkpoint_steps
+                )
+                if retain_interval:
+                    interval_checkpoint_path = args.checkpoint_interval_root / f'step-{completed_steps:08d}'
+                    interval_checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+                    save_checkpoint(
+                        interval_checkpoint_path,
+                        model,
+                        optimizer,
+                        model_id=args.model_id,
+                        corpus=Corpus.DISTRIBUTABLE,
+                        target_format=target_format,
+                        prompt_contract=prompt_contract,
+                    )
+                    progress.console.print(f'interval checkpoint: {interval_checkpoint_path}')
                 if is_new_best and args.best_checkpoint_root is not None:
                     checkpoint_path = args.best_checkpoint_root / f'step-{completed_steps:08d}'
                     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
@@ -617,7 +928,7 @@ def main() -> None:
                         checkpoint_path,
                         model,
                         optimizer,
-                        model_id=MODEL_ID,
+                        model_id=args.model_id,
                         corpus=Corpus.DISTRIBUTABLE,
                         target_format=target_format,
                         prompt_contract=prompt_contract,
@@ -657,14 +968,20 @@ def main() -> None:
     print(f'elapsed: {elapsed:.2f}s')
 
     failure_message = None
-    if not math.isfinite(final_train_loss) or final_train_loss >= initial_train_loss * 0.9:
+    if not math.isfinite(final_train_loss):
+        failure_message = f'smoke failed: non-finite final train loss {final_train_loss}'
+    elif (
+        args.resume_checkpoint is None
+        and args.initialize_from_checkpoint is None
+        and final_train_loss >= initial_train_loss * 0.9
+    ):
         failure_message = f'smoke failed: train loss did not fall by 10% ({initial_train_loss:.4f} -> {final_train_loss:.4f})'
     if args.checkpoint is not None and failure_message is None:
         metadata = save_checkpoint(
             args.checkpoint,
             model,
             optimizer,
-            model_id=MODEL_ID,
+            model_id=args.model_id,
             corpus=Corpus.DISTRIBUTABLE,
             target_format=target_format,
             prompt_contract=prompt_contract,
@@ -674,7 +991,7 @@ def main() -> None:
     if args.report is not None:
         report = {
             'report_schema_version': 3,
-            'model_id': MODEL_ID,
+            'model_id': args.model_id,
             'adapter': {
                 'rank': args.rank,
                 'alpha': args.alpha,
@@ -694,6 +1011,12 @@ def main() -> None:
                 'path': str(args.resume_checkpoint),
                 'step': resumed_metadata.step,
             },
+            'initialize_from_checkpoint': None
+            if initialized_metadata is None
+            else {
+                'path': str(args.initialize_from_checkpoint),
+                'step': initialized_metadata.step,
+            },
             'selection': {
                 'seed': args.seed,
                 'split_seed': split_seed,
@@ -702,14 +1025,16 @@ def main() -> None:
                 'train_record_ids_sha256': _record_id_sha256(unique_train_records),
                 'train_source_counts': dict(Counter(record.source for record in unique_train_records)),
                 'effective_train_examples': len(train_records),
+                'unique_curated_examples': unique_curated_examples,
+                'curated_data_fraction': args.curated_data_fraction,
+                'curated_presentations': args.curated_presentations,
                 'effective_train_source_counts': dict(Counter(record.source for record in train_records)),
                 'effective_rehearsal_examples': sum(
-                    record.record_id.startswith(args.rehearsal_record_prefix)
-                    for record in train_records
-                    if args.rehearsal_record_prefix is not None
+                    any(record.record_id.startswith(prefix) for prefix, _ in rehearsal_specs) for record in train_records
                 ),
                 'rehearsal_record_prefix': args.rehearsal_record_prefix,
                 'rehearsal_weight': args.rehearsal_weight,
+                'rehearsals': [{'record_prefix': prefix, 'weight': weight} for prefix, weight in rehearsal_specs],
                 'eval_examples': len(eval_records),
                 'eval_split': args.eval_split.value,
                 'eval_record_ids_sha256': _record_id_sha256(eval_records),
@@ -759,6 +1084,10 @@ def main() -> None:
                     'heldout_loss': best_loss_observation.heldout_loss,
                 },
                 'best_checkpoint': None if best_checkpoint is None else str(best_checkpoint),
+                'checkpoint_interval_root': None if args.checkpoint_interval_root is None else str(args.checkpoint_interval_root),
+                'retained_checkpoint_steps': None
+                if args.retain_checkpoint_steps is None
+                else sorted(args.retain_checkpoint_steps),
                 'gradient_diagnostics': None
                 if not args.gradient_diagnostics
                 else {

@@ -1,0 +1,317 @@
+{
+  "records": {
+    "curated-development:v1:linux:apt-cache-depends-filtered": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:apt-cache-names-only": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:apt-mark-auto-libraries": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:apt-mark-hold-kernel": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:b2sum-quiet-missing": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:b2sum-short-tag": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:basename-null-suffix-sort": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:basenc-base32hex-recovery": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:basenc-url-no-wrap": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:blkid-filesystem-usage-export": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:blkid-first-token-value": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:blkid-label-device": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:blkid-probe-offset-size": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:btrfs-device-errors-json": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:btrfs-du-summary-raw": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:btrfs-scrub-detailed-raw": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:btrfs-snapshots-below-sorted": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:busctl-call-bounded-no-start": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:busctl-property-json": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:busctl-system-acquired-unique": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:busctl-user-tree-paths": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:bwrap-clean-env-network": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:bwrap-die-parent-hostname": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:bwrap-readonly-project": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:bwrap-user-private-dev": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:csplit-chapters-quiet": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:csplit-error-sections": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:dirname-null-sort": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:dpkg-deb-contents-verbose": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:dpkg-deb-raw-extract": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:dpkg-deb-selected-fields": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:dpkg-deb-show-format": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:dpkg-query-alternate-root-files": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:dpkg-query-package-version": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:fallocate-collapse-range": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:fallocate-preallocate-keep-size": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:fallocate-punch-range": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:fallocate-zero-exact-range": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:fmt-crown-split-only": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:fmt-prefix-uniform": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:getconf-all-key-sort": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:ionice-pgid-idle": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:ionice-pid-best-effort": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:ionice-run-idle-backup": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:ionice-uid-realtime": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:losetup-associated-json": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:losetup-direct-nooverlap": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:losetup-offset-limited-sector": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:losetup-readonly-partscan": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:lsns-net-json-columns": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:lsns-pid-tree-raw": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:lsns-task-mount": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:lsns-user-nowrap": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:machinectl-copy-create-directory": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:machinectl-shell-user-env": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:machinectl-show-values": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:machinectl-status-journal": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:mountpoint-block-device-number": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:mountpoint-fs-device-number": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:mountpoint-major-number": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:mountpoint-quiet-nofollow": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:namei-long-context": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:namei-long-no-symlinks": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:namei-no-symlink-mounts": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:namei-owner-vertical-two": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:networkctl-edit-dropin": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:networkctl-json-all-status": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:networkctl-link-stats-full": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:networkctl-lldp-json": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:nsenter-all-target-credentials": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:nsenter-net-uts-directory": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:nsenter-pid-no-fork": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:nsenter-user-root-uid": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:printenv-null-to-lines": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:prlimit-cpu-processes": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:prlimit-pid-open-files": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:prlimit-raw-columns": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:prlimit-run-core-stack": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:runcon-computed-web-type": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:runcon-explicit-context": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:runcon-range-role": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:runcon-user-role-type": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:script-advanced-io-timing": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:script-append-no-echo": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:script-command-return-flush": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:script-output-limit": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:setpriv-clean-nobody": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:setpriv-drop-capabilities": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:setpriv-parent-death": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:setpriv-service-identity": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:shred-seven-zero-wipe": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:shred-sized-random-exact": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:shuf-echo-output": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:shuf-range-reproducible": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:systemd-run-bounded-service": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:systemd-run-delayed-cleanup": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:systemd-run-scope-nice": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:systemd-run-user-directory-env": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:unexpand-all-width-four": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:unexpand-first-custom-stops": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:unshare-child-term": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:unshare-current-private-workdir": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:unshare-net-uts-hostname": {
+      "variable_literal_paths": []
+    },
+    "curated-development:v1:linux:unshare-root-proc-shell": {
+      "variable_literal_paths": []
+    }
+  },
+  "schema_version": 1
+}

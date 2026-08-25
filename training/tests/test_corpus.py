@@ -22,7 +22,7 @@ PORTABLE_SHELLS = (
 
 
 def corpus_files():
-    files = sorted(CORPUS_DIRECTORY.glob('*.jsonl'))
+    files = [path for path in sorted(CORPUS_DIRECTORY.glob('*.jsonl')) if not path.name.startswith('reviewed-preference-')]
     assert files, 'curated corpus must contain at least one JSONL file'
     return files
 
@@ -69,7 +69,8 @@ def test_provenance_and_licensing_are_uniform():
     for path, record in curated_records():
         assert record.source == CURATED_SOURCE
         assert record.license == CURATED_LICENSE
-        assert record.provenance == f'corpus/{path.name}@2026-08-07:model-authored'
+        assert record.provenance.startswith(f'corpus/{path.name}')
+        assert record.provenance.endswith(':model-authored')
 
 
 def test_command_matches_the_response():

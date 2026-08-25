@@ -10,7 +10,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from shelliq_training.retention_analysis import retention_failures  # noqa: E402
+from shelliq_training.retention_analysis import (  # noqa: E402
+    retention_failures,
+    tiered_retention_failures,
+)
 from shelliq_training.semantic_error_analysis import (  # noqa: E402
     analyze_examples,
     compare_results,
@@ -26,6 +29,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--grounding-audit', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--gate', action='store_true')
+    parser.add_argument(
+        '--tiered',
+        action='store_true',
+        help='Use preregistered absolute floors instead of strict incumbent no-regression.',
+    )
     return parser.parse_args()
 
 
@@ -45,14 +53,20 @@ def main() -> None:
             raise ValueError(f'{record_id}: retention instruction or target differs')
     baseline_metrics, baseline_results = analyze_examples(baseline_examples, audit)
     candidate_metrics, candidate_results = analyze_examples(candidate_examples, audit)
-    failures = retention_failures(baseline_metrics, candidate_metrics)
+    failures = (
+        tiered_retention_failures(candidate_metrics) if args.tiered else retention_failures(baseline_metrics, candidate_metrics)
+    )
     comparison = compare_results(baseline_results, candidate_results)
     report = {
         'analysis_schema_version': 1,
         'baseline': {'path': str(args.baseline), 'metrics': baseline_metrics},
         'candidate': {'path': str(args.candidate), 'metrics': candidate_metrics},
         'comparison': comparison,
-        'gate': {'passed': not failures, 'failures': failures},
+        'gate': {
+            'policy': 'tiered-absolute-v1' if args.tiered else 'strict-no-regression-v1',
+            'passed': not failures,
+            'failures': failures,
+        },
     }
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + '\n')
     print(json.dumps(report['gate'], sort_keys=True))

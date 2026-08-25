@@ -49,6 +49,7 @@ from shelliq_training.weights import load_hf_state_dict  # noqa: E402
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--semantic-dataset', type=Path, required=True)
+    parser.add_argument('--model-id', default=MODEL_ID)
     parser.add_argument('--checkpoint', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--split', type=Split, choices=Split, default=Split.TEST)
@@ -105,7 +106,7 @@ def main() -> None:
         split=args.split,
         split_seed=args.split_seed,
     )
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, local_files_only=True)
+    tokenizer = AutoTokenizer.from_pretrained(args.model_id, local_files_only=True)
     records, examples = select_all_examples(
         split_records_for_evaluation,
         tokenizer,
@@ -123,14 +124,19 @@ def main() -> None:
         pad_token_id=tokenizer_pad_id(tokenizer),
     )
 
-    model = Qwen2ForCausalLM(Qwen2Config(), param_dtype=jnp.bfloat16, rngs=nnx.Rngs(0))
-    weights_path = hf_hub_download(MODEL_ID, 'model.safetensors', local_files_only=True)
+    config_path = hf_hub_download(args.model_id, 'config.json', local_files_only=True)
+    model = Qwen2ForCausalLM(
+        Qwen2Config.from_json(Path(config_path)),
+        param_dtype=jnp.bfloat16,
+        rngs=nnx.Rngs(0),
+    )
+    weights_path = hf_hub_download(args.model_id, 'model.safetensors', local_files_only=True)
     load_hf_state_dict(model, load_file(weights_path), param_dtype=jnp.bfloat16)
     inject_lora(model, rank=args.rank, alpha=args.alpha, rngs=nnx.Rngs(1))
     metadata = restore_adapter_checkpoint(
         args.checkpoint,
         model,
-        model_id=MODEL_ID,
+        model_id=args.model_id,
         corpus=Corpus.DISTRIBUTABLE,
         target_format=TargetFormat.SEMANTIC_DOCUMENT_V2,
         prompt_contract=PromptContract.CONTEXT_AUTHORITATIVE_V1,

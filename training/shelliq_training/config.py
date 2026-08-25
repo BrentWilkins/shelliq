@@ -1,4 +1,6 @@
+import json
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -15,6 +17,13 @@ class Qwen2Config:
     rope_theta: float = 1000000.0
     rms_norm_eps: float = 1e-6
     tie_word_embeddings: bool = True
+
+    @classmethod
+    def from_json(cls, path: Path) -> Qwen2Config:
+        """Load the architecture fields used by the local Qwen2 implementation."""
+        document = json.loads(path.read_text())
+        names = cls.__dataclass_fields__
+        return cls(**{name: document[name] for name in names})
 
     def __post_init__(self) -> None:
         if self.hidden_size % self.num_attention_heads != 0:

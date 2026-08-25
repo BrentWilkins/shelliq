@@ -1,0 +1,1014 @@
+{
+  "records": {
+    "curated-development:v1:linux:apt-cache-depends-filtered": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "apt-cache"
+    },
+    "curated-development:v1:linux:apt-cache-names-only": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "apt-cache"
+    },
+    "curated-development:v1:linux:apt-mark-auto-libraries": {
+      "constraint_count": 2,
+      "dimensions": [
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "apt-mark"
+    },
+    "curated-development:v1:linux:apt-mark-hold-kernel": {
+      "constraint_count": 2,
+      "dimensions": [
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "apt-mark"
+    },
+    "curated-development:v1:linux:b2sum-quiet-missing": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "b2sum"
+    },
+    "curated-development:v1:linux:b2sum-short-tag": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "b2sum"
+    },
+    "curated-development:v1:linux:basename-null-suffix-sort": {
+      "constraint_count": 5,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering",
+        "pipeline-semantics"
+      ],
+      "family": "basename"
+    },
+    "curated-development:v1:linux:basenc-base32hex-recovery": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "basenc"
+    },
+    "curated-development:v1:linux:basenc-url-no-wrap": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "basenc"
+    },
+    "curated-development:v1:linux:blkid-filesystem-usage-export": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "blkid"
+    },
+    "curated-development:v1:linux:blkid-first-token-value": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "blkid"
+    },
+    "curated-development:v1:linux:blkid-label-device": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value"
+      ],
+      "family": "blkid"
+    },
+    "curated-development:v1:linux:blkid-probe-offset-size": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "blkid"
+    },
+    "curated-development:v1:linux:btrfs-device-errors-json": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "btrfs"
+    },
+    "curated-development:v1:linux:btrfs-du-summary-raw": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "btrfs"
+    },
+    "curated-development:v1:linux:btrfs-scrub-detailed-raw": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "btrfs"
+    },
+    "curated-development:v1:linux:btrfs-snapshots-below-sorted": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "btrfs"
+    },
+    "curated-development:v1:linux:busctl-call-bounded-no-start": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "busctl"
+    },
+    "curated-development:v1:linux:busctl-property-json": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "busctl"
+    },
+    "curated-development:v1:linux:busctl-system-acquired-unique": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "busctl"
+    },
+    "curated-development:v1:linux:busctl-user-tree-paths": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "busctl"
+    },
+    "curated-development:v1:linux:bwrap-clean-env-network": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "bwrap"
+    },
+    "curated-development:v1:linux:bwrap-die-parent-hostname": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "bwrap"
+    },
+    "curated-development:v1:linux:bwrap-readonly-project": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "bwrap"
+    },
+    "curated-development:v1:linux:bwrap-user-private-dev": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "bwrap"
+    },
+    "curated-development:v1:linux:csplit-chapters-quiet": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "csplit"
+    },
+    "curated-development:v1:linux:csplit-error-sections": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "csplit"
+    },
+    "curated-development:v1:linux:dirname-null-sort": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering",
+        "pipeline-semantics"
+      ],
+      "family": "dirname"
+    },
+    "curated-development:v1:linux:dpkg-deb-contents-verbose": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "dpkg-deb"
+    },
+    "curated-development:v1:linux:dpkg-deb-raw-extract": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "dpkg-deb"
+    },
+    "curated-development:v1:linux:dpkg-deb-selected-fields": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "dpkg-deb"
+    },
+    "curated-development:v1:linux:dpkg-deb-show-format": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "dpkg-deb"
+    },
+    "curated-development:v1:linux:dpkg-query-alternate-root-files": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "dpkg-query"
+    },
+    "curated-development:v1:linux:dpkg-query-package-version": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "dpkg-query"
+    },
+    "curated-development:v1:linux:fallocate-collapse-range": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "fallocate"
+    },
+    "curated-development:v1:linux:fallocate-preallocate-keep-size": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "fallocate"
+    },
+    "curated-development:v1:linux:fallocate-punch-range": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "fallocate"
+    },
+    "curated-development:v1:linux:fallocate-zero-exact-range": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "fallocate"
+    },
+    "curated-development:v1:linux:fmt-crown-split-only": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "fmt"
+    },
+    "curated-development:v1:linux:fmt-prefix-uniform": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "fmt"
+    },
+    "curated-development:v1:linux:getconf-all-key-sort": {
+      "constraint_count": 5,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering",
+        "pipeline-semantics"
+      ],
+      "family": "getconf"
+    },
+    "curated-development:v1:linux:ionice-pgid-idle": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "ionice"
+    },
+    "curated-development:v1:linux:ionice-pid-best-effort": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "ionice"
+    },
+    "curated-development:v1:linux:ionice-run-idle-backup": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "ionice"
+    },
+    "curated-development:v1:linux:ionice-uid-realtime": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "ionice"
+    },
+    "curated-development:v1:linux:losetup-associated-json": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "losetup"
+    },
+    "curated-development:v1:linux:losetup-direct-nooverlap": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "losetup"
+    },
+    "curated-development:v1:linux:losetup-offset-limited-sector": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "losetup"
+    },
+    "curated-development:v1:linux:losetup-readonly-partscan": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "losetup"
+    },
+    "curated-development:v1:linux:lsns-net-json-columns": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "lsns"
+    },
+    "curated-development:v1:linux:lsns-pid-tree-raw": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "lsns"
+    },
+    "curated-development:v1:linux:lsns-task-mount": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "lsns"
+    },
+    "curated-development:v1:linux:lsns-user-nowrap": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "lsns"
+    },
+    "curated-development:v1:linux:machinectl-copy-create-directory": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "machinectl"
+    },
+    "curated-development:v1:linux:machinectl-shell-user-env": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "machinectl"
+    },
+    "curated-development:v1:linux:machinectl-show-values": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "machinectl"
+    },
+    "curated-development:v1:linux:machinectl-status-journal": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "machinectl"
+    },
+    "curated-development:v1:linux:mountpoint-block-device-number": {
+      "constraint_count": 2,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding"
+      ],
+      "family": "mountpoint"
+    },
+    "curated-development:v1:linux:mountpoint-fs-device-number": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "mountpoint"
+    },
+    "curated-development:v1:linux:mountpoint-major-number": {
+      "constraint_count": 5,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering",
+        "pipeline-semantics"
+      ],
+      "family": "mountpoint"
+    },
+    "curated-development:v1:linux:mountpoint-quiet-nofollow": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "mountpoint"
+    },
+    "curated-development:v1:linux:namei-long-context": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "namei"
+    },
+    "curated-development:v1:linux:namei-long-no-symlinks": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "namei"
+    },
+    "curated-development:v1:linux:namei-no-symlink-mounts": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "namei"
+    },
+    "curated-development:v1:linux:namei-owner-vertical-two": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "namei"
+    },
+    "curated-development:v1:linux:networkctl-edit-dropin": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "networkctl"
+    },
+    "curated-development:v1:linux:networkctl-json-all-status": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "networkctl"
+    },
+    "curated-development:v1:linux:networkctl-link-stats-full": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "networkctl"
+    },
+    "curated-development:v1:linux:networkctl-lldp-json": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "networkctl"
+    },
+    "curated-development:v1:linux:nsenter-all-target-credentials": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "nsenter"
+    },
+    "curated-development:v1:linux:nsenter-net-uts-directory": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "nsenter"
+    },
+    "curated-development:v1:linux:nsenter-pid-no-fork": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "nsenter"
+    },
+    "curated-development:v1:linux:nsenter-user-root-uid": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "nsenter"
+    },
+    "curated-development:v1:linux:printenv-null-to-lines": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering",
+        "pipeline-semantics"
+      ],
+      "family": "printenv"
+    },
+    "curated-development:v1:linux:prlimit-cpu-processes": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "prlimit"
+    },
+    "curated-development:v1:linux:prlimit-pid-open-files": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "prlimit"
+    },
+    "curated-development:v1:linux:prlimit-raw-columns": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "prlimit"
+    },
+    "curated-development:v1:linux:prlimit-run-core-stack": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "prlimit"
+    },
+    "curated-development:v1:linux:runcon-computed-web-type": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "runcon"
+    },
+    "curated-development:v1:linux:runcon-explicit-context": {
+      "constraint_count": 2,
+      "dimensions": [
+        "operand-binding"
+      ],
+      "family": "runcon"
+    },
+    "curated-development:v1:linux:runcon-range-role": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "runcon"
+    },
+    "curated-development:v1:linux:runcon-user-role-type": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "runcon"
+    },
+    "curated-development:v1:linux:script-advanced-io-timing": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "script"
+    },
+    "curated-development:v1:linux:script-append-no-echo": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "script"
+    },
+    "curated-development:v1:linux:script-command-return-flush": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "script"
+    },
+    "curated-development:v1:linux:script-output-limit": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "script"
+    },
+    "curated-development:v1:linux:setpriv-clean-nobody": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "setpriv"
+    },
+    "curated-development:v1:linux:setpriv-drop-capabilities": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "setpriv"
+    },
+    "curated-development:v1:linux:setpriv-parent-death": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "setpriv"
+    },
+    "curated-development:v1:linux:setpriv-service-identity": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "setpriv"
+    },
+    "curated-development:v1:linux:shred-seven-zero-wipe": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "shred"
+    },
+    "curated-development:v1:linux:shred-sized-random-exact": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "shred"
+    },
+    "curated-development:v1:linux:shuf-echo-output": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "shuf"
+    },
+    "curated-development:v1:linux:shuf-range-reproducible": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "shuf"
+    },
+    "curated-development:v1:linux:systemd-run-bounded-service": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "systemd-run"
+    },
+    "curated-development:v1:linux:systemd-run-delayed-cleanup": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "systemd-run"
+    },
+    "curated-development:v1:linux:systemd-run-scope-nice": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "systemd-run"
+    },
+    "curated-development:v1:linux:systemd-run-user-directory-env": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "systemd-run"
+    },
+    "curated-development:v1:linux:unexpand-all-width-four": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "unexpand"
+    },
+    "curated-development:v1:linux:unexpand-first-custom-stops": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "unexpand"
+    },
+    "curated-development:v1:linux:unshare-child-term": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "unshare"
+    },
+    "curated-development:v1:linux:unshare-current-private-workdir": {
+      "constraint_count": 4,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "option-value",
+        "ordering"
+      ],
+      "family": "unshare"
+    },
+    "curated-development:v1:linux:unshare-net-uts-hostname": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "unshare"
+    },
+    "curated-development:v1:linux:unshare-root-proc-shell": {
+      "constraint_count": 3,
+      "dimensions": [
+        "flag-selection",
+        "operand-binding",
+        "ordering"
+      ],
+      "family": "unshare"
+    }
+  },
+  "schema_version": 1,
+  "status": "frozen",
+  "suite_id": "curated-development-v1"
+}

@@ -1,4 +1,4 @@
-from shelliq_training.retention_analysis import retention_failures
+from shelliq_training.retention_analysis import retention_failures, tiered_retention_failures
 
 
 def metrics(**overrides: float | int) -> dict[str, float | int]:
@@ -31,3 +31,19 @@ def test_retention_gate_reports_every_regression():
 
 def test_retention_gate_rejects_different_populations():
     assert retention_failures(metrics(), metrics(total_examples=19)) == ['total_examples differs between baseline and candidate']
+
+
+def test_tiered_retention_allows_small_regression_above_absolute_floors() -> None:
+    candidate = metrics(
+        first_command_accuracy=19 / 20,
+        command_flag_sequence_exact_match=13 / 20,
+        grounded_document_exact_match=9 / 20,
+    )
+    assert tiered_retention_failures(candidate) == []
+
+
+def test_tiered_retention_keeps_contract_and_capability_floors_hard() -> None:
+    candidate = metrics(json_parse_rate=19 / 20, first_command_accuracy=18 / 20)
+    failures = tiered_retention_failures(candidate)
+    assert 'json_parse_rate=19/20 below 20/20' in failures
+    assert 'first_command_accuracy=18/20 below 19/20' in failures

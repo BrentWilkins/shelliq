@@ -52,6 +52,7 @@ from shelliq_training.weights import load_hf_state_dict  # noqa: E402
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--semantic-dataset', type=Path, required=True)
+    parser.add_argument('--model-id', default=MODEL_ID)
     parser.add_argument('--checkpoint', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--examples', type=int, default=35)
@@ -65,6 +66,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--seed', type=int, default=2026)
     parser.add_argument('--rank', type=int, default=16)
     parser.add_argument('--alpha', type=float, default=32.0)
+    parser.add_argument(
+        '--baseline-report',
+        type=Path,
+        help='Reuse base-model generations from an exact-matching prior report.',
+    )
     parser.add_argument('--priority-source', default='shelliq-curated')
     parser.add_argument(
         '--prompt-contract',
@@ -107,6 +113,50 @@ def _by_source(
     }
 
 
+def _load_baseline_predictions(
+    path: Path,
+    records: list[SFTRecord],
+    *,
+    dataset_sha256: str,
+    prompt_contract: PromptContract,
+    selection: str,
+    model_id: str,
+) -> tuple[list[ModelPrediction], list[str]]:
+    report = json.loads(path.read_text())
+    if report.get('model_id') != model_id:
+        raise ValueError(f'{path}: baseline model mismatch')
+    if report.get('prompt_contract') != prompt_contract.value:
+        raise ValueError(f'{path}: baseline prompt contract mismatch')
+    dataset = report.get('dataset')
+    if not isinstance(dataset, dict) or dataset.get('sha256') != dataset_sha256:
+        raise ValueError(f'{path}: baseline dataset mismatch')
+    selection_data = report.get('selection')
+    if not isinstance(selection_data, dict) or selection_data.get('selection') != selection:
+        raise ValueError(f'{path}: baseline selection mismatch')
+    examples = report.get('examples')
+    if not isinstance(examples, list) or len(examples) != len(records):
+        raise ValueError(f'{path}: baseline example count mismatch')
+    by_id = {record.record_id: record for record in records}
+    texts: dict[str, str] = {}
+    for example in examples:
+        if not isinstance(example, dict):
+            raise ValueError(f'{path}: invalid baseline example')
+        record_id = example.get('record_id')
+        text = example.get('baseline')
+        expected = example.get('expected')
+        if not isinstance(record_id, str) or not isinstance(text, str):
+            raise ValueError(f'{path}: invalid baseline prediction')
+        record = by_id.get(record_id)
+        if record is None or expected != record.response or record_id in texts:
+            raise ValueError(f'{path}: baseline example drift for {record_id!r}')
+        texts[record_id] = text
+    if set(texts) != set(by_id):
+        raise ValueError(f'{path}: baseline record IDs mismatch')
+    ordered_texts = [texts[record.record_id] for record in records]
+    predictions = [ModelPrediction(record.record_id, text) for record, text in zip(records, ordered_texts, strict=True)]
+    return predictions, ordered_texts
+
+
 def main() -> None:
     args = parse_args()
     if args.output.exists():
@@ -124,7 +174,7 @@ def main() -> None:
 
     records = load_semantic_jsonl(args.semantic_dataset)
     splits = split_records(records, corpus=Corpus.DISTRIBUTABLE, seed=args.seed)
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, local_files_only=True)
+    tokenizer = AutoTokenizer.from_pretrained(args.model_id, local_files_only=True)
     if args.selection == 'all':
         eval_records = records
         eval_examples = [
@@ -163,23 +213,39 @@ def main() -> None:
         raise SystemExit(f'grounding audit does not match selection: missing={missing}, extra={extra}')
     print(f'evaluation selection: {len(eval_records)} rows, sources={dict(Counter(record.source for record in eval_records))}')
 
-    model = Qwen2ForCausalLM(Qwen2Config(), param_dtype=jnp.bfloat16, rngs=nnx.Rngs(0))
-    weights_path = hf_hub_download(MODEL_ID, 'model.safetensors', local_files_only=True)
+    config_path = hf_hub_download(args.model_id, 'config.json', local_files_only=True)
+    model = Qwen2ForCausalLM(
+        Qwen2Config.from_json(Path(config_path)),
+        param_dtype=jnp.bfloat16,
+        rngs=nnx.Rngs(0),
+    )
+    weights_path = hf_hub_download(args.model_id, 'model.safetensors', local_files_only=True)
     load_hf_state_dict(model, load_file(weights_path), param_dtype=jnp.bfloat16)
     inject_lora(model, rank=args.rank, alpha=args.alpha, rngs=nnx.Rngs(1))
 
-    baseline_predictions, baseline_texts = _generate(
-        model,
-        eval_records,
-        eval_examples,
-        tokenizer,
-        sequence_length=args.sequence_length,
-        label='base evaluation',
-    )
+    dataset_sha256 = _sha256(args.semantic_dataset)
+    if args.baseline_report is None:
+        baseline_predictions, baseline_texts = _generate(
+            model,
+            eval_records,
+            eval_examples,
+            tokenizer,
+            sequence_length=args.sequence_length,
+            label='base evaluation',
+        )
+    else:
+        baseline_predictions, baseline_texts = _load_baseline_predictions(
+            args.baseline_report,
+            eval_records,
+            dataset_sha256=dataset_sha256,
+            prompt_contract=args.prompt_contract,
+            selection=args.selection,
+            model_id=args.model_id,
+        )
     metadata = restore_adapter_checkpoint(
         args.checkpoint,
         model,
-        model_id=MODEL_ID,
+        model_id=args.model_id,
         corpus=Corpus.DISTRIBUTABLE,
         target_format=TargetFormat.SEMANTIC_DOCUMENT_V2,
         prompt_contract=args.prompt_contract,
@@ -197,10 +263,10 @@ def main() -> None:
         'evaluation_schema_version': 2,
         'target_format': 'semantic-document-v2-json',
         'prompt_contract': args.prompt_contract.value,
-        'model_id': MODEL_ID,
+        'model_id': args.model_id,
         'dataset': {
             'path': str(args.semantic_dataset),
-            'sha256': _sha256(args.semantic_dataset),
+            'sha256': dataset_sha256,
             'accepted_records': len(records),
         },
         'checkpoint': {'path': str(args.checkpoint), 'step': metadata.step},

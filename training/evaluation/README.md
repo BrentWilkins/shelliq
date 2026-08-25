@@ -3,6 +3,18 @@
 This directory contains reviewed metadata used only to score model outputs. It
 does not alter training examples.
 
+`curated-development-v1.jsonl` is the frozen checkpoint-selection benchmark for
+fully specified multi-constraint requests. Its manifest records command-family
+and failure-dimension coverage; its grounding file is closed over every case.
+The suite must pass `scripts/audit_curated_development.py` and reach the freeze
+requirements in `CURATED_DEVELOPMENT.md` before any checkpoint scores are used
+for selection. It is permanently excluded from training and is distinct from
+release, retention, pipeline confirmation, and shadow data.
+
+See `../experiments/curated-development-capacity-study-v1.md` for the first
+completed study, including why model capacity moved from 0.5B to 1.5B and why no
+evaluated checkpoint was promoted.
+
 `curated-option-arities-v1.json` maps curated `record_id` values to the flags in
 their expected command and whether each flag consumes the following token:
 

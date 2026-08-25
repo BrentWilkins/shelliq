@@ -58,7 +58,9 @@ def merge_distributable_corpus(
     """Load TLDR then curated families, rejecting IDs repeated across files."""
     tldr_file = Path(tldr_path)
     curated_directory = Path(curated_directory)
-    curated_files = sorted(curated_directory.glob('*.jsonl'))
+    curated_files = [
+        path for path in sorted(curated_directory.glob('*.jsonl')) if not path.name.startswith('reviewed-preference-')
+    ]
     if not curated_files:
         raise DatasetFormatError(f'{curated_directory}: no curated JSONL files found')
 
