@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import run_semantic_action_candidate as candidate
 import run_semantic_action_decoder as v1
+import run_semantic_action_pretrained_candidates as pretrained_candidates
 import run_semantic_action_typed as typed
 import run_semantic_action_typed_ranking as ranking
 import torch
@@ -40,6 +41,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--report', type=Path, required=True)
     parser.add_argument('--device', default='cuda')
     parser.add_argument('--ranking-v2', action='store_true')
+    parser.add_argument('--pretrained-v3', action='store_true')
     return parser.parse_args()
 
 
@@ -53,14 +55,24 @@ def main() -> None:
     evaluation_examples = [examples[item] for item in evaluation_ids]
     evaluation_records = [by_record[item] for item in evaluation_ids]
     baseline = json.loads(args.baseline_report.read_text())
-    source_experiment = ranking.EXPERIMENT if args.ranking_v2 else typed.EXPERIMENT
+    if args.ranking_v2 and args.pretrained_v3:
+        raise ValueError('select at most one attribution model variant')
+    source_experiment = (
+        pretrained_candidates.EXPERIMENT if args.pretrained_v3 else ranking.EXPERIMENT if args.ranking_v2 else typed.EXPERIMENT
+    )
     checkpoint = torch.load(args.checkpoint, map_location='cpu', weights_only=False)
     if checkpoint.get('experiment') != source_experiment:
         raise ValueError('typed checkpoint belongs to another experiment')
     if checkpoint.get('metadata', {}).get('best_epoch') != baseline.get('best_epoch'):
         raise ValueError('typed checkpoint does not match the baseline selected epoch')
     device = v1._device(args.device)
-    model = (ranking.build_model(tokenizer) if args.ranking_v2 else typed.build_model(tokenizer)).to(device)
+    model = (
+        pretrained_candidates.build_model(tokenizer)
+        if args.pretrained_v3
+        else ranking.build_model(tokenizer)
+        if args.ranking_v2
+        else typed.build_model(tokenizer)
+    ).to(device)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
     roles = byte_roles(grammar)

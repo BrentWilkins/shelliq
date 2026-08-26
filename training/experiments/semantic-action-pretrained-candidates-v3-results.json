@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "experiment": "semantic-action-pretrained-candidates-v3",
+  "selected_epoch": 4,
+  "selected_validation_total_loss": 3.8260659944400044,
+  "metrics": {
+    "examples": 92,
+    "exact_actions": 0,
+    "rust_valid": 92,
+    "first_command_match": 82,
+    "reference_accepted": 0
+  },
+  "progress_gate_passed": false,
+  "attribution": {
+    "argument_candidate_top1": 84,
+    "argument_candidate_total": 229,
+    "global_candidate_top1": 1,
+    "global_candidate_total": 66,
+    "local_candidate_top1": 111,
+    "local_candidate_total": 158,
+    "argument_count_top1": 19,
+    "argument_count_total": 93,
+    "gold_count_reference_accepted": 4
+  },
+  "decision": "stop_typed_model_path",
+  "raw_report_sha256": {
+    "cpu": "4e65426cfb94db628590feaf017b0213680ae2c699866e218c475796ce3c474e",
+    "overfit": "06cdfc7976de0dd5147f9e4f91e1db812974a13e5e2170b47f335be343c5db74",
+    "inner": "d74b1d0360cea80471cfcebd4edd85399441601425b448bd18d0ae15295dcda8",
+    "attribution": "e68abb35b280f2ec3395ec57b5fd72a27d2b0b73eaac6a4f6b59a654633c836c"
+  }
+}
