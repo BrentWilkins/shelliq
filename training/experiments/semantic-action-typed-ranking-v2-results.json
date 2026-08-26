@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "experiment": "semantic-action-typed-ranking-v2",
+  "selected_epoch": 4,
+  "selected_validation_total_loss": 3.819856157399537,
+  "metrics": {
+    "examples": 92,
+    "exact_actions": 1,
+    "rust_valid": 92,
+    "first_command_match": 81,
+    "reference_accepted": 1
+  },
+  "frozen_progress_gate_passed": false,
+  "attribution": {
+    "argument_candidate_top1": 76,
+    "argument_candidate_total": 229,
+    "global_candidate_top1": 1,
+    "global_candidate_total": 66,
+    "command_candidate_top1": 85,
+    "command_candidate_total": 91,
+    "argument_count_top1": 19,
+    "argument_count_total": 93
+  },
+  "raw_report_sha256": {
+    "cpu": "ab97afbe2e7dbb42c3f918653ba4922dd0f583f835cac9609aed506ca827e3a6",
+    "overfit": "f33be81ba1965976f3b04fd36ee478fdc2542f0c516b4fee0ffa46f1aa54c119",
+    "inner": "db8c97606774b5caa4221855b2c2948863afc4f2c15d226cda7075a878825bcb",
+    "attribution": "bb0e3a421f45342d63dbdbc89de9e0ada7bb4766f6a689f0733254447f5b4092"
+  }
+}
