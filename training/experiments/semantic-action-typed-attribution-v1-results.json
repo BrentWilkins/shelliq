@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "experiment": "semantic-action-typed-attribution-v1",
+  "status": "complete-candidate-ranking-dominant",
+  "evaluation_records": 92,
+  "fully_candidate_covered_records": 23,
+  "baseline": {
+    "exact_actions": 1,
+    "rust_valid": 91,
+    "first_command_match": 81,
+    "reference_accepted": 1
+  },
+  "candidate_ranks": {
+    "command": {"total": 91, "top1": 83, "top4": 89, "top8": 89},
+    "argument": {"total": 229, "top1": 84, "top4": 134, "top8": 149},
+    "local": {"total": 158, "top1": 108, "top4": 141, "top8": 145},
+    "local_global": {"total": 82, "top1": 56, "top4": 77, "top8": 81},
+    "global_only": {"total": 66, "top1": 3, "top4": 3, "top8": 8},
+    "derived_only": {"total": 13, "top1": 0, "top4": 1, "top8": 3}
+  },
+  "argument_count_ranks": {
+    "total": 93,
+    "top1": 16,
+    "top4": 67,
+    "top8": 89,
+    "top1_mean_absolute_error": 1.7419354838709677
+  },
+  "counterfactuals": {
+    "gold_counts_all_records": {
+      "examples": 92,
+      "exact_actions": 2,
+      "rust_valid": 91,
+      "first_command_match": 81,
+      "reference_accepted": 2
+    },
+    "gold_words_fully_covered": {
+      "examples": 23,
+      "exact_actions": 13,
+      "rust_valid": 23,
+      "first_command_match": 16,
+      "reference_accepted": 13
+    },
+    "gold_words_and_counts_fully_covered": {
+      "examples": 23,
+      "exact_actions": 23,
+      "rust_valid": 23,
+      "first_command_match": 23,
+      "reference_accepted": 23
+    }
+  },
+  "outer_validation_evaluated": false,
+  "comparison_test_evaluated": false,
+  "raw_report_sha256": "1ef80b95bb407f2337c95e930ac3d5ea6e16bd9f7272e8b86ff8d5652b006e86",
+  "decision": "improve-order-sensitive-role-specific-global-candidate-ranking"
+}
