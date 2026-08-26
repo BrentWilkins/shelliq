@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "experiment": "semantic-action-grounded-count-v1",
+  "phase": "overfit",
+  "gate_passed": false,
+  "stopped_step": 400,
+  "measurements": [
+    {"step": 100, "loss": 0.288150, "exact": 1, "examples": 8},
+    {"step": 200, "loss": 0.038073, "exact": 1, "examples": 8},
+    {"step": 300, "loss": 0.003094, "exact": 1, "examples": 8},
+    {"step": 400, "loss": 0.000781, "exact": 1, "examples": 8}
+  ],
+  "diagnosis": "hard grounding mask makes required global-only outputs unreachable"
+}
