@@ -283,6 +283,7 @@ def inner(args: argparse.Namespace) -> None:
 def make_batch(examples: Sequence[TypedActionExample], tokenizer, role_count: int):
     return collate_typed_actions(
         examples,
+        tokenizer=tokenizer,
         source_length=max(len(item.source_ids) for item in examples),
         source_byte_length=max(len(item.source_bytes) for item in examples),
         candidate_count=max(len(item.candidates) for item in examples),

@@ -34,6 +34,8 @@ class TypedActionBatch:
     candidate_byte_mask: torch.Tensor
     candidate_byte_histogram: torch.Tensor
     candidate_bigram_histogram: torch.Tensor
+    candidate_token_ids: torch.Tensor
+    candidate_token_mask: torch.Tensor
     candidate_starts: torch.Tensor
     candidate_ends: torch.Tensor
     candidate_features: torch.Tensor

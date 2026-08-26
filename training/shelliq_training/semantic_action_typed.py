@@ -248,6 +248,7 @@ def typed_action_examples(
 def collate_typed_actions(
     examples: Sequence[TypedActionExample],
     *,
+    tokenizer: AlignedCodeT5Tokenizer,
     source_length: int,
     source_byte_length: int,
     candidate_count: int,
@@ -260,6 +261,12 @@ def collate_typed_actions(
         raise ValueError('cannot collate an empty typed batch')
     if any(example.corpus is not examples[0].corpus for example in examples):
         raise DatasetFormatError('cannot mix corpus privacy classes')
+    encoded_candidates = {
+        candidate.value: tuple(tokenizer.encode(candidate.value.decode('utf-8'), add_special_tokens=False))
+        for example in examples
+        for candidate in example.candidates
+    }
+    candidate_token_length = max(len(token_ids) for token_ids in encoded_candidates.values())
     rows: dict[str, list] = defaultdict(list)
     alignments = []
     for example in examples:
@@ -283,7 +290,9 @@ def collate_typed_actions(
         for byte_index, token_indices in enumerate(example.byte_token_indices):
             alignment[byte_index, list(token_indices)] = 1 / len(token_indices)
         alignments.append(alignment)
-        candidate_bytes, candidate_byte_masks, histograms, bigrams, starts, ends, features, role_masks = (
+        candidate_bytes, candidate_byte_masks, histograms, bigrams, token_ids, token_masks, starts, ends, features, role_masks = (
+            [],
+            [],
             [],
             [],
             [],
@@ -306,6 +315,10 @@ def collate_typed_actions(
             for first, second in zip(item.value, item.value[1:], strict=False):
                 bigram[(first * 257 + second) % BIGRAM_BUCKETS] += 1 / pair_count
             bigrams.append(tuple(bigram))
+            encoded = encoded_candidates[item.value]
+            token_padding = candidate_token_length - len(encoded)
+            token_ids.append(encoded + (tokenizer.pad_token_id,) * token_padding)
+            token_masks.append((1,) * len(encoded) + (0,) * token_padding)
             starts.append(item.local_span.start if item.local_span else 0)
             ends.append(item.local_span.end if item.local_span else 1)
             features.append((item.local, item.derived, item.global_))
@@ -314,6 +327,8 @@ def collate_typed_actions(
         candidate_byte_masks.extend([(0,) * candidate_byte_length] * candidate_padding)
         histograms.extend([(0.0,) * 256] * candidate_padding)
         bigrams.extend([(0.0,) * BIGRAM_BUCKETS] * candidate_padding)
+        token_ids.extend([(tokenizer.pad_token_id,) * candidate_token_length] * candidate_padding)
+        token_masks.extend([(0,) * candidate_token_length] * candidate_padding)
         starts.extend([0] * candidate_padding)
         ends.extend([1] * candidate_padding)
         features.extend([(False, False, False)] * candidate_padding)
@@ -322,6 +337,8 @@ def collate_typed_actions(
         rows['candidate_byte_mask'].append(candidate_byte_masks)
         rows['candidate_byte_histogram'].append(histograms)
         rows['candidate_bigram_histogram'].append(bigrams)
+        rows['candidate_token_ids'].append(token_ids)
+        rows['candidate_token_mask'].append(token_masks)
         rows['candidate_starts'].append(starts)
         rows['candidate_ends'].append(ends)
         rows['candidate_features'].append(features)
@@ -343,6 +360,8 @@ def collate_typed_actions(
         torch.tensor(rows['candidate_byte_mask'], dtype=torch.bool),
         torch.tensor(rows['candidate_byte_histogram'], dtype=torch.float),
         torch.tensor(rows['candidate_bigram_histogram'], dtype=torch.float),
+        torch.tensor(rows['candidate_token_ids'], dtype=torch.long),
+        torch.tensor(rows['candidate_token_mask'], dtype=torch.bool),
         torch.tensor(rows['candidate_starts'], dtype=torch.long),
         torch.tensor(rows['candidate_ends'], dtype=torch.long),
         torch.tensor(rows['candidate_features'], dtype=torch.float),

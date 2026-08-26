@@ -6,6 +6,9 @@ import torch
 from test_semantic_action_candidate_model import TinyDecoder, TinyEncoder
 
 from shelliq_training.semantic_action_model import ActionDecoderConfig
+from shelliq_training.semantic_action_pretrained_candidate_model import (
+    SemanticActionPretrainedCandidateModel,
+)
 from shelliq_training.semantic_action_typed_model import (
     SemanticActionTypedModel,
     TypedActionBatch,
@@ -86,6 +89,8 @@ def batch() -> TypedActionBatch:
         candidate_byte_mask=torch.tensor([[[True, True, True], [True, False, False]]]),
         candidate_byte_histogram=torch.nn.functional.one_hot(torch.tensor([[ord('c'), ord('x')]]), 256).float(),
         candidate_bigram_histogram=torch.zeros(1, 2, 512),
+        candidate_token_ids=torch.tensor([[[4, 5], [6, 0]]]),
+        candidate_token_mask=torch.tensor([[[True, True], [True, False]]]),
         candidate_starts=torch.tensor([[0, 0]]),
         candidate_ends=torch.tensor([[3, 1]]),
         candidate_features=torch.tensor([[[1.0, 0.0, 1.0], [0.0, 0.0, 1.0]]]),
@@ -137,6 +142,20 @@ def test_ranking_model_uses_order_and_role_conditioning() -> None:
     assert model.candidate_bigram_embedding.grad is not None
     assert model.candidate_bigram_embedding.grad.abs().sum() > 0
     assert model.role_query_scale.grad is not None
+
+
+def test_pretrained_candidate_model_reaches_encoder_token_embeddings() -> None:
+    torch.manual_seed(43)
+    config = ActionDecoderConfig(d_model=8, num_heads=2, num_layers=1, feedforward_size=16)
+    encoder = TinyEncoder(8)
+    model = SemanticActionPretrainedCandidateModel(encoder, TinyDecoder(), config, maximum_source_bytes=4, role_count=2)
+
+    components = model.loss_components(replace(batch(), candidate_role_mask=torch.ones(1, 2, 2, dtype=torch.bool)))
+    components['total'].backward()
+
+    assert all(torch.isfinite(component) for component in components.values())
+    assert encoder.embedding.weight.grad is not None
+    assert encoder.embedding.weight.grad[4:7].abs().sum() > 0
 
 
 def test_typed_beam_obeys_predicted_argument_count() -> None:
