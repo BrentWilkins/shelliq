@@ -30,6 +30,51 @@ _NUMBER = re.compile(r'\d+')
 _LONG_OPTION = re.compile(r'--[A-Za-z][A-Za-z0-9-]*')
 _IDENTIFIER = re.compile(r'[A-Za-z_][A-Za-z0-9_]*')
 _SINGLE_FLAG = re.compile(r'(?<![\w-])-[A-Za-z](?![A-Za-z])')
+_NUMBER_WORDS = {
+    'zero': 0,
+    'one': 1,
+    'single': 1,
+    'once': 1,
+    'first': 1,
+    'two': 2,
+    'second': 2,
+    'three': 3,
+    'third': 3,
+    'four': 4,
+    'fourth': 4,
+    'five': 5,
+    'fifth': 5,
+    'six': 6,
+    'sixth': 6,
+    'seven': 7,
+    'seventh': 7,
+    'eight': 8,
+    'eighth': 8,
+    'nine': 9,
+    'ninth': 9,
+    'ten': 10,
+    'tenth': 10,
+    'eleven': 11,
+    'eleventh': 11,
+    'twelve': 12,
+    'twelfth': 12,
+    'thirteen': 13,
+    'thirteenth': 13,
+    'fourteen': 14,
+    'fourteenth': 14,
+    'fifteen': 15,
+    'fifteenth': 15,
+    'sixteen': 16,
+    'sixteenth': 16,
+    'seventeen': 17,
+    'seventeenth': 17,
+    'eighteen': 18,
+    'eighteenth': 18,
+    'nineteen': 19,
+    'nineteenth': 19,
+    'twenty': 20,
+    'twentieth': 20,
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,6 +132,7 @@ def typed_candidates(
     global_roles: Mapping[bytes, Sequence[str]],
     *,
     maximum_bytes: int = 128,
+    normalize_number_words: bool = False,
 ) -> tuple[TypedCandidate, ...]:
     roles = byte_roles(grammar)
     role_ids = {role: index for index, role in enumerate(roles)}
@@ -97,6 +143,11 @@ def typed_candidates(
         local_spans.setdefault(value, span)
     local_text = {value.decode('utf-8') for value in local_spans}
     derived_text = _derived_values(source, local_text, tuple(value.decode('utf-8') for value in global_roles))
+    if normalize_number_words:
+        lowered = source.lower()
+        derived_text.update(
+            str(number) for word, number in _NUMBER_WORDS.items() if re.search(rf'(?<![a-z]){re.escape(word)}(?![a-z])', lowered)
+        )
     derived = {value.encode('utf-8') for value in derived_text if 0 < len(value.encode('utf-8')) <= maximum_bytes}
     values = set(local_spans) | derived | set(global_roles)
     all_role_ids = tuple(range(len(roles)))
@@ -157,6 +208,8 @@ def align_typed_actions(
     grammar: ActionGrammar,
     candidates: Sequence[TypedCandidate],
     argument_counts: Sequence[int],
+    *,
+    post_command_counts: bool = False,
 ) -> tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...]]:
     candidate_labels = [CANDIDATE_IGNORE_INDEX] * len(actions)
     count_labels = [COUNT_IGNORE_INDEX] * len(actions)
@@ -190,7 +243,10 @@ def align_typed_actions(
         if state.name == 'command_name_bytes':
             if command_index >= len(argument_counts):
                 raise ValueError('more command action words than semantic commands')
-            count_labels[begin] = argument_counts[command_index]
+            count_position = position + 1 if post_command_counts else begin
+            if count_position >= len(actions):
+                raise ValueError('command count label has no post-command action')
+            count_labels[count_position] = argument_counts[command_index]
             command_index += 1
         cursor.advance(actions[position])
         position += 1
@@ -212,6 +268,8 @@ def typed_action_examples(
     source_byte_length: int,
     target_length: int,
     prompt_contract: PromptContract,
+    normalize_number_words: bool = False,
+    post_command_counts: bool = False,
 ) -> list[TypedActionExample]:
     if len(records) != len(actions):
         raise ValueError('records and actions are not aligned')
@@ -221,12 +279,18 @@ def typed_action_examples(
         source_ids, source_bytes, byte_token_indices = tokenizer.encode_with_byte_alignment(source)
         if len(source_ids) > source_length or len(source_bytes) > source_byte_length or len(target) > target_length:
             raise SequenceTooLongError(f'{record.record_id}: typed example exceeds a fixed length')
-        candidates = typed_candidates(source, grammar, global_roles)
+        candidates = typed_candidates(
+            source,
+            grammar,
+            global_roles,
+            normalize_number_words=normalize_number_words,
+        )
         candidate_labels, count_labels, word_role_labels = align_typed_actions(
             target,
             grammar,
             candidates,
             command_argument_counts(json.loads(record.response)),
+            post_command_counts=post_command_counts,
         )
         examples.append(
             TypedActionExample(

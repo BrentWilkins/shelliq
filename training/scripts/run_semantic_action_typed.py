@@ -32,6 +32,10 @@ from shelliq_training.semantic_action_typed_model import SemanticActionTypedMode
 
 EXPERIMENT = 'semantic-action-typed-slots-v1'
 BEAM_WIDTH = 8
+ARGUMENT_COUNT_TOP_K = 4
+GROUND_ARGUMENTS = False
+NORMALIZE_NUMBER_WORDS = False
+POST_COMMAND_COUNTS = False
 
 
 def parse_args() -> argparse.Namespace:
@@ -84,6 +88,8 @@ def load_typed(args: argparse.Namespace, train_ids: Sequence[str]):
         source_byte_length=candidate.SOURCE_BYTE_LENGTH,
         target_length=candidate.TARGET_LENGTH,
         prompt_contract=candidate.PROMPT_CONTRACT,
+        normalize_number_words=NORMALIZE_NUMBER_WORDS,
+        post_command_counts=POST_COMMAND_COUNTS,
     )
     return records, frozen, {item.record_id: item for item in examples}, tokenizer, client, grammar, manifest, global_roles
 
@@ -105,6 +111,9 @@ def cpu(args: argparse.Namespace) -> None:
         grammar,
         byte_roles(grammar),
         beam_width=BEAM_WIDTH,
+        argument_count_top_k=ARGUMENT_COUNT_TOP_K,
+        ground_arguments=GROUND_ARGUMENTS,
+        post_command_counts=POST_COMMAND_COUNTS,
         max_new_tokens=8,
     )
     cursor = grammar.cursor()
@@ -315,7 +324,17 @@ def generate(model, examples, tokenizer, grammar, device):
     roles = byte_roles(grammar)
     for example in examples:
         batch = make_batch([example], tokenizer, len(roles)).to(device)
-        generated.extend(model.generate_typed_beam(batch, grammar, roles, beam_width=BEAM_WIDTH))
+        generated.extend(
+            model.generate_typed_beam(
+                batch,
+                grammar,
+                roles,
+                beam_width=BEAM_WIDTH,
+                argument_count_top_k=ARGUMENT_COUNT_TOP_K,
+                ground_arguments=GROUND_ARGUMENTS,
+                post_command_counts=POST_COMMAND_COUNTS,
+            )
+        )
     return generated
 
 

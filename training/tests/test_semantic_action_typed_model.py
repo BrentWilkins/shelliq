@@ -199,6 +199,15 @@ def test_typed_beam_obeys_predicted_argument_count() -> None:
             2,
         )
     ]
+    post_command = model.generate_typed_beam(
+        batch(),
+        grammar(),
+        ('command_name_bytes', 'argument_bytes'),
+        beam_width=2,
+        max_new_tokens=15,
+        post_command_counts=True,
+    )
+    assert post_command == generated
     forced = model.generate_typed_beam(
         batch(),
         grammar(),

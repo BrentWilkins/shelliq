@@ -141,6 +141,7 @@ class SemanticActionTypedRankingModel(SemanticActionTypedModel):
         role_logits = output.role_candidate_logits.gather(2, role_indices).squeeze(2)
         role_mask_indices = batch.word_role_labels.clamp_min(0).unsqueeze(-1).expand_as(role_logits)
         role_mask = batch.candidate_role_mask.gather(1, role_mask_indices)
+        role_mask = self._candidate_loss_mask(batch, role_mask)
         typed_logits = role_logits.masked_fill(~role_mask, -torch.inf)
         copyable = batch.candidate_labels != CANDIDATE_IGNORE_INDEX
         candidate_loss = (
@@ -176,3 +177,6 @@ class SemanticActionTypedRankingModel(SemanticActionTypedModel):
             'content_global': content_global_loss,
             'total': total,
         }
+
+    def _candidate_loss_mask(self, batch: TypedActionBatch, role_mask: torch.Tensor) -> torch.Tensor:
+        return role_mask

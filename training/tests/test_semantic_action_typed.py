@@ -96,6 +96,37 @@ def test_typed_derivations_compose_numbered_options() -> None:
     assert set(by_value[b'--maxfail=3'].roles) == {byte_roles(value).index('argument_bytes')}
 
 
+def test_typed_derivations_normalize_spelled_numbers() -> None:
+    value = grammar()
+    candidates = typed_candidates(
+        'Collect five reports every two seconds.',
+        value,
+        {},
+        normalize_number_words=True,
+    )
+    by_value = {candidate.value: candidate for candidate in candidates}
+
+    assert by_value[b'2'].derived
+    assert by_value[b'5'].derived
+
+
+def test_post_command_count_alignment_uses_word_end_context() -> None:
+    value = grammar()
+    target = actions()
+    candidates = typed_candidates('cmd 2', value, role_word_lexicon([target], value))
+
+    _, counts, _ = align_typed_actions(
+        target,
+        value,
+        candidates,
+        (1,),
+        post_command_counts=True,
+    )
+
+    assert counts[1] == -100
+    assert counts[5] == 1
+
+
 def test_command_argument_counts_support_pipelines() -> None:
     document = {
         's': [

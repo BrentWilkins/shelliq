@@ -221,9 +221,14 @@ class SemanticActionTypedModel(SemanticActionCandidateModel):
         max_new_tokens: int | None = None,
         forced_argument_counts: tuple[int, ...] | None = None,
         forced_words: tuple[bytes, ...] | None = None,
+        argument_count_top_k: int = 4,
+        ground_arguments: bool = False,
+        post_command_counts: bool = False,
     ) -> list[tuple[int, ...]]:
         if beam_width <= 0:
             raise ValueError('beam_width must be positive')
+        if not 1 <= argument_count_top_k <= MAXIMUM_ARGUMENTS + 1:
+            raise ValueError('argument_count_top_k is outside the count vocabulary')
         limit = max_new_tokens or self.config.max_target_length - 1
         if not 1 <= limit < self.config.max_target_length:
             raise ValueError('max_new_tokens leaves no room for BOS')
@@ -256,9 +261,46 @@ class SemanticActionTypedModel(SemanticActionCandidateModel):
                 output = self.distributions(batch, hidden[:, -1:], memory)
                 state = grammar.states[hypothesis.cursor.state]
                 produced = False
+                if post_command_counts and state.name == 'command_body' and hypothesis.desired_arguments is None:
+                    count_scores = output.argument_count_logits[0, -1].log_softmax(dim=-1)
+                    if forced_argument_counts is not None:
+                        if hypothesis.command_index == 0 or hypothesis.command_index > len(forced_argument_counts):
+                            count_choices = torch.empty(0, dtype=torch.long, device=batch.source_ids.device)
+                        else:
+                            count_choices = torch.tensor(
+                                [forced_argument_counts[hypothesis.command_index - 1]],
+                                dtype=torch.long,
+                                device=batch.source_ids.device,
+                            )
+                    else:
+                        count_choices = count_scores.topk(argument_count_top_k).indices
+                    for count_tensor in count_choices:
+                        count = int(count_tensor)
+                        score = hypothesis.score
+                        if forced_argument_counts is None:
+                            score += float(count_scores[count])
+                        _retain_typed(
+                            expanded,
+                            _TypedBeam(
+                                hypothesis.actions,
+                                _clone_cursor(hypothesis.cursor),
+                                score,
+                                count,
+                                hypothesis.emitted_arguments,
+                                hypothesis.command_index,
+                                hypothesis.word_index,
+                            ),
+                        )
+                        produced = True
+                    continue
                 if state.byte_payload is not None:
                     role = role_ids[state.name]
                     mask = batch.candidate_role_mask[0, role]
+                    if ground_arguments and state.name == 'argument_bytes':
+                        grounded = batch.candidate_features[0, :, :2].bool().any(dim=-1)
+                        grounded_mask = mask & grounded
+                        if bool(grounded_mask.any()):
+                            mask = grounded_mask
                     candidate_logits = (
                         output.candidate_logits[0, -1]
                         if output.role_candidate_logits is None
@@ -278,7 +320,7 @@ class SemanticActionTypedModel(SemanticActionCandidateModel):
                             word_choices = torch.tensor(matches[:1], dtype=torch.long, device=batch.source_ids.device)
                     else:
                         word_choices = scores.topk(min(4 if state.name == 'command_name_bytes' else 8, int(mask.sum()))).indices
-                    if state.name == 'command_name_bytes':
+                    if state.name == 'command_name_bytes' and not post_command_counts:
                         count_scores = output.argument_count_logits[0, -1].log_softmax(dim=-1)
                         if forced_argument_counts is not None:
                             if hypothesis.command_index >= len(forced_argument_counts):
@@ -290,7 +332,7 @@ class SemanticActionTypedModel(SemanticActionCandidateModel):
                                     device=batch.source_ids.device,
                                 )
                         else:
-                            count_choices = count_scores.topk(4).indices
+                            count_choices = count_scores.topk(argument_count_top_k).indices
                     else:
                         count_scores = None
                         count_choices = torch.tensor([-1], device=batch.source_ids.device)
@@ -305,7 +347,11 @@ class SemanticActionTypedModel(SemanticActionCandidateModel):
                             next_cursor = _clone_cursor(hypothesis.cursor)
                             for value in addition:
                                 next_cursor.advance(value)
-                            desired = count if state.name == 'command_name_bytes' else hypothesis.desired_arguments
+                            desired = (
+                                count
+                                if state.name == 'command_name_bytes' and not post_command_counts
+                                else hypothesis.desired_arguments
+                            )
                             emitted = hypothesis.emitted_arguments + int(state.name == 'argument_bytes')
                             score = hypothesis.score
                             if forced_words is None:
