@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import run_semantic_action_candidate as candidate
 import run_semantic_action_decoder as v1
+import run_semantic_action_grounded_count_v2 as grounded_count
 import run_semantic_action_pretrained_candidates as pretrained_candidates
 import run_semantic_action_typed as typed
 import run_semantic_action_typed_ranking as ranking
@@ -43,6 +44,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--device', default='cuda')
     parser.add_argument('--ranking-v2', action='store_true')
     parser.add_argument('--pretrained-v3', action='store_true')
+    parser.add_argument('--grounded-count-v2', action='store_true')
     return parser.parse_args()
 
 
@@ -51,15 +53,27 @@ def main() -> None:
     _, _, _, _, _, _, manifest = candidate.load_inputs(args)
     train_ids = manifest['inner_splits']['train']['record_ids']
     evaluation_ids = manifest['inner_splits']['validation']['record_ids']
+    selected_variants = sum((args.ranking_v2, args.pretrained_v3, args.grounded_count_v2))
+    if selected_variants > 1:
+        raise ValueError('select at most one attribution model variant')
+    if args.grounded_count_v2:
+        typed.BEAM_WIDTH = 32
+        typed.ARGUMENT_COUNT_TOP_K = 8
+        typed.NORMALIZE_NUMBER_WORDS = True
+        typed.POST_COMMAND_COUNTS = True
     records, _, examples, tokenizer, client, grammar, _, _ = typed.load_typed(args, train_ids)
     by_record = {record.record_id: record for record in records}
     evaluation_examples = [examples[item] for item in evaluation_ids]
     evaluation_records = [by_record[item] for item in evaluation_ids]
     baseline = json.loads(args.baseline_report.read_text())
-    if args.ranking_v2 and args.pretrained_v3:
-        raise ValueError('select at most one attribution model variant')
     source_experiment = (
-        pretrained_candidates.EXPERIMENT if args.pretrained_v3 else ranking.EXPERIMENT if args.ranking_v2 else typed.EXPERIMENT
+        grounded_count.EXPERIMENT
+        if args.grounded_count_v2
+        else pretrained_candidates.EXPERIMENT
+        if args.pretrained_v3
+        else ranking.EXPERIMENT
+        if args.ranking_v2
+        else typed.EXPERIMENT
     )
     checkpoint = torch.load(args.checkpoint, map_location='cpu', weights_only=False)
     if checkpoint.get('experiment') != source_experiment:
@@ -68,7 +82,9 @@ def main() -> None:
         raise ValueError('typed checkpoint does not match the baseline selected epoch')
     device = v1._device(args.device)
     model = (
-        pretrained_candidates.build_model(tokenizer)
+        grounded_count.build_model(tokenizer)
+        if args.grounded_count_v2
+        else pretrained_candidates.build_model(tokenizer)
         if args.pretrained_v3
         else ranking.build_model(tokenizer)
         if args.ranking_v2
@@ -274,6 +290,8 @@ def _counterfactual(
                 beam_width=typed.BEAM_WIDTH,
                 forced_argument_counts=counts,
                 forced_words=words,
+                argument_count_top_k=typed.ARGUMENT_COUNT_TOP_K,
+                post_command_counts=typed.POST_COMMAND_COUNTS,
             )
         )
     return v1._evaluate(records, examples, generated, client)

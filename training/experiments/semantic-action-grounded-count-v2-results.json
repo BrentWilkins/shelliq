@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "experiment": "semantic-action-grounded-count-v2",
+  "selected_epoch": 5,
+  "selected_validation_total_loss": 4.044116828308455,
+  "metrics": {
+    "examples": 92,
+    "exact_actions": 1,
+    "rust_valid": 92,
+    "first_command_match": 79,
+    "reference_accepted": 1
+  },
+  "success_gate_passed": false,
+  "attribution": {
+    "argument_candidate_top1": 83,
+    "argument_candidate_total": 230,
+    "global_candidate_top1": 0,
+    "global_candidate_total": 47,
+    "argument_count_top1": 9,
+    "argument_count_top8": 87,
+    "argument_count_total": 93,
+    "gold_count_reference_accepted": 2,
+    "fully_covered_gold_word_reference_accepted": 5,
+    "fully_covered_gold_count_and_word_reference_accepted": 23
+  },
+  "raw_report_sha256": {
+    "cpu": "34c1415d87321413edc6ab954a63e2d688e3dff7738bad1d54d9139ff63a4731",
+    "overfit": "aaff9bb9a0cb2b46c53de791ddc3f2e9ee49c3f9f19e64fbcf52d9bc1cdd7bf4",
+    "inner": "87d05747825c9abe56d2f09a0c3907d17e6ff99264b515a0c7ee9e9fe8d3b7a8",
+    "attribution": "0129c308440227715317a4afc726d19c8bb6d18a2035f79d3ffe8a8f54a4890f",
+    "decisions": "ea65f87532599f955b71e0e197522b916efb84abfbe4946d9a9bf53c3eab52fb"
+  }
+}
