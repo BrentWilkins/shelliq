@@ -35,7 +35,7 @@ def compile_semantic_rule(
 def _compile_ss(instruction: str, context: str) -> RuleCompilation | None:
     lowered_instruction = instruction.lower()
     lowered_context = context.lower()
-    if not (lowered_context.startswith('ss:') or re.search(r'\bss\s+-s\b', lowered_context)):
+    if not (re.search(r'(?:^|\n)(?:iproute2\s+)?ss:', lowered_context) or re.search(r'\bss\s+-s\b', lowered_context)):
         return None
     if (
         re.search(r'\b(summary|summarize|totals?)\b', lowered_instruction)
@@ -43,6 +43,8 @@ def _compile_ss(instruction: str, context: str) -> RuleCompilation | None:
     ) and re.search(r'\bss\s+-s\b', lowered_context):
         return RuleCompilation('ss-summary', _document('ss', ('-s',)))
 
+    if 'specific port' in lowered_instruction or _DECIMAL.search(instruction):
+        return None
     requested: set[str] = set()
     listening = bool(re.search(r'\blisten(?:ing)?\b', lowered_instruction))
     if 'tcp' in lowered_instruction:
@@ -73,10 +75,10 @@ def _compile_ss(instruction: str, context: str) -> RuleCompilation | None:
 
 def _compile_pmap(instruction: str, context: str) -> RuleCompilation | None:
     lowered_instruction = instruction.lower()
-    if not context.lower().startswith('procps pmap:'):
+    if not re.search(r'(?:^|\n)procps\s+pmap:', context.lower()):
         return None
-    if 'kernel' in lowered_instruction and '-X' in context:
-        mode = '-X'
+    if 'kernel' in lowered_instruction and '-XX' in context:
+        mode = '-XX'
         rule_id = 'pmap-kernel-details'
     elif re.search(r'\bextended\b', lowered_instruction) and '-x' in context:
         mode = '-x'

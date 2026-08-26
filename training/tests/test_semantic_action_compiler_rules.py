@@ -55,11 +55,35 @@ def test_pmap_rule_extracts_one_pid_and_documented_mode() -> None:
         command='pmap',
         platform='linux',
         instruction='Show kernel-provided memory-map details for PID 771.',
-        context='procps pmap: -X includes kernel-detail columns while -x is the shorter extended view.',
+        context=(
+            'Output contract: compact SemanticDocumentV2 JSON only.\n'
+            'procps pmap: -XX includes every kernel-detail column while -x is the shorter extended view.'
+        ),
     )
 
     assert arguments(extended) == ['-x', '4242']
-    assert arguments(kernel) == ['-X', '771']
+    assert arguments(kernel) == ['-XX', '771']
+
+
+def test_rules_accept_prompt_prefix_and_decline_ss_port_filters() -> None:
+    prefixed = compile_semantic_rule(
+        command='ss',
+        platform='linux',
+        instruction='List listening TCP sockets numerically.',
+        context=('Output contract: compact SemanticDocumentV2 JSON only.\nss: -l is listening, -n is numeric, and -t is TCP.'),
+    )
+    port_filter = compile_semantic_rule(
+        command='ss',
+        platform='linux',
+        instruction='Find the process listening on TCP port 8080.',
+        context=(
+            'Output contract: compact SemanticDocumentV2 JSON only.\n'
+            'iproute2 ss: -l is listening, -t is TCP, -n is numeric, and -p shows processes.'
+        ),
+    )
+
+    assert arguments(prefixed) == ['-lnt']
+    assert port_filter is None
 
 
 def test_rules_decline_unsupported_or_ambiguous_requests() -> None:

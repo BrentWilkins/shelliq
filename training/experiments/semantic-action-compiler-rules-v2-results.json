@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "experiment": "semantic-action-compiler-rules-v2",
+  "gate_passed": true,
+  "rule_coverage": 6,
+  "rust_encoded_rules": 6,
+  "metrics": {
+    "examples": 92,
+    "exact_actions": 6,
+    "rust_valid": 92,
+    "first_command_match": 79,
+    "reference_accepted": 6
+  },
+  "floors": {
+    "minimum_rust_valid": 83,
+    "minimum_first_command_match": 74,
+    "minimum_reference_accepted": 5
+  },
+  "per_rule": {
+    "ss-summary": {
+      "examples": 1,
+      "exact_actions": 1,
+      "rust_valid": 1,
+      "first_command_match": 1,
+      "reference_accepted": 1
+    },
+    "ss-listing": {
+      "examples": 3,
+      "exact_actions": 3,
+      "rust_valid": 3,
+      "first_command_match": 3,
+      "reference_accepted": 3
+    },
+    "pmap-extended": {
+      "examples": 1,
+      "exact_actions": 1,
+      "rust_valid": 1,
+      "first_command_match": 1,
+      "reference_accepted": 1
+    },
+    "pmap-kernel-details": {
+      "examples": 1,
+      "exact_actions": 1,
+      "rust_valid": 1,
+      "first_command_match": 1,
+      "reference_accepted": 1
+    }
+  },
+  "source_experiment": "semantic-action-grounded-count-v2",
+  "source_best_epoch": 5,
+  "raw_report_sha256": "39982216e37666862d5243799dc8912e920402fefa2f0353b66f68ac5d9237ce",
+  "split_status": "inner-development only; outer validation and test sealed"
+}

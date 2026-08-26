@@ -19,7 +19,7 @@ from run_semantic_action_decoder import _evaluate
 
 from shelliq_training.semantic_action_compiler_rules import compile_semantic_rule
 
-EXPERIMENT = 'semantic-action-compiler-rules-v1'
+EXPERIMENT = 'semantic-action-compiler-rules-v2'
 
 
 def parse_args() -> argparse.Namespace:
