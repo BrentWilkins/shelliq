@@ -39,6 +39,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--checkpoint', type=Path, required=True)
     parser.add_argument('--baseline-report', type=Path, required=True)
     parser.add_argument('--report', type=Path, required=True)
+    parser.add_argument('--decision-report', type=Path)
     parser.add_argument('--device', default='cuda')
     parser.add_argument('--ranking-v2', action='store_true')
     parser.add_argument('--pretrained-v3', action='store_true')
@@ -79,6 +80,7 @@ def main() -> None:
     role_metrics: dict[str, dict[str, float]] = defaultdict(_rank_row)
     provenance_metrics: dict[str, dict[str, float]] = defaultdict(_rank_row)
     count_metrics = _rank_row()
+    decision_rows: list[dict[str, object]] = []
     fully_covered = []
     started = time.monotonic()
 
@@ -108,6 +110,19 @@ def main() -> None:
                     name for name, active in zip(('local', 'derived', 'global'), feature, strict=True) if active
                 )
                 _add_rank(provenance_metrics[provenance or 'none'], rank)
+                top_indices = logits.topk(min(8, int(mask.sum()))).indices.tolist()
+                decision_rows.append(
+                    {
+                        'record_id': example.record_id,
+                        'position': position,
+                        'kind': 'candidate',
+                        'role': roles[role],
+                        'provenance': provenance or 'none',
+                        'rank': rank,
+                        'gold': model.candidate_bytes(batch, label).decode('utf-8'),
+                        'top8': [model.candidate_bytes(batch, item).decode('utf-8') for item in top_indices],
+                    }
+                )
             counted = (batch.argument_count_labels[0] != -100).nonzero().flatten()
             for position_tensor in counted:
                 position = int(position_tensor)
@@ -116,12 +131,22 @@ def main() -> None:
                 rank = 1 + int((logits > logits[label]).sum())
                 _add_rank(count_metrics, rank)
                 count_metrics['absolute_error'] += abs(int(logits.argmax()) - label)
+                decision_rows.append(
+                    {
+                        'record_id': example.record_id,
+                        'position': position,
+                        'kind': 'argument_count',
+                        'rank': rank,
+                        'gold': label,
+                        'top8': logits.topk(8).indices.tolist(),
+                    }
+                )
             if covered:
                 fully_covered.append(index - 1)
             if index % 10 == 0:
                 print(f'ranked={index}/{len(evaluation_examples)}', flush=True)
 
-    gold_counts = _counterfactual(
+    gold_counts, gold_count_outcomes = _counterfactual(
         model,
         evaluation_examples,
         evaluation_records,
@@ -134,7 +159,7 @@ def main() -> None:
     )
     covered_examples = [evaluation_examples[index] for index in fully_covered]
     covered_records = [evaluation_records[index] for index in fully_covered]
-    gold_words = _counterfactual(
+    gold_words, gold_word_outcomes = _counterfactual(
         model,
         covered_examples,
         covered_records,
@@ -145,7 +170,7 @@ def main() -> None:
         force_counts=False,
         force_words=True,
     )
-    gold_both = _counterfactual(
+    gold_both, gold_both_outcomes = _counterfactual(
         model,
         covered_examples,
         covered_records,
@@ -173,6 +198,23 @@ def main() -> None:
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2, sort_keys=True) + '\n')
+    if args.decision_report is not None:
+        args.decision_report.parent.mkdir(parents=True, exist_ok=True)
+        args.decision_report.write_text(
+            json.dumps(
+                {
+                    'schema_version': 1,
+                    'source_experiment': source_experiment,
+                    'decisions': decision_rows,
+                    'gold_count_outcomes': gold_count_outcomes,
+                    'gold_word_outcomes': gold_word_outcomes,
+                    'gold_count_and_word_outcomes': gold_both_outcomes,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + '\n'
+        )
     print(json.dumps(report, indent=2, sort_keys=True))
 
 
@@ -234,8 +276,7 @@ def _counterfactual(
                 forced_words=words,
             )
         )
-    metrics, _ = v1._evaluate(records, examples, generated, client)
-    return metrics
+    return v1._evaluate(records, examples, generated, client)
 
 
 if __name__ == '__main__':
