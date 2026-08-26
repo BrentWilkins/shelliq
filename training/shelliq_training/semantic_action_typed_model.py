@@ -33,6 +33,7 @@ class TypedActionBatch:
     candidate_bytes: torch.Tensor
     candidate_byte_mask: torch.Tensor
     candidate_byte_histogram: torch.Tensor
+    candidate_bigram_histogram: torch.Tensor
     candidate_starts: torch.Tensor
     candidate_ends: torch.Tensor
     candidate_features: torch.Tensor
@@ -54,6 +55,8 @@ class TypedActionOutput:
     action_logits: torch.Tensor
     candidate_logits: torch.Tensor
     argument_count_logits: torch.Tensor
+    role_candidate_logits: torch.Tensor | None = None
+    content_role_candidate_logits: torch.Tensor | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,9 +167,19 @@ class SemanticActionTypedModel(SemanticActionCandidateModel):
             ignore_index=LABEL_IGNORE_INDEX,
         )
         copyable = batch.candidate_labels != CANDIDATE_IGNORE_INDEX
-        role_indices = batch.word_role_labels.clamp_min(0).unsqueeze(-1).expand_as(output.candidate_logits)
+        if output.role_candidate_logits is None:
+            candidate_logits = output.candidate_logits
+        else:
+            role_indices_4d = (
+                batch.word_role_labels.clamp_min(0)
+                .unsqueeze(-1)
+                .unsqueeze(-1)
+                .expand(*batch.word_role_labels.shape, 1, output.candidate_logits.shape[-1])
+            )
+            candidate_logits = output.role_candidate_logits.gather(2, role_indices_4d).squeeze(2)
+        role_indices = batch.word_role_labels.clamp_min(0).unsqueeze(-1).expand_as(candidate_logits)
         role_mask = batch.candidate_role_mask.gather(1, role_indices)
-        typed_logits = output.candidate_logits.masked_fill(~role_mask, -torch.inf)
+        typed_logits = candidate_logits.masked_fill(~role_mask, -torch.inf)
         candidate_loss = (
             functional.cross_entropy(typed_logits[copyable], batch.candidate_labels[copyable])
             if bool(copyable.any())
@@ -244,7 +257,12 @@ class SemanticActionTypedModel(SemanticActionCandidateModel):
                 if state.byte_payload is not None:
                     role = role_ids[state.name]
                     mask = batch.candidate_role_mask[0, role]
-                    scores = output.candidate_logits[0, -1].masked_fill(~mask, -torch.inf).log_softmax(dim=-1)
+                    candidate_logits = (
+                        output.candidate_logits[0, -1]
+                        if output.role_candidate_logits is None
+                        else output.role_candidate_logits[0, -1, role]
+                    )
+                    scores = candidate_logits.masked_fill(~mask, -torch.inf).log_softmax(dim=-1)
                     if forced_words is not None:
                         if hypothesis.word_index >= len(forced_words):
                             word_choices = torch.empty(0, dtype=torch.long, device=batch.source_ids.device)

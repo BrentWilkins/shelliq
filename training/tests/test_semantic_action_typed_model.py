@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import torch
 from test_semantic_action_candidate_model import TinyDecoder, TinyEncoder
 
@@ -9,6 +11,7 @@ from shelliq_training.semantic_action_typed_model import (
     TypedActionBatch,
     TypedActionOutput,
 )
+from shelliq_training.semantic_action_typed_ranking_model import SemanticActionTypedRankingModel
 from shelliq_training.semantic_actions import ActionGrammar
 
 
@@ -82,6 +85,7 @@ def batch() -> TypedActionBatch:
         candidate_bytes=torch.tensor([[[ord('c'), ord('m'), ord('d')], [ord('x'), 0, 0]]]),
         candidate_byte_mask=torch.tensor([[[True, True, True], [True, False, False]]]),
         candidate_byte_histogram=torch.nn.functional.one_hot(torch.tensor([[ord('c'), ord('x')]]), 256).float(),
+        candidate_bigram_histogram=torch.zeros(1, 2, 512),
         candidate_starts=torch.tensor([[0, 0]]),
         candidate_ends=torch.tensor([[3, 1]]),
         candidate_features=torch.tensor([[[1.0, 0.0, 1.0], [0.0, 0.0, 1.0]]]),
@@ -106,6 +110,33 @@ def test_typed_model_has_finite_candidate_and_count_losses() -> None:
     assert all(torch.isfinite(value) for value in components.values())
     assert model.argument_count_head.weight.grad is not None
     assert model.candidate_feature_embedding.grad is not None
+
+
+def test_ranking_model_uses_order_and_role_conditioning() -> None:
+    torch.manual_seed(41)
+    config = ActionDecoderConfig(d_model=8, num_heads=2, num_layers=1, feedforward_size=16)
+    model = SemanticActionTypedRankingModel(TinyEncoder(8), TinyDecoder(), config, maximum_source_bytes=4, role_count=2)
+    value = batch()
+    bigrams = torch.zeros(1, 2, 512)
+    bigrams[0, 0, (ord('a') * 257 + ord('b')) % 512] = 1
+    bigrams[0, 1, (ord('b') * 257 + ord('a')) % 512] = 1
+    value = replace(
+        value,
+        candidate_bigram_histogram=bigrams,
+        candidate_role_mask=torch.ones_like(value.candidate_role_mask),
+    )
+
+    output = model(value)
+    components = model.loss_components(value)
+    components['total'].backward()
+
+    assert output.role_candidate_logits is not None
+    assert output.role_candidate_logits.shape == (1, 2, 2, 2)
+    assert output.content_role_candidate_logits is not None
+    assert all(torch.isfinite(component) for component in components.values())
+    assert model.candidate_bigram_embedding.grad is not None
+    assert model.candidate_bigram_embedding.grad.abs().sum() > 0
+    assert model.role_query_scale.grad is not None
 
 
 def test_typed_beam_obeys_predicted_argument_count() -> None:

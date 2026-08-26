@@ -25,6 +25,7 @@ from shelliq_training.semantic_actions import ActionGrammar
 
 COUNT_IGNORE_INDEX = -100
 MAXIMUM_ARGUMENTS = 12
+BIGRAM_BUCKETS = 512
 _NUMBER = re.compile(r'\d+')
 _LONG_OPTION = re.compile(r'--[A-Za-z][A-Za-z0-9-]*')
 _IDENTIFIER = re.compile(r'[A-Za-z_][A-Za-z0-9_]*')
@@ -282,7 +283,8 @@ def collate_typed_actions(
         for byte_index, token_indices in enumerate(example.byte_token_indices):
             alignment[byte_index, list(token_indices)] = 1 / len(token_indices)
         alignments.append(alignment)
-        candidate_bytes, candidate_byte_masks, histograms, starts, ends, features, role_masks = (
+        candidate_bytes, candidate_byte_masks, histograms, bigrams, starts, ends, features, role_masks = (
+            [],
             [],
             [],
             [],
@@ -299,6 +301,11 @@ def collate_typed_actions(
             for byte in item.value:
                 histogram[byte] += 1 / len(item.value)
             histograms.append(tuple(histogram))
+            bigram = [0.0] * BIGRAM_BUCKETS
+            pair_count = max(1, len(item.value) - 1)
+            for first, second in zip(item.value, item.value[1:], strict=False):
+                bigram[(first * 257 + second) % BIGRAM_BUCKETS] += 1 / pair_count
+            bigrams.append(tuple(bigram))
             starts.append(item.local_span.start if item.local_span else 0)
             ends.append(item.local_span.end if item.local_span else 1)
             features.append((item.local, item.derived, item.global_))
@@ -306,6 +313,7 @@ def collate_typed_actions(
         candidate_bytes.extend([(0,) * candidate_byte_length] * candidate_padding)
         candidate_byte_masks.extend([(0,) * candidate_byte_length] * candidate_padding)
         histograms.extend([(0.0,) * 256] * candidate_padding)
+        bigrams.extend([(0.0,) * BIGRAM_BUCKETS] * candidate_padding)
         starts.extend([0] * candidate_padding)
         ends.extend([1] * candidate_padding)
         features.extend([(False, False, False)] * candidate_padding)
@@ -313,6 +321,7 @@ def collate_typed_actions(
         rows['candidate_bytes'].append(candidate_bytes)
         rows['candidate_byte_mask'].append(candidate_byte_masks)
         rows['candidate_byte_histogram'].append(histograms)
+        rows['candidate_bigram_histogram'].append(bigrams)
         rows['candidate_starts'].append(starts)
         rows['candidate_ends'].append(ends)
         rows['candidate_features'].append(features)
@@ -333,6 +342,7 @@ def collate_typed_actions(
         torch.tensor(rows['candidate_bytes'], dtype=torch.long),
         torch.tensor(rows['candidate_byte_mask'], dtype=torch.bool),
         torch.tensor(rows['candidate_byte_histogram'], dtype=torch.float),
+        torch.tensor(rows['candidate_bigram_histogram'], dtype=torch.float),
         torch.tensor(rows['candidate_starts'], dtype=torch.long),
         torch.tensor(rows['candidate_ends'], dtype=torch.long),
         torch.tensor(rows['candidate_features'], dtype=torch.float),
