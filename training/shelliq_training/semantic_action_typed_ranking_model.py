@@ -169,14 +169,27 @@ class SemanticActionTypedRankingModel(SemanticActionTypedModel):
             if bool(global_targets.any())
             else action_loss.new_zeros(())
         )
-        total = action_loss + 0.25 * candidate_loss + 0.25 * count_loss + 0.10 * content_global_loss
-        return {
+        grounding_loss = action_loss.new_zeros(())
+        if output.grounding_logits is not None:
+            argument_targets = copyable & (batch.word_role_labels == getattr(self, 'argument_role_index', 0))
+            grounded_candidates = batch.candidate_features[:, :, :2].bool().any(dim=-1)
+            target_grounded = grounded_candidates.gather(1, labels).long()
+            if bool(argument_targets.any()):
+                grounding_loss = functional.cross_entropy(
+                    output.grounding_logits[argument_targets],
+                    target_grounded[argument_targets],
+                )
+        total = action_loss + 0.25 * candidate_loss + 0.25 * count_loss + 0.10 * content_global_loss + 0.10 * grounding_loss
+        result = {
             'action': action_loss,
             'candidate': candidate_loss,
             'argument_count': count_loss,
             'content_global': content_global_loss,
             'total': total,
         }
+        if output.grounding_logits is not None:
+            result['grounding'] = grounding_loss
+        return result
 
     def _candidate_loss_mask(self, batch: TypedActionBatch, role_mask: torch.Tensor) -> torch.Tensor:
         return role_mask

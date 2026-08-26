@@ -9,6 +9,9 @@ from shelliq_training.semantic_action_model import ActionDecoderConfig
 from shelliq_training.semantic_action_pretrained_candidate_model import (
     SemanticActionPretrainedCandidateModel,
 )
+from shelliq_training.semantic_action_soft_grounded_count_model import (
+    SemanticActionSoftGroundedCountModel,
+)
 from shelliq_training.semantic_action_typed_model import (
     SemanticActionTypedModel,
     TypedActionBatch,
@@ -156,6 +159,27 @@ def test_pretrained_candidate_model_reaches_encoder_token_embeddings() -> None:
     assert all(torch.isfinite(component) for component in components.values())
     assert encoder.embedding.weight.grad is not None
     assert encoder.embedding.weight.grad[4:7].abs().sum() > 0
+
+
+def test_soft_grounding_prior_is_supervised_without_masking_global_targets() -> None:
+    torch.manual_seed(47)
+    config = ActionDecoderConfig(d_model=8, num_heads=2, num_layers=1, feedforward_size=16)
+    model = SemanticActionSoftGroundedCountModel(
+        TinyEncoder(8),
+        TinyDecoder(),
+        config,
+        maximum_source_bytes=4,
+        role_count=2,
+        argument_role_index=1,
+    )
+
+    components = model.loss_components(batch())
+    components['total'].backward()
+
+    assert 'grounding' in components
+    assert all(torch.isfinite(component) for component in components.values())
+    assert model.grounding_head.weight.grad is not None
+    assert model.grounding_head.weight.grad.abs().sum() > 0
 
 
 def test_typed_beam_obeys_predicted_argument_count() -> None:

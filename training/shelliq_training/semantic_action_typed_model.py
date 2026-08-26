@@ -59,6 +59,7 @@ class TypedActionOutput:
     argument_count_logits: torch.Tensor
     role_candidate_logits: torch.Tensor | None = None
     content_role_candidate_logits: torch.Tensor | None = None
+    grounding_logits: torch.Tensor | None = None
 
 
 @dataclass(frozen=True, slots=True)
