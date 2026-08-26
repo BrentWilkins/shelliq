@@ -149,3 +149,23 @@ def test_typed_beam_obeys_predicted_argument_count() -> None:
             2,
         )
     ]
+    forced = model.generate_typed_beam(
+        batch(),
+        grammar(),
+        ('command_name_bytes', 'argument_bytes'),
+        beam_width=2,
+        max_new_tokens=15,
+        forced_argument_counts=(1,),
+        forced_words=(b'cmd', b'x'),
+    )
+    assert forced == generated
+    no_arguments = model.generate_typed_beam(
+        batch(),
+        grammar(),
+        ('command_name_bytes', 'argument_bytes'),
+        beam_width=2,
+        max_new_tokens=15,
+        forced_argument_counts=(0,),
+        forced_words=(b'cmd',),
+    )
+    assert no_arguments == [(1, 64 + ord('c'), 64 + ord('m'), 64 + ord('d'), 23, 8, 2)]

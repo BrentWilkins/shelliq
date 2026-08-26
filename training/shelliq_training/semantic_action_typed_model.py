@@ -63,6 +63,8 @@ class _TypedBeam:
     score: float
     desired_arguments: int | None
     emitted_arguments: int
+    command_index: int
+    word_index: int
 
 
 class SemanticActionTypedModel(SemanticActionCandidateModel):
@@ -202,6 +204,8 @@ class SemanticActionTypedModel(SemanticActionCandidateModel):
         *,
         beam_width: int = 8,
         max_new_tokens: int | None = None,
+        forced_argument_counts: tuple[int, ...] | None = None,
+        forced_words: tuple[bytes, ...] | None = None,
     ) -> list[tuple[int, ...]]:
         if beam_width <= 0:
             raise ValueError('beam_width must be positive')
@@ -214,7 +218,7 @@ class SemanticActionTypedModel(SemanticActionCandidateModel):
         memory = self.encode(batch)
         cursor = grammar.cursor()
         cursor.advance(self.config.bos_token_id)
-        initial = _TypedBeam((self.config.bos_token_id,), cursor, 0.0, None, 0)
+        initial = _TypedBeam((self.config.bos_token_id,), cursor, 0.0, None, 0, 0, 0)
         active = [initial]
         completed: list[_TypedBeam] = []
         bounded: list[_TypedBeam] = []
@@ -226,7 +230,7 @@ class SemanticActionTypedModel(SemanticActionCandidateModel):
         while active:
             if completed and completed[0].score >= active[0].score:
                 break
-            expanded: dict[tuple[tuple[int, ...], int | None, int], _TypedBeam] = {}
+            expanded: dict[tuple[tuple[int, ...], int | None, int, int, int], _TypedBeam] = {}
             for hypothesis in active:
                 hidden = self.decode_hidden(
                     torch.tensor([hypothesis.actions], dtype=torch.long, device=batch.source_ids.device),
@@ -241,10 +245,32 @@ class SemanticActionTypedModel(SemanticActionCandidateModel):
                     role = role_ids[state.name]
                     mask = batch.candidate_role_mask[0, role]
                     scores = output.candidate_logits[0, -1].masked_fill(~mask, -torch.inf).log_softmax(dim=-1)
-                    word_choices = scores.topk(min(4 if state.name == 'command_name_bytes' else 8, int(mask.sum()))).indices
+                    if forced_words is not None:
+                        if hypothesis.word_index >= len(forced_words):
+                            word_choices = torch.empty(0, dtype=torch.long, device=batch.source_ids.device)
+                        else:
+                            expected = forced_words[hypothesis.word_index]
+                            matches = [
+                                index
+                                for index in mask.nonzero().flatten().tolist()
+                                if self.candidate_bytes(batch, index) == expected
+                            ]
+                            word_choices = torch.tensor(matches[:1], dtype=torch.long, device=batch.source_ids.device)
+                    else:
+                        word_choices = scores.topk(min(4 if state.name == 'command_name_bytes' else 8, int(mask.sum()))).indices
                     if state.name == 'command_name_bytes':
                         count_scores = output.argument_count_logits[0, -1].log_softmax(dim=-1)
-                        count_choices = count_scores.topk(4).indices
+                        if forced_argument_counts is not None:
+                            if hypothesis.command_index >= len(forced_argument_counts):
+                                count_choices = torch.empty(0, dtype=torch.long, device=batch.source_ids.device)
+                            else:
+                                count_choices = torch.tensor(
+                                    [forced_argument_counts[hypothesis.command_index]],
+                                    dtype=torch.long,
+                                    device=batch.source_ids.device,
+                                )
+                        else:
+                            count_choices = count_scores.topk(4).indices
                     else:
                         count_scores = None
                         count_choices = torch.tensor([-1], device=batch.source_ids.device)
@@ -261,10 +287,20 @@ class SemanticActionTypedModel(SemanticActionCandidateModel):
                                 next_cursor.advance(value)
                             desired = count if state.name == 'command_name_bytes' else hypothesis.desired_arguments
                             emitted = hypothesis.emitted_arguments + int(state.name == 'argument_bytes')
-                            score = hypothesis.score + float(scores[choice])
-                            if count_scores is not None:
+                            score = hypothesis.score
+                            if forced_words is None:
+                                score += float(scores[choice])
+                            if count_scores is not None and forced_argument_counts is None:
                                 score += float(count_scores[count])
-                            item = _TypedBeam(hypothesis.actions + addition, next_cursor, score, desired, emitted)
+                            item = _TypedBeam(
+                                hypothesis.actions + addition,
+                                next_cursor,
+                                score,
+                                desired,
+                                emitted,
+                                hypothesis.command_index + int(state.name == 'command_name_bytes'),
+                                hypothesis.word_index + 1,
+                            )
                             _retain_typed(expanded, item)
                             produced = True
                 else:
@@ -290,6 +326,8 @@ class SemanticActionTypedModel(SemanticActionCandidateModel):
                                 hypothesis.score + float(scores[index]),
                                 desired,
                                 emitted,
+                                hypothesis.command_index,
+                                hypothesis.word_index,
                             )
                             _retain_typed(expanded, item)
                             produced = True
@@ -301,7 +339,15 @@ class SemanticActionTypedModel(SemanticActionCandidateModel):
                     completed.append(item)
                 else:
                     active.append(item)
-            active.sort(key=lambda item: (-item.score, item.actions, item.desired_arguments or -1))
+            active.sort(
+                key=lambda item: (
+                    -item.score,
+                    item.actions,
+                    item.desired_arguments or -1,
+                    item.command_index,
+                    item.word_index,
+                )
+            )
             active = active[:beam_width]
             completed.sort(key=lambda item: (-item.score, item.actions))
             completed = completed[:beam_width]
@@ -310,8 +356,17 @@ class SemanticActionTypedModel(SemanticActionCandidateModel):
         return [winner.actions]
 
 
-def _retain_typed(target: dict[tuple[tuple[int, ...], int | None, int], _TypedBeam], candidate: _TypedBeam) -> None:
-    key = (candidate.actions, candidate.desired_arguments, candidate.emitted_arguments)
+def _retain_typed(
+    target: dict[tuple[tuple[int, ...], int | None, int, int, int], _TypedBeam],
+    candidate: _TypedBeam,
+) -> None:
+    key = (
+        candidate.actions,
+        candidate.desired_arguments,
+        candidate.emitted_arguments,
+        candidate.command_index,
+        candidate.word_index,
+    )
     previous = target.get(key)
     if previous is None or candidate.score > previous.score:
         target[key] = candidate
