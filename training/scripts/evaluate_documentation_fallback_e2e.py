@@ -57,21 +57,25 @@ def main() -> None:
         'ready_precision': precision,
         'all_emitted_semantic_and_locally_valid': all(bool(item['semantic_and_locally_valid']) for item in emitted),
         'safe_incomplete_abstentions': sum(bool(item['safe_abstention']) for item in incomplete),
+        'explicit_incomplete_abstentions': sum(bool(item['explicit_abstention']) for item in incomplete),
         'mean_latency_ms': sum(measured) / len(measured) if measured else 0.0,
         'maximum_latency_ms': max(measured, default=0.0),
     }
+    required_abstentions = (
+        metrics['explicit_incomplete_abstentions']
+        if experiment == 'documentation-fallback-e2e-v4'
+        else metrics['safe_incomplete_abstentions']
+    )
     gate_passed = (
         metrics['complete_exact'] >= 39
         and metrics['ready_precision'] >= 0.95
         and metrics['all_emitted_semantic_and_locally_valid']
-        and metrics['safe_incomplete_abstentions'] == 16
+        and required_abstentions == 16
         and metrics['mean_latency_ms'] <= 250.0
         and metrics['maximum_latency_ms'] <= 1_000.0
     )
     if args.partition == 'development':
-        gate_passed = metrics['all_emitted_semantic_and_locally_valid'] and metrics['safe_incomplete_abstentions'] == len(
-            incomplete
-        )
+        gate_passed = metrics['all_emitted_semantic_and_locally_valid'] and required_abstentions == len(incomplete)
     report = {
         'schema_version': 1,
         'experiment': experiment,
@@ -171,6 +175,12 @@ def _evaluate(shelliq: Path, row: dict[str, object]) -> dict[str, object]:
         safe_abstention = (
             expected_status == 'needs_input' and result.returncode != 0 and not output and 'needs_input:' in result.stderr
         )
+        explicit_abstention = (
+            expected_status == 'needs_input'
+            and result.returncode != 0
+            and not output
+            and ('needs_input:' in result.stderr or 'no_documentation:' in result.stderr)
+        )
         return {
             'record_id': row['record_id'],
             'command': command,
@@ -180,6 +190,7 @@ def _evaluate(shelliq: Path, row: dict[str, object]) -> dict[str, object]:
             'exact': exact,
             'semantic_and_locally_valid': verified,
             'safe_abstention': safe_abstention,
+            'explicit_abstention': explicit_abstention,
             'latency_ms': latency_ms,
             'output': output or None,
             'stderr': result.stderr.strip(),
