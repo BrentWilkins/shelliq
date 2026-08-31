@@ -74,6 +74,7 @@ def main() -> None:
             'selected_options': list(compilation.selected_options),
             'bindings': list(compilation.bindings),
             'unresolved_slots': list(compilation.unresolved_slots),
+            'word_provenance': [{'word': item.word, 'source': item.source} for item in compilation.word_provenance],
         }
         if compilation.status == 'ready':
             result = decoded_by_index[index_value]

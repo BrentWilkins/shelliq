@@ -87,6 +87,12 @@ class ComposedTemplate:
 
 
 @dataclass(frozen=True, slots=True)
+class WordProvenance:
+    word: str
+    source: str
+
+
+@dataclass(frozen=True, slots=True)
 class TemplateCompilation:
     status: str
     document: dict[str, object] | None
@@ -94,6 +100,7 @@ class TemplateCompilation:
     selected_options: tuple[str, ...]
     bindings: tuple[tuple[str, str], ...]
     unresolved_slots: tuple[str, ...]
+    word_provenance: tuple[WordProvenance, ...] = ()
 
 
 def documentation_templates(
@@ -107,6 +114,8 @@ def documentation_templates(
         document = json.loads(record.response)
         if not isinstance(document, dict):
             raise ValueError(f'{record.record_id}: semantic target is not an object')
+        if not _document_contains_command(document, record.command):
+            continue
         templates.append(
             DocumentationTemplate(
                 record_id=record.record_id,
@@ -376,6 +385,7 @@ def compile_documented_command_scored(
     if not retrieved:
         return TemplateCompilation('no_documentation', None, (), (), (), ())
     selected_options = select_documented_options(instruction, context)
+    required_literals = tuple(value for _, value in _request_literals(instruction))
     candidates = compose_contextual_candidates(
         retrieved,
         instruction,
@@ -391,7 +401,9 @@ def compile_documented_command_scored(
         unsupported = _unsupported_operands(candidate, instruction)
         arguments = _argument_command(candidate.document)
         candidate_options = tuple(value for value in (arguments[1] if arguments else ()) if value.startswith('-'))
+        candidate_words = {node['s'].strip('"\'') for node in _word_nodes(candidate.document)}
         missing_options = sum(option.startswith('-') and option not in candidate_options for option in selected_options)
+        missing_literals = tuple(value for value in required_literals if value.strip('"\'') not in candidate_words)
         extra_options = sum(option not in selected_options for option in candidate_options) if selected_options else 0
         source_similarity = max(
             (
@@ -403,6 +415,7 @@ def compile_documented_command_scored(
         )
         rank_key: tuple[object, ...] = (
             missing_options,
+            len(missing_literals),
             len(unsupported),
             extra_options,
             -source_similarity,
@@ -410,7 +423,7 @@ def compile_documented_command_scored(
             len(candidate.source_record_ids),
             _document_key(candidate.document),
         )
-        ranked.append((rank_key, candidate, unsupported))
+        ranked.append((rank_key, candidate, (*missing_literals, *unsupported)))
     ranked.sort(key=lambda item: item[0])
     _, selected, unsupported = ranked[0]
     unresolved = tuple(dict.fromkeys((*unresolved_placeholders(selected.document), *unsupported)))
@@ -421,6 +434,7 @@ def compile_documented_command_scored(
         selected_options=selected_options,
         bindings=selected.bindings,
         unresolved_slots=unresolved,
+        word_provenance=_candidate_word_provenance(selected, instruction, selected_options),
     )
 
 
@@ -777,6 +791,64 @@ def _instantiate_command(template: DocumentationTemplate, command: str) -> Docum
         context=template.context,
         document=document,
     )
+
+
+def _document_contains_command(document: Mapping[str, object], command: str) -> bool:
+    normalized = _VERSION_SUFFIX.sub('', command)
+    return any(
+        name == command or (_VERSION_SUFFIX.sub('', name) == normalized and bool(normalized)) for name in _command_names(document)
+    )
+
+
+def _command_names(document: Mapping[str, object]) -> tuple[str, ...]:
+    names: list[str] = []
+    statements = document.get('s')
+    if not isinstance(statements, list):
+        return ()
+    for statement in statements:
+        if not isinstance(statement, dict) or not isinstance(statement.get('c'), list):
+            continue
+        for command in statement['c']:
+            if isinstance(command, dict) and isinstance(command.get('n'), dict) and isinstance(command['n'].get('s'), str):
+                names.append(command['n']['s'])
+    return tuple(names)
+
+
+def _candidate_word_provenance(
+    candidate: ComposedTemplate, instruction: str, selected_options: Sequence[str]
+) -> tuple[WordProvenance, ...]:
+    bindings = {value: placeholder for placeholder, value in candidate.bindings}
+    context_values = {
+        value
+        for source in candidate.source_record_ids
+        if source.startswith('context:')
+        for value in source.removeprefix('context:').split('|')
+    }
+    command = _argument_command(candidate.document)
+    argument_nodes = _argument_word_nodes(candidate.document)
+    static_node = argument_nodes[0] if argument_nodes and not argument_nodes[0]['s'].startswith('-') else None
+    evidence: list[WordProvenance] = []
+    command_names = set(_command_names(candidate.document))
+    for node in _word_nodes(candidate.document):
+        word = node['s']
+        if word in command_names:
+            source = 'command'
+        elif word in bindings:
+            source = f'request-binding:{bindings[word]}'
+        elif word in instruction or word.strip('"\'') in instruction:
+            source = 'request-literal'
+        elif word in context_values or word in selected_options:
+            source = 'context-fragment'
+        elif word.startswith('-'):
+            source = 'documentation-option'
+        elif node is static_node and command is not None:
+            source = 'static-subcommand'
+        elif is_placeholder(word):
+            source = 'unresolved-placeholder'
+        else:
+            source = 'unsupported-documentation-operand'
+        evidence.append(WordProvenance(word, source))
+    return tuple(evidence)
 
 
 def _document_key(document: Mapping[str, object]) -> str:

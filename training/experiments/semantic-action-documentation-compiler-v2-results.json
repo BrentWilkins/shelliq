@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "experiment": "semantic-action-documentation-compiler-v2",
+  "status": "failed-progress-gate",
+  "metrics": {
+    "examples": 92,
+    "ready": 71,
+    "needs_input": 16,
+    "no_documentation": 5,
+    "ready_rust_valid": 71,
+    "ready_first_command_match": 66,
+    "reference_accepted": 2,
+    "ready_reference_precision": 0.028169014084507043
+  },
+  "raw_report_sha256": "3b1c7747bfba3e2ef9165c4f890defe21e85dfdaac3857503b8df712a1f8403f",
+  "decision": "filter documentation records by typed command integrity; require all request literals and emit per-word provenance"
+}

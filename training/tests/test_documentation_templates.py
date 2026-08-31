@@ -75,6 +75,21 @@ def test_index_excludes_curated_targets_and_scopes_command_platform() -> None:
     assert index.rank(command='base64', platform=Platform.DARWIN, instruction='Encode file', context='') == []
 
 
+def test_index_excludes_meta_example_that_does_not_invoke_indexed_command() -> None:
+    docs = documentation_templates(
+        [
+            record(
+                record_id='tldr:python3:meta',
+                source='tldr-pages',
+                instruction='Show Python documentation',
+                target=document('tldr', 'python'),
+            )
+        ]
+    )
+
+    assert docs == []
+
+
 def test_generic_binding_substitutes_explicit_compatible_literals() -> None:
     template = DocumentationTemplate(
         record_id='tldr:rsync:port',
@@ -304,6 +319,13 @@ def test_scored_compiler_selects_complete_candidate_across_unseen_family() -> No
     assert result.status == 'ready'
     assert result.document == document('docker', 'logs', '--tail', '20', 'api')
     assert result.source_record_ids[0] == 'tldr:docker:logs'
+    assert [(item.word, item.source) for item in result.word_provenance] == [
+        ('docker', 'command'),
+        ('logs', 'request-literal'),
+        ('--tail', 'context-fragment'),
+        ('20', 'request-binding:number'),
+        ('api', 'request-binding:container_name'),
+    ]
 
 
 def test_scored_compiler_rejects_concrete_undocumented_operand() -> None:
