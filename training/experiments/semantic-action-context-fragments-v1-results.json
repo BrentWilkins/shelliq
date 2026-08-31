@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "experiment": "semantic-action-context-fragments-v1",
+  "status": "failed-feasibility-gate",
+  "metrics": {
+    "examples": 92,
+    "documentation_covered": 87,
+    "candidate_documents": 8064,
+    "rust_valid_candidates": 8064,
+    "skeleton_oracle": 11,
+    "skeleton_oracle_distinct_commands": 8,
+    "exact_oracle": 3
+  },
+  "raw_report_sha256": "361b4fedafd92a7183652ff999116fe5a56c1820638be8e1c851bb86de78807d",
+  "decision": "correct generic option placement and version-suffixed documentation lookup"
+}

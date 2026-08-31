@@ -180,3 +180,45 @@ def test_contextual_composer_overlays_documented_options_on_typed_structure() ->
 
     assert documented_context_options(context) == ('-i', '-d', '-m', '-v')
     assert any(template_matches_document(item.document, target) for item in candidates)
+
+
+def test_context_options_follow_documented_subcommand_prefix() -> None:
+    base = DocumentationTemplate(
+        record_id='tldr:docker:logs',
+        command='docker',
+        platform=Platform.LINUX,
+        instruction='Show container logs',
+        context='',
+        document=document('docker', 'logs', 'container_name'),
+    )
+    target = document('docker', 'logs', '--tail', 'container_name')
+
+    candidates = compose_contextual_candidates(
+        [RetrievedTemplate(base, 1.0)],
+        'Show recent logs.',
+        'docker logs: --tail limits the number of lines.',
+    )
+
+    assert any(template_matches_document(item.document, target) for item in candidates)
+
+
+def test_version_suffix_fallback_reuses_typed_recipe_and_keeps_requested_command() -> None:
+    python = DocumentationTemplate(
+        record_id='tldr:python:http',
+        command='python',
+        platform=Platform.LINUX,
+        instruction='Start an HTTP server',
+        context='',
+        document=document('python', '-m', 'http.server'),
+    )
+    index = DocumentationTemplateIndex([python])
+
+    ranked = index.rank(
+        command='python3',
+        platform=Platform.LINUX,
+        instruction='Start an HTTP server',
+        context='',
+    )
+
+    assert ranked[0].template.command == 'python3'
+    assert ranked[0].template.document == document('python3', '-m', 'http.server')

@@ -21,6 +21,7 @@ _URL = re.compile(r'(?:https?|ssh|rsync)://[^\s,;]+')
 _PATH = re.compile(r'(?:\.{0,2}/|/|~\/)[^\s,;]+|[A-Za-z0-9_.-]+\.[A-Za-z0-9]{1,8}')
 _INTEGER = re.compile(r'(?<![A-Za-z0-9_.-])\d+(?![A-Za-z0-9_-])')
 _OPTION = re.compile(r'(?<![A-Za-z0-9_])--?[A-Za-z0-9][A-Za-z0-9-]*(?:=[A-Za-z0-9_./:@%+,-]+)?')
+_VERSION_SUFFIX = re.compile(r'\d+(?:\.\d+)*$')
 _PLACEHOLDER_PART = re.compile(
     r'(?:^|[_/.-])(?:'
     r'archive|command|count|date|directory|domain|extension|field|file|filename|'
@@ -118,9 +119,19 @@ class DocumentationTemplateIndex:
         if limit <= 0:
             raise ValueError('retrieval limit must be positive')
         query = _vectorize(_tokenize(f'{instruction}\n{context}'), self._idf)
+        indices = self._groups.get((command, platform), ())
+        alias = False
+        if not indices:
+            normalized = _VERSION_SUFFIX.sub('', command)
+            if normalized and normalized != command:
+                indices = self._groups.get((normalized, platform), ())
+                alias = bool(indices)
         ranked = [
-            RetrievedTemplate(self.templates[index], _cosine(query, self._vectors[index]))
-            for index in self._groups.get((command, platform), ())
+            RetrievedTemplate(
+                _instantiate_command(self.templates[index], command) if alias else self.templates[index],
+                _cosine(query, self._vectors[index]),
+            )
+            for index in indices
         ]
         ranked.sort(key=lambda item: (-item.score, item.template.record_id))
         return ranked[:limit]
@@ -242,7 +253,7 @@ def compose_contextual_candidates(
             continue
         _, base_arguments = command
         for option_sequence in option_sequences:
-            merged_arguments = _shortest_common_supersequence(option_sequence, base_arguments)
+            merged_arguments = _overlay_context_options(base_arguments, option_sequence)
             merged = _replace_arguments(base, merged_arguments)
             source_ids = (retrieved_item.template.record_id, f'context:{"|".join(option_sequence)}')
             bound, bindings = _bind_document(merged, instruction)
@@ -493,6 +504,37 @@ def _shortest_common_supersequence(left: Sequence[str], right: Sequence[str]) ->
     merged.extend(left[left_index:])
     merged.extend(right[right_index:])
     return tuple(merged)
+
+
+def _overlay_context_options(base_arguments: Sequence[str], options: Sequence[str]) -> tuple[str, ...]:
+    prefix_end = 0
+    for argument in base_arguments:
+        if argument.startswith('-') or is_placeholder(argument):
+            break
+        prefix_end += 1
+    prefix = tuple(base_arguments[:prefix_end])
+    remainder = tuple(base_arguments[prefix_end:])
+    return (*prefix, *_shortest_common_supersequence(options, remainder))
+
+
+def _instantiate_command(template: DocumentationTemplate, command: str) -> DocumentationTemplate:
+    document = copy.deepcopy(template.document)
+    statements = document.get('s')
+    if isinstance(statements, list):
+        for statement in statements:
+            if not isinstance(statement, dict) or not isinstance(statement.get('c'), list):
+                continue
+            for item in statement['c']:
+                if isinstance(item, dict) and isinstance(item.get('n'), dict) and item['n'].get('s') == template.command:
+                    item['n']['s'] = command
+    return DocumentationTemplate(
+        record_id=template.record_id,
+        command=command,
+        platform=template.platform,
+        instruction=template.instruction,
+        context=template.context,
+        document=document,
+    )
 
 
 def _document_key(document: Mapping[str, object]) -> str:
