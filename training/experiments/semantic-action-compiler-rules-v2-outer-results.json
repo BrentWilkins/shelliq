@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "experiment": "semantic-action-compiler-rules-v2",
+  "phase": "outer",
+  "gate_passed": false,
+  "source_experiment": "semantic-action-grounded-count-v2",
+  "source_epochs": 5,
+  "source_seed": 20260826,
+  "train_records": 610,
+  "evaluation_records": 78,
+  "rule_coverage": 0,
+  "rust_encoded_rules": 0,
+  "metrics": {
+    "examples": 78,
+    "exact_actions": 1,
+    "rust_valid": 78,
+    "first_command_match": 69,
+    "reference_accepted": 1
+  },
+  "floors": {
+    "minimum_rust_valid": 71,
+    "minimum_first_command_match": 63,
+    "minimum_reference_accepted": 8
+  },
+  "per_rule": {
+    "fallback": {
+      "examples": 78,
+      "exact_actions": 1,
+      "rust_valid": 78,
+      "first_command_match": 69,
+      "reference_accepted": 1
+    }
+  },
+  "training_history": [
+    {"epoch": 1, "train_loss": 8.10039505356061},
+    {"epoch": 2, "train_loss": 5.2588361655334195},
+    {"epoch": 3, "train_loss": 4.379062589917184},
+    {"epoch": 4, "train_loss": 3.9010981867828165},
+    {"epoch": 5, "train_loss": 3.5645425674739486}
+  ],
+  "inner_authorization_sha256": "39982216e37666862d5243799dc8912e920402fefa2f0353b66f68ac5d9237ce",
+  "raw_report_sha256": "3e457bf87ad30760192581bd2d43807522e2082abac4b258db15ea8956a64c70",
+  "checkpoint_sha256": "f6248cf7aeb0bebb56853b60b4bb6633f7b665948fb549f6dcfc7336871957e7",
+  "decision": "stop recipe; protected test remains sealed"
+}
