@@ -19,6 +19,7 @@ from shelliq_training.data import load_semantic_jsonl
 from shelliq_training.documentation_templates import (
     DocumentationTemplate,
     RetrievedTemplate,
+    _request_literals,
     bind_template,
     documentation_templates,
     unresolved_placeholders,
@@ -36,6 +37,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--prior-benchmark', type=Path, required=True)
     parser.add_argument('--exclude-dataset', action='append', type=Path, default=[])
     parser.add_argument('--experiment', default=DEFAULT_EXPERIMENT)
+    parser.add_argument('--exclude-source-literals', action='store_true')
     parser.add_argument('--development-output', type=Path, required=True)
     parser.add_argument('--test-output', type=Path, required=True)
     parser.add_argument('--manifest', type=Path, required=True)
@@ -76,6 +78,8 @@ def main() -> None:
         if not SAFE_COMMAND.fullmatch(template.command):
             continue
         if not benchmark._eligible_placeholders(template.document):
+            continue
+        if args.exclude_source_literals and _request_literals(template.instruction):
             continue
         if _simple_words(template.document) is None:
             continue
@@ -120,6 +124,7 @@ def main() -> None:
         'excluded_additional_commands': len(additional_commands),
         'documentation_index_sha256': _sha256(args.documentation_index),
         'command_disjoint': True,
+        'source_instructions_literal_free': args.exclude_source_literals,
     }
     args.manifest.parent.mkdir(parents=True, exist_ok=True)
     args.manifest.write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n')
