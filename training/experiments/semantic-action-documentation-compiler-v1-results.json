@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "experiment": "semantic-action-documentation-compiler-v1",
+  "status": "failed-target-blind-gate",
+  "metrics": {
+    "examples": 92,
+    "ready": 55,
+    "needs_input": 32,
+    "no_documentation": 5,
+    "ready_rust_valid": 55,
+    "ready_first_command_match": 50,
+    "reference_accepted": 0,
+    "ready_reference_precision": 0.0
+  },
+  "raw_report_sha256": "a2180ff8a81efd0ea30c87c352eb88aa232d1e4f52a71950db586c0a85282d29",
+  "decision": "stop top-one template selection; require whole-candidate semantic scoring and conservative operand provenance"
+}
