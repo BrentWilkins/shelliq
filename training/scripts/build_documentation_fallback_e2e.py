@@ -24,7 +24,7 @@ from shelliq_training.documentation_templates import (
     unresolved_placeholders,
 )
 
-EXPERIMENT = 'documentation-fallback-e2e-v1'
+DEFAULT_EXPERIMENT = 'documentation-fallback-e2e-v1'
 SAFE_COMMAND = re.compile(r'^[A-Za-z0-9][A-Za-z0-9+._-]*$')
 
 
@@ -34,6 +34,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--split-manifest', type=Path, required=True)
     parser.add_argument('--documentation-index', type=Path, required=True)
     parser.add_argument('--prior-benchmark', type=Path, required=True)
+    parser.add_argument('--exclude-dataset', action='append', type=Path, default=[])
+    parser.add_argument('--experiment', default=DEFAULT_EXPERIMENT)
     parser.add_argument('--development-output', type=Path, required=True)
     parser.add_argument('--test-output', type=Path, required=True)
     parser.add_argument('--manifest', type=Path, required=True)
@@ -50,10 +52,15 @@ def main() -> None:
     semantic_by_id = {record.record_id: record for record in semantic_records}
     split_manifest = json.loads(args.split_manifest.read_text())
     train_ids = split_manifest['outer_splits']['train']['record_ids']
-    excluded_commands = {semantic_by_id[record_id].command for record_id in train_ids}
+    train_commands = {semantic_by_id[record_id].command for record_id in train_ids}
+    excluded_commands = set(train_commands)
     prior_rows = [json.loads(line) for line in args.prior_benchmark.read_text().splitlines()]
     prior_commands = {row['command'] for row in prior_rows}
     excluded_commands.update(prior_commands)
+    additional_commands = {
+        row['command'] for path in args.exclude_dataset for row in (json.loads(line) for line in path.read_text().splitlines())
+    }
+    excluded_commands.update(additional_commands)
 
     templates = sorted(
         documentation_templates(load_semantic_jsonl(args.documentation_index)),
@@ -90,7 +97,7 @@ def main() -> None:
     _write_jsonl(args.test_output, test)
     manifest = {
         'schema_version': 1,
-        'experiment': EXPERIMENT,
+        'experiment': args.experiment,
         'selection': (
             'stable record-id order; Linux simple single-command typed TLDR recipes with '
             'at least one placeholder; one recipe per command'
@@ -108,8 +115,9 @@ def main() -> None:
             'sha256': _sha256(args.test_output),
         },
         'distinct_commands': len(selected_commands),
-        'excluded_neural_train_commands': len(set(excluded_commands) - prior_commands),
+        'excluded_neural_train_commands': len(train_commands),
         'excluded_prior_benchmark_commands': len(prior_commands),
+        'excluded_additional_commands': len(additional_commands),
         'documentation_index_sha256': _sha256(args.documentation_index),
         'command_disjoint': True,
     }
