@@ -31,6 +31,27 @@ _PLACEHOLDER_PART = re.compile(
     r')(?:$|[_/.-])',
     re.IGNORECASE,
 )
+_STOPWORDS = frozenset(
+    {
+        'a',
+        'an',
+        'and',
+        'as',
+        'at',
+        'by',
+        'for',
+        'from',
+        'in',
+        'is',
+        'it',
+        'of',
+        'on',
+        'or',
+        'the',
+        'to',
+        'with',
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +84,16 @@ class ComposedTemplate:
     score: float
     document: dict[str, object]
     bindings: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class TemplateCompilation:
+    status: str
+    document: dict[str, object] | None
+    source_record_ids: tuple[str, ...]
+    selected_options: tuple[str, ...]
+    bindings: tuple[tuple[str, str], ...]
+    unresolved_slots: tuple[str, ...]
 
 
 def documentation_templates(
@@ -278,6 +309,83 @@ def documented_context_options(context: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(match.group() for match in _OPTION.finditer(context)))
 
 
+def compile_documented_command(
+    index: DocumentationTemplateIndex,
+    *,
+    command: str,
+    platform: Platform,
+    instruction: str,
+    context: str,
+) -> TemplateCompilation:
+    """Select one target-blind template or abstain when literal slots remain."""
+    retrieved = index.rank(
+        command=command,
+        platform=platform,
+        instruction=instruction,
+        context=context,
+        limit=8,
+    )
+    if not retrieved:
+        return TemplateCompilation('no_documentation', None, (), (), (), ())
+    selected_options = select_documented_options(instruction, context)
+    base = retrieved[0]
+    command_shape = _argument_command(base.template.document)
+    document = copy.deepcopy(base.template.document)
+    if command_shape is not None and selected_options:
+        _, arguments = command_shape
+        document = _replace_arguments(document, _overlay_context_options(arguments, selected_options))
+    bound, bindings = _bind_document(document, instruction)
+    unresolved = unresolved_placeholders(bound)
+    return TemplateCompilation(
+        status='needs_input' if unresolved else 'ready',
+        document=bound,
+        source_record_ids=(base.template.record_id,),
+        selected_options=selected_options,
+        bindings=bindings,
+        unresolved_slots=unresolved,
+    )
+
+
+def select_documented_options(instruction: str, context: str) -> tuple[str, ...]:
+    """Select option fragments whose local documentation overlaps the request."""
+    query = _content_tokens(instruction)
+    selected: list[str] = []
+    clauses = re.split(r'(?<=[.;])\s+|,\s*|\s+and\s+(?=--?)', context)
+    for clause in clauses:
+        options = list(_OPTION.finditer(clause))
+        if not options:
+            continue
+        description = _content_tokens(_OPTION.sub(' ', clause))
+        explicit = any(match.group() in instruction for match in options)
+        if not explicit and not query.intersection(description):
+            continue
+        for match in options:
+            selected.append(match.group())
+            remainder = clause[match.end() :]
+            value = re.match(r"\s+(\d+|'[^']*'|\"[^\"]*\")", remainder)
+            if value:
+                selected.append(value.group(1))
+    return tuple(dict.fromkeys(selected))
+
+
+def unresolved_placeholders(document: Mapping[str, object]) -> tuple[str, ...]:
+    unresolved: list[str] = []
+
+    def visit(value: object) -> None:
+        if isinstance(value, list):
+            for item in value:
+                visit(item)
+        elif isinstance(value, dict):
+            if set(value) == {'s'} and isinstance(value['s'], str) and is_placeholder(value['s']):
+                unresolved.append(value['s'])
+            else:
+                for item in value.values():
+                    visit(item)
+
+    visit(document)
+    return tuple(dict.fromkeys(unresolved))
+
+
 def _bind_document(document: Mapping[str, object], instruction: str) -> tuple[dict[str, object], tuple[tuple[str, str], ...]]:
     bound = copy.deepcopy(dict(document))
     available = _request_literals(instruction)
@@ -357,6 +465,19 @@ def template_matches_document(template: Mapping[str, object], document: Mapping[
 
 def _tokenize(value: str) -> Counter[str]:
     return Counter(_TOKEN.findall(value.lower()))
+
+
+def _content_tokens(value: str) -> set[str]:
+    tokens: set[str] = set()
+    for token in _TOKEN.findall(value.lower()):
+        if token.startswith('-') or token in _STOPWORDS:
+            continue
+        for suffix in ('ing', 'ed', 'es', 's'):
+            if len(token) > len(suffix) + 2 and token.endswith(suffix):
+                token = token[: -len(suffix)]
+                break
+        tokens.add(token)
+    return tokens
 
 
 def _vectorize(tokens: Counter[str], inverse_document_frequency: Mapping[str, float]) -> dict[str, float]:

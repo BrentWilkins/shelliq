@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "experiment": "semantic-action-context-fragments-v2",
+  "status": "failed-feasibility-gate",
+  "metrics": {
+    "examples": 92,
+    "documentation_covered": 87,
+    "candidate_documents": 8063,
+    "rust_valid_candidates": 8063,
+    "skeleton_oracle": 11,
+    "skeleton_oracle_distinct_commands": 8,
+    "exact_oracle": 3
+  },
+  "raw_report_sha256": "692b38bfa35503682d736fda053e1614cdc0f10360952e34f9379df9c05c22da",
+  "decision": "stop bounded context-subset oracle expansion; implement target-blind selection and explicit unresolved-slot abstention"
+}

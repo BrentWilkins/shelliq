@@ -9,11 +9,13 @@ from shelliq_training.documentation_templates import (
     DocumentationTemplateIndex,
     RetrievedTemplate,
     bind_template,
+    compile_documented_command,
     compose_contextual_candidates,
     compose_template_candidates,
     documentation_templates,
     documented_context_options,
     is_placeholder,
+    select_documented_options,
     template_matches_document,
 )
 from shelliq_training.semantic_actions import SemanticActionClient
@@ -222,3 +224,51 @@ def test_version_suffix_fallback_reuses_typed_recipe_and_keeps_requested_command
 
     assert ranked[0].template.command == 'python3'
     assert ranked[0].template.document == document('python3', '-m', 'http.server')
+
+
+def test_target_blind_compiler_selects_relevant_option_and_binds_request_literal() -> None:
+    template = DocumentationTemplate(
+        record_id='tldr:base64:encode',
+        command='base64',
+        platform=Platform.LINUX,
+        instruction='Encode a file',
+        context='',
+        document=document('base64', 'path/to/file'),
+    )
+    index = DocumentationTemplateIndex([template])
+    context = 'base64: -w 0 disables wrapping. -d decodes input.'
+
+    result = compile_documented_command(
+        index,
+        command='base64',
+        platform=Platform.LINUX,
+        instruction='Encode report.bin without wrapping.',
+        context=context,
+    )
+
+    assert select_documented_options('Encode report.bin without wrapping.', context) == ('-w', '0')
+    assert result.status == 'ready'
+    assert result.document == document('base64', '-w', '0', 'report.bin')
+    assert result.unresolved_slots == ()
+
+
+def test_target_blind_compiler_abstains_when_required_literal_is_missing() -> None:
+    template = DocumentationTemplate(
+        record_id='tldr:base64:encode',
+        command='base64',
+        platform=Platform.LINUX,
+        instruction='Encode a file',
+        context='',
+        document=document('base64', 'path/to/file'),
+    )
+
+    result = compile_documented_command(
+        DocumentationTemplateIndex([template]),
+        command='base64',
+        platform=Platform.LINUX,
+        instruction='Encode a file.',
+        context='base64 encodes a file to standard output.',
+    )
+
+    assert result.status == 'needs_input'
+    assert result.unresolved_slots == ('path/to/file',)
