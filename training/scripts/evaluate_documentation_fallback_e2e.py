@@ -13,7 +13,7 @@ import tempfile
 import time
 from pathlib import Path
 
-EXPERIMENT = 'documentation-fallback-e2e-v1'
+EXPERIMENT_PREFIX = 'documentation-fallback-e2e-v'
 
 
 def parse_args() -> argparse.Namespace:
@@ -29,7 +29,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     manifest = json.loads(args.manifest.read_text())
-    if manifest.get('experiment') != EXPERIMENT:
+    experiment = manifest.get('experiment')
+    if not isinstance(experiment, str) or not experiment.startswith(EXPERIMENT_PREFIX):
         raise ValueError('unexpected fallback evaluation manifest')
     expected_hash = manifest[args.partition]['sha256']
     if _sha256(args.dataset) != expected_hash:
@@ -73,7 +74,7 @@ def main() -> None:
         )
     report = {
         'schema_version': 1,
-        'experiment': EXPERIMENT,
+        'experiment': experiment,
         'partition': args.partition,
         'dataset_sha256': expected_hash,
         'gate_passed': gate_passed,

@@ -50,10 +50,13 @@ enum SlotKind {
 struct RecipeCompilation {
     command: String,
     unresolved: Vec<String>,
+    unused_literals: Vec<String>,
 }
 
 pub fn compile(index: &Index, commands: &[String], platform: &str, instruction: &str) -> Result<Compilation> {
     let mut best: Option<Compilation> = None;
+    let mut best_documentation_score = 0;
+    let mut top_intents = HashSet::new();
     for command in commands {
         if !index.command_exists(command)? {
             continue;
@@ -64,9 +67,23 @@ pub fn compile(index: &Index, commands: &[String], platform: &str, instruction: 
             if score == 0 {
                 continue;
             }
-            let Some(recipe) = compile_recipe(index, command, instruction, example)? else {
+            if score > best_documentation_score {
+                best_documentation_score = score;
+                best = None;
+                top_intents.clear();
+            } else if score < best_documentation_score {
+                continue;
+            }
+            top_intents.insert(format!("{command}\n{}", normalize_phrase(&example.description)));
+            let Some(mut recipe) = compile_recipe(index, command, instruction, example)? else {
                 continue;
             };
+            recipe.unresolved.extend(
+                recipe
+                    .unused_literals
+                    .into_iter()
+                    .map(|value| format!("unused request value {value}")),
+            );
             let source = format!("tldr:{platform}:{command}:{}", example_index + 1);
             let candidate = if recipe.unresolved.is_empty() {
                 let Ok(suggestion) = lower_suggestion(&recipe.command) else {
@@ -94,6 +111,16 @@ pub fn compile(index: &Index, commands: &[String], platform: &str, instruction: 
                 best = Some(candidate);
             }
         }
+    }
+    if top_intents.len() > 1 {
+        return Ok(Compilation {
+            status: CompilationStatus::NeedsInput,
+            suggestion: None,
+            command_name: None,
+            source: None,
+            unresolved_slots: vec!["ambiguous documentation intent".into()],
+            score: best_documentation_score,
+        });
     }
     Ok(best.unwrap_or(Compilation {
         status: CompilationStatus::NoDocumentation,
@@ -189,9 +216,16 @@ fn compile_recipe(index: &Index, command: &str, instruction: &str, example: &Par
     }
     unresolved.sort();
     unresolved.dedup();
+    let unused_literals = literals
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| !used.contains(index))
+        .map(|(_, literal)| literal.value.clone())
+        .collect();
     Ok(Some(RecipeCompilation {
         command: words.join(" "),
         unresolved,
+        unused_literals,
     }))
 }
 
@@ -541,5 +575,15 @@ mod tests {
         assert_eq!(incomplete.status, CompilationStatus::NeedsInput);
         assert!(incomplete.suggestion.is_none());
         assert!(!incomplete.unresolved_slots.is_empty());
+
+        let extra = compile(
+            &index,
+            &["grep".into()],
+            "linux",
+            "Search exact string (disables regexes). Use \"needle\", /tmp/input.dat, and 42.",
+        )
+        .unwrap();
+        assert_eq!(extra.status, CompilationStatus::NeedsInput);
+        assert!(extra.unresolved_slots.iter().any(|slot| slot == "unused request value 42"));
     }
 }
