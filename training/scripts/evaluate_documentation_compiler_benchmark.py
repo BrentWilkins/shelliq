@@ -57,19 +57,23 @@ def main() -> None:
     decoded = client.decode(client.encode(ready_documents))
     decoded_by_index = dict(zip(ready_indices, decoded, strict=True))
 
-    exact = 0
+    delivered_exact = 0
+    template_exact = 0
     outcomes: list[dict[str, object]] = []
     for index_value, (row, compilation) in enumerate(zip(rows, compilations, strict=True)):
-        is_exact = compilation.document is not None and semantic_documents_equivalent(
+        is_template_exact = compilation.document is not None and semantic_documents_equivalent(
             row['expected_document'], compilation.document
         )
-        exact += is_exact
+        is_delivered_exact = compilation.status == 'ready' and is_template_exact
+        template_exact += is_template_exact
+        delivered_exact += is_delivered_exact
         outcomes.append(
             {
                 'record_id': row['record_id'],
                 'command': row['command'],
                 'status': compilation.status,
-                'exact': is_exact,
+                'template_exact': is_template_exact,
+                'delivered_exact': is_delivered_exact,
                 'rust_valid': decoded_by_index[index_value].valid if index_value in decoded_by_index else None,
                 'sources': list(compilation.source_record_ids),
                 'unresolved_slots': list(compilation.unresolved_slots),
@@ -78,8 +82,8 @@ def main() -> None:
         )
     ready = len(ready_indices)
     valid = sum(item.valid for item in decoded)
-    precision = exact / ready if ready else 0.0
-    coverage = exact / len(rows) if rows else 0.0
+    precision = delivered_exact / ready if ready else 0.0
+    coverage = delivered_exact / len(rows) if rows else 0.0
     metrics = {
         'examples': len(rows),
         'distinct_commands': len({row['command'] for row in rows}),
@@ -87,7 +91,8 @@ def main() -> None:
         'needs_input': sum(item.status == 'needs_input' for item in compilations),
         'no_documentation': sum(item.status == 'no_documentation' for item in compilations),
         'ready_rust_valid': valid,
-        'exact': exact,
+        'template_exact': template_exact,
+        'delivered_exact': delivered_exact,
         'exact_coverage': coverage,
         'ready_precision': precision,
     }

@@ -22,6 +22,7 @@ from shelliq_training.documentation_templates import (
 )
 
 EXPERIMENT = 'documentation-compiler-input-complete-v1'
+INCLUDE_SLOT_NAMES = True
 
 
 def parse_args() -> argparse.Namespace:
@@ -60,10 +61,13 @@ def main() -> None:
             continue
         kinds = [placeholder_kind(placeholder) for placeholder in placeholders]
         values = [_slot_value(kind, len(rows), index) for index, kind in enumerate(kinds)]
-        additions = ', '.join(
-            f'{_formatted(value, kind)} for {placeholder}'
-            for placeholder, value, kind in zip(placeholders, values, kinds, strict=True)
-        )
+        if INCLUDE_SLOT_NAMES:
+            additions = ', '.join(
+                f'{_formatted(value, kind)} for {placeholder}'
+                for placeholder, value, kind in zip(placeholders, values, kinds, strict=True)
+            )
+        else:
+            additions = ', '.join(_formatted(value, kind) for value, kind in zip(values, kinds, strict=True))
         instruction = f'{template.instruction}. Use {additions}.'
         bound = bind_template(RetrievedTemplate(template, 1.0), instruction)
         if unresolved_placeholders(bound.document):

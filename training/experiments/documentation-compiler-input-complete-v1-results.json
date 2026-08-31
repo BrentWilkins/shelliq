@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "experiment": "documentation-compiler-input-complete-v1",
+  "status": "failed-capability-gate",
+  "metrics": {
+    "examples": 100,
+    "distinct_commands": 100,
+    "ready": 22,
+    "needs_input": 78,
+    "no_documentation": 0,
+    "ready_rust_valid": 22,
+    "template_exact": 50,
+    "delivered_exact": 16,
+    "exact_coverage": 0.16,
+    "ready_precision": 0.7272727272727273
+  },
+  "benchmark_sha256": "6b6de50bcf5d868012d0c7b9b74247744b923d163c6ce7d14c12f2e538834424",
+  "raw_report_sha256": "68152575594ddcafab87a5a0d64a929c2a88fb6882f15a93c16829991548c764",
+  "decision": "remove slot labels from requests and prefer complete single-source templates"
+}

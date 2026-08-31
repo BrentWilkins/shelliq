@@ -416,11 +416,11 @@ def compile_documented_command_scored(
         rank_key: tuple[object, ...] = (
             missing_options,
             len(missing_literals),
+            len(candidate.source_record_ids),
             len(unsupported),
             extra_options,
             -source_similarity,
             -candidate.score,
-            len(candidate.source_record_ids),
             _document_key(candidate.document),
         )
         ranked.append((rank_key, candidate, (*missing_literals, *unsupported)))
