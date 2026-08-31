@@ -126,6 +126,14 @@ with a nonzero exit and no standard output, so the Zsh widget never puts an
 abstention in the editable buffer. If no documentation matches, it returns
 `no_documentation`.
 
+On two independent literal-clean sealed sets, the unchanged runtime delivered
+81/96 complete requests exactly with 100% ready precision and local/semantic
+validity, and abstained with nonzero exit plus empty stdout on 32/32 incomplete
+requests. The final v4 preregistered gate still failed its per-partition coverage
+floor (37/48 versus 39 required), so this is a conservative fallback rather than
+a standalone high-coverage generator. Full evidence is in
+`training/experiments/documentation-fallback-e2e-v4-results.md`.
+
 ## Footprint
 
 The default build links no inference library, opens no socket, and needs no GPU. A model is

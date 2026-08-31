@@ -1,0 +1,30 @@
+{
+  "binary_sha256": "8977ce96dd44810768ffe1941970fc93631065f8654e6f232d9494bd626e62ff",
+  "dataset_sha256": "1b4bd3e26d3c041a82b46e731f480cdf9e5105408c00056936f8ba711b0b94ec",
+  "descriptive_literal_clean_aggregate": {
+    "complete_exact": 81,
+    "complete_records": 96,
+    "exact_coverage": 0.84375,
+    "explicit_incomplete_abstentions": 32,
+    "incomplete_records": 32,
+    "ready_precision": 1.0,
+    "ready_valid": 81
+  },
+  "experiment": "documentation-fallback-e2e-v4",
+  "gate_passed": false,
+  "metrics": {
+    "all_emitted_semantic_and_locally_valid": true,
+    "complete_emitted": 37,
+    "complete_exact": 37,
+    "complete_records": 48,
+    "explicit_incomplete_abstentions": 16,
+    "incomplete_records": 16,
+    "maximum_latency_ms": 50.01831999106798,
+    "mean_latency_ms": 36.72196976580419,
+    "ready_precision": 1.0,
+    "safe_incomplete_abstentions": 16
+  },
+  "partition": "test",
+  "raw_report_sha256": "6aa8a6915665348fa4719beeb8e8f0f8ef86533ad90cb6558a468bfc9d084f02",
+  "schema_version": 1
+}
