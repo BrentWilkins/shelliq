@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "experiment": "semantic-action-documentation-templates-v1",
+  "status": "failed-feasibility-gate",
+  "documentation_index": {
+    "source": "tldr-pages",
+    "revision": "v2.3",
+    "records": 29786,
+    "commands": 5073,
+    "rust_action_round_trips": 29786,
+    "sha256": "ec1191fb076d78d5d556d78dbe9aa3f38470bf93d120395e18083033820061e2"
+  },
+  "metrics": {
+    "examples": 92,
+    "documentation_covered": 87,
+    "top1_skeleton_match": 3,
+    "top8_skeleton_match": 5,
+    "top8_distinct_commands": 5,
+    "rust_valid": 92,
+    "first_command_match": 85,
+    "reference_accepted": 0
+  },
+  "attribution": {
+    "missing_documentation": {"records": 5, "distinct_commands": 4},
+    "missing_recipe": {"records": 81, "distinct_commands": 16},
+    "retrieval_rank_miss": {"records": 1, "distinct_commands": 1},
+    "top8_recipe": {"records": 5, "distinct_commands": 5}
+  },
+  "raw_report_sha256": "5a80ac4d0eca5d554b239de3b75ef598b2fecacc5e992bd13979a0efd6dca330",
+  "coverage_report_sha256": "0abd81a70053bdd5b9529c591152374024de7944301adb56bed0d0016687fc74",
+  "decision": "stop single-template retrieval; require generic typed-fragment composition"
+}
