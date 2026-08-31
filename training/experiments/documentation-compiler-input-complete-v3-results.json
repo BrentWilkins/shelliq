@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "experiment": "documentation-compiler-input-complete-v3",
+  "status": "passed-capability-gate",
+  "metrics": {
+    "examples": 100,
+    "distinct_commands": 100,
+    "ready": 93,
+    "needs_input": 7,
+    "no_documentation": 0,
+    "ready_rust_valid": 93,
+    "template_exact": 97,
+    "delivered_exact": 90,
+    "exact_coverage": 0.90,
+    "ready_precision": 0.967741935483871
+  },
+  "benchmark_sha256": "d023fb742fbe7878a124d50c861a09296bda79dd7ee47cf171d45e1a1311d1db",
+  "raw_report_sha256": "8b190acd984d701b7a7f61677cd8335428eeda3ee31a199902ed8478f617686a",
+  "decision": "passed; make final generic safety correction by ranking semantic intent before unsupported-operand count"
+}

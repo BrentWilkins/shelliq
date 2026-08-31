@@ -420,9 +420,9 @@ def compile_documented_command_scored(
             missing_options,
             len(missing_literals),
             len(candidate.source_record_ids),
+            -source_similarity,
             len(unsupported),
             extra_options,
-            -source_similarity,
             -candidate.score,
             _document_key(candidate.document),
         )
