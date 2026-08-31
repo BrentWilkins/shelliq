@@ -10,6 +10,7 @@ from shelliq_training.documentation_templates import (
     RetrievedTemplate,
     bind_template,
     compile_documented_command,
+    compile_documented_command_scored,
     compose_contextual_candidates,
     compose_template_candidates,
     documentation_templates,
@@ -272,3 +273,56 @@ def test_target_blind_compiler_abstains_when_required_literal_is_missing() -> No
 
     assert result.status == 'needs_input'
     assert result.unresolved_slots == ('path/to/file',)
+
+
+def test_scored_compiler_selects_complete_candidate_across_unseen_family() -> None:
+    history = DocumentationTemplate(
+        record_id='tldr:docker:history',
+        command='docker',
+        platform=Platform.LINUX,
+        instruction='Show the history of an image',
+        context='',
+        document=document('docker', 'history', 'image'),
+    )
+    logs = DocumentationTemplate(
+        record_id='tldr:docker:logs',
+        command='docker',
+        platform=Platform.LINUX,
+        instruction='Show a number of recent logs from a container',
+        context='',
+        document=document('docker', 'logs', '--tail', 'number', 'container_name'),
+    )
+
+    result = compile_documented_command_scored(
+        DocumentationTemplateIndex([history, logs]),
+        command='docker',
+        platform=Platform.LINUX,
+        instruction='Show 20 recent logs from container "api".',
+        context='docker logs: --tail limits recent log lines. --since filters by time.',
+    )
+
+    assert result.status == 'ready'
+    assert result.document == document('docker', 'logs', '--tail', '20', 'api')
+    assert result.source_record_ids[0] == 'tldr:docker:logs'
+
+
+def test_scored_compiler_rejects_concrete_undocumented_operand() -> None:
+    history = DocumentationTemplate(
+        record_id='tldr:docker:history',
+        command='docker',
+        platform=Platform.LINUX,
+        instruction='Show the history of an image',
+        context='',
+        document=document('docker', 'history', 'image'),
+    )
+
+    result = compile_documented_command_scored(
+        DocumentationTemplateIndex([history]),
+        command='docker',
+        platform=Platform.LINUX,
+        instruction='Show history.',
+        context='docker history displays image layers.',
+    )
+
+    assert result.status == 'needs_input'
+    assert 'image' in result.unresolved_slots

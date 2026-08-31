@@ -127,16 +127,20 @@ class DocumentationTemplateIndex:
         self.templates = tuple(templates)
         groups: dict[tuple[str, Platform], list[int]] = defaultdict(list)
         token_rows: list[Counter[str]] = []
+        instruction_rows: list[Counter[str]] = []
         document_frequency: Counter[str] = Counter()
         for index, template in enumerate(self.templates):
             groups[(template.command, template.platform)].append(index)
             tokens = _tokenize(f'{template.instruction}\n{template.context}')
             token_rows.append(tokens)
+            instruction_rows.append(_tokenize(template.instruction))
             document_frequency.update(tokens)
         self._groups = {key: tuple(value) for key, value in groups.items()}
         count = len(self.templates)
         self._idf = {token: math.log((1 + count) / (1 + frequency)) + 1.0 for token, frequency in document_frequency.items()}
         self._vectors = tuple(_vectorize(tokens, self._idf) for tokens in token_rows)
+        self._instruction_vectors = tuple(_vectorize(tokens, self._idf) for tokens in instruction_rows)
+        self._template_indices = {template.record_id: index for index, template in enumerate(self.templates)}
 
     def rank(
         self,
@@ -166,6 +170,13 @@ class DocumentationTemplateIndex:
         ]
         ranked.sort(key=lambda item: (-item.score, item.template.record_id))
         return ranked[:limit]
+
+    def instruction_similarity(self, instruction: str, record_id: str) -> float:
+        index = self._template_indices.get(record_id)
+        if index is None:
+            return 0.0
+        query = _vectorize(_tokenize(instruction), self._idf)
+        return _cosine(query, self._instruction_vectors[index])
 
 
 def bind_template(retrieved: RetrievedTemplate, instruction: str) -> BoundTemplate:
@@ -346,6 +357,73 @@ def compile_documented_command(
     )
 
 
+def compile_documented_command_scored(
+    index: DocumentationTemplateIndex,
+    *,
+    command: str,
+    platform: Platform,
+    instruction: str,
+    context: str,
+) -> TemplateCompilation:
+    """Score whole candidates and conservatively audit every emitted operand."""
+    retrieved = index.rank(
+        command=command,
+        platform=platform,
+        instruction=instruction,
+        context=context,
+        limit=8,
+    )
+    if not retrieved:
+        return TemplateCompilation('no_documentation', None, (), (), (), ())
+    selected_options = select_documented_options(instruction, context)
+    candidates = compose_contextual_candidates(
+        retrieved,
+        instruction,
+        context,
+        limit=512,
+        maximum_context_options=6,
+    )
+    if not candidates:
+        return TemplateCompilation('no_documentation', None, (), selected_options, (), ())
+
+    ranked: list[tuple[tuple[object, ...], ComposedTemplate, tuple[str, ...]]] = []
+    for candidate in candidates:
+        unsupported = _unsupported_operands(candidate, instruction)
+        arguments = _argument_command(candidate.document)
+        candidate_options = tuple(value for value in (arguments[1] if arguments else ()) if value.startswith('-'))
+        missing_options = sum(option.startswith('-') and option not in candidate_options for option in selected_options)
+        extra_options = sum(option not in selected_options for option in candidate_options) if selected_options else 0
+        source_similarity = max(
+            (
+                index.instruction_similarity(instruction, source)
+                for source in candidate.source_record_ids
+                if not source.startswith('context:')
+            ),
+            default=0.0,
+        )
+        rank_key: tuple[object, ...] = (
+            missing_options,
+            len(unsupported),
+            extra_options,
+            -source_similarity,
+            -candidate.score,
+            len(candidate.source_record_ids),
+            _document_key(candidate.document),
+        )
+        ranked.append((rank_key, candidate, unsupported))
+    ranked.sort(key=lambda item: item[0])
+    _, selected, unsupported = ranked[0]
+    unresolved = tuple(dict.fromkeys((*unresolved_placeholders(selected.document), *unsupported)))
+    return TemplateCompilation(
+        status='needs_input' if unresolved else 'ready',
+        document=selected.document,
+        source_record_ids=selected.source_record_ids,
+        selected_options=selected_options,
+        bindings=selected.bindings,
+        unresolved_slots=unresolved,
+    )
+
+
 def select_documented_options(instruction: str, context: str) -> tuple[str, ...]:
     """Select option fragments whose local documentation overlaps the request."""
     query = _content_tokens(instruction)
@@ -384,6 +462,49 @@ def unresolved_placeholders(document: Mapping[str, object]) -> tuple[str, ...]:
 
     visit(document)
     return tuple(dict.fromkeys(unresolved))
+
+
+def _unsupported_operands(candidate: ComposedTemplate, instruction: str) -> tuple[str, ...]:
+    command = _argument_command(candidate.document)
+    if command is None:
+        return tuple(
+            node['s']
+            for node in _word_nodes(candidate.document)[1:]
+            if not node['s'].startswith('-') and node['s'] not in instruction
+        )
+    _, arguments = command
+    prefix_end = 0
+    for argument in arguments:
+        if argument.startswith('-') or is_placeholder(argument):
+            break
+        prefix_end += 1
+    prefix_end = min(prefix_end, 1)
+    bound_values = {value for _, value in candidate.bindings}
+    context_values = {
+        value
+        for source in candidate.source_record_ids
+        if source.startswith('context:')
+        for value in source.removeprefix('context:').split('|')
+    }
+    unsupported: list[str] = []
+    for index, argument in enumerate(arguments):
+        if index < prefix_end or argument.startswith('-'):
+            continue
+        normalized = argument.strip('"\'')
+        if argument in bound_values or argument in context_values or argument in instruction or normalized in instruction:
+            continue
+        unsupported.append(argument)
+    argument_ids = {id(item) for item in _argument_word_nodes(candidate.document)}
+    for node in _word_nodes(candidate.document):
+        if id(node) in argument_ids:
+            continue
+        word = node['s']
+        if word.startswith('-') or word in instruction or word.strip('"\'') in instruction:
+            continue
+        if word == command[0]:
+            continue
+        unsupported.append(word)
+    return tuple(dict.fromkeys(unsupported))
 
 
 def _bind_document(document: Mapping[str, object], instruction: str) -> tuple[dict[str, object], tuple[tuple[str, str], ...]]:
@@ -660,3 +781,38 @@ def _instantiate_command(template: DocumentationTemplate, command: str) -> Docum
 
 def _document_key(document: Mapping[str, object]) -> str:
     return json.dumps(document, separators=(',', ':'), sort_keys=True)
+
+
+def _word_nodes(document: Mapping[str, object]) -> list[dict[str, str]]:
+    nodes: list[dict[str, str]] = []
+
+    def visit(value: object) -> None:
+        if isinstance(value, list):
+            for item in value:
+                visit(item)
+        elif isinstance(value, dict):
+            if set(value) == {'s'} and isinstance(value['s'], str):
+                nodes.append(value)
+            else:
+                for item in value.values():
+                    visit(item)
+
+    visit(document)
+    return nodes
+
+
+def _argument_word_nodes(document: Mapping[str, object]) -> list[dict[str, str]]:
+    statements = document.get('s')
+    if not isinstance(statements, list) or len(statements) != 1 or not isinstance(statements[0], dict):
+        return []
+    commands = statements[0].get('c')
+    if not isinstance(commands, list) or len(commands) != 1 or not isinstance(commands[0], dict):
+        return []
+    arguments = commands[0].get('a', [])
+    if not isinstance(arguments, list):
+        return []
+    return [
+        argument
+        for argument in arguments
+        if isinstance(argument, dict) and set(argument) == {'s'} and isinstance(argument['s'], str)
+    ]

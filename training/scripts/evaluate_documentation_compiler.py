@@ -21,6 +21,8 @@ from shelliq_training.semantic_actions import SemanticActionClient
 from shelliq_training.teacher_verification import RustValidation, verify_against_reference
 
 EXPERIMENT = 'semantic-action-documentation-compiler-v1'
+MINIMUM_ACCEPTED = 5
+MINIMUM_PRECISION = 0.50
 
 
 def parse_args() -> argparse.Namespace:
@@ -105,7 +107,7 @@ def main() -> None:
         'reference_accepted': accepted,
         'ready_reference_precision': precision,
     }
-    gate_passed = rust_valid == ready and accepted >= 5 and precision >= 0.50
+    gate_passed = rust_valid == ready and accepted >= MINIMUM_ACCEPTED and precision >= MINIMUM_PRECISION
     report = {
         'schema_version': 1,
         'experiment': EXPERIMENT,
@@ -114,8 +116,8 @@ def main() -> None:
         'metrics': metrics,
         'floors': {
             'require_all_ready_rust_valid': True,
-            'minimum_reference_accepted': 5,
-            'minimum_ready_reference_precision': 0.50,
+            'minimum_reference_accepted': MINIMUM_ACCEPTED,
+            'minimum_ready_reference_precision': MINIMUM_PRECISION,
         },
         'outcomes': rows,
         'split_status': 'open inner-development only; outer result not consulted and test sealed',
