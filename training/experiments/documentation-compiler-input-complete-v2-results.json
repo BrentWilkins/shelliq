@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "experiment": "documentation-compiler-input-complete-v2",
+  "status": "failed-precision-gate-by-one-case",
+  "metrics": {
+    "examples": 100,
+    "distinct_commands": 100,
+    "ready": 93,
+    "needs_input": 7,
+    "no_documentation": 0,
+    "ready_rust_valid": 93,
+    "template_exact": 95,
+    "delivered_exact": 88,
+    "exact_coverage": 0.88,
+    "ready_precision": 0.946236559139785
+  },
+  "benchmark_sha256": "d023fb742fbe7878a124d50c861a09296bda79dd7ee47cf171d45e1a1311d1db",
+  "raw_report_sha256": "6c27e649017fc110aa64cd2c9862822f3ee03f75080841587e6f6e202899d5c3",
+  "decision": "add exact documentation-instruction prefix evidence before lexical similarity"
+}

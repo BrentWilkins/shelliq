@@ -242,6 +242,29 @@ def test_version_suffix_fallback_reuses_typed_recipe_and_keeps_requested_command
     assert ranked[0].template.document == document('python3', '-m', 'http.server')
 
 
+def test_exact_documentation_instruction_prefix_outranks_lexical_neighbor() -> None:
+    direct = DocumentationTemplate(
+        record_id='tldr:tool:direct',
+        command='tool',
+        platform=Platform.LINUX,
+        instruction='Compile a source file',
+        context='',
+        document=document('tool', 'path/to/source'),
+    )
+    neighbor = DocumentationTemplate(
+        record_id='tldr:tool:neighbor',
+        command='tool',
+        platform=Platform.LINUX,
+        instruction='Compile a source file and write a named output file',
+        context='',
+        document=document('tool', 'path/to/source', '-o', 'path/to/output'),
+    )
+    index = DocumentationTemplateIndex([direct, neighbor])
+    request = 'Compile a source file. Use /tmp/input.c.'
+
+    assert index.instruction_similarity(request, direct.record_id) > index.instruction_similarity(request, neighbor.record_id)
+
+
 def test_target_blind_compiler_selects_relevant_option_and_binds_request_literal() -> None:
     template = DocumentationTemplate(
         record_id='tldr:base64:encode',

@@ -185,7 +185,10 @@ class DocumentationTemplateIndex:
         if index is None:
             return 0.0
         query = _vectorize(_tokenize(instruction), self._idf)
-        return _cosine(query, self._instruction_vectors[index])
+        documented = self.templates[index].instruction.strip().lower().rstrip('.')
+        requested = instruction.strip().lower()
+        prefix_bonus = 1.0 if documented and requested.startswith(documented) else 0.0
+        return prefix_bonus + _cosine(query, self._instruction_vectors[index])
 
 
 def bind_template(retrieved: RetrievedTemplate, instruction: str) -> BoundTemplate:
