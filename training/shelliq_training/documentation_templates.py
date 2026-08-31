@@ -285,6 +285,9 @@ def compose_contextual_candidates(
         for size in range(1, min(len(options), maximum_context_options) + 1)
         for indices in combinations(range(len(options)), size)
     ]
+    selected_sequence = select_documented_options(instruction, context)
+    if selected_sequence and selected_sequence not in option_sequences:
+        option_sequences.append(selected_sequence)
     states: dict[str, tuple[dict[str, object], tuple[str, ...], float, tuple[tuple[str, str], ...]]] = {}
 
     def add(
@@ -401,11 +404,12 @@ def compile_documented_command_scored(
 
     ranked: list[tuple[tuple[object, ...], ComposedTemplate, tuple[str, ...]]] = []
     for candidate in candidates:
-        unsupported = _unsupported_operands(candidate, instruction)
+        unsupported = _unsupported_operands(candidate, instruction, selected_options)
         arguments = _argument_command(candidate.document)
         candidate_options = tuple(value for value in (arguments[1] if arguments else ()) if value.startswith('-'))
         candidate_words = {node['s'].strip('"\'') for node in _word_nodes(candidate.document)}
-        missing_options = sum(option.startswith('-') and option not in candidate_options for option in selected_options)
+        candidate_arguments = arguments[1] if arguments else ()
+        missing_options = sum(value not in candidate_arguments for value in selected_options)
         missing_literals = tuple(value for value in required_literals if value.strip('"\'') not in candidate_words)
         extra_options = sum(option not in selected_options for option in candidate_options) if selected_options else 0
         source_similarity = max(
@@ -481,7 +485,7 @@ def unresolved_placeholders(document: Mapping[str, object]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(unresolved))
 
 
-def _unsupported_operands(candidate: ComposedTemplate, instruction: str) -> tuple[str, ...]:
+def _unsupported_operands(candidate: ComposedTemplate, instruction: str, selected_options: Sequence[str]) -> tuple[str, ...]:
     command = _argument_command(candidate.document)
     if command is None:
         return tuple(
@@ -503,6 +507,7 @@ def _unsupported_operands(candidate: ComposedTemplate, instruction: str) -> tupl
         if source.startswith('context:')
         for value in source.removeprefix('context:').split('|')
     }
+    context_values.update(selected_options)
     unsupported: list[str] = []
     for index, argument in enumerate(arguments):
         if index < prefix_end or argument.startswith('-'):
@@ -829,7 +834,11 @@ def _candidate_word_provenance(
     }
     command = _argument_command(candidate.document)
     argument_nodes = _argument_word_nodes(candidate.document)
-    static_node = argument_nodes[0] if argument_nodes and not argument_nodes[0]['s'].startswith('-') else None
+    static_node = (
+        argument_nodes[0]
+        if argument_nodes and not argument_nodes[0]['s'].startswith('-') and not is_placeholder(argument_nodes[0]['s'])
+        else None
+    )
     evidence: list[WordProvenance] = []
     command_names = set(_command_names(candidate.document))
     for node in _word_nodes(candidate.document):
@@ -860,6 +869,7 @@ def _document_key(document: Mapping[str, object]) -> str:
 
 def _word_nodes(document: Mapping[str, object]) -> list[dict[str, str]]:
     nodes: list[dict[str, str]] = []
+    seen: set[int] = set()
 
     def visit(value: object) -> None:
         if isinstance(value, list):
@@ -867,11 +877,24 @@ def _word_nodes(document: Mapping[str, object]) -> list[dict[str, str]]:
                 visit(item)
         elif isinstance(value, dict):
             if set(value) == {'s'} and isinstance(value['s'], str):
-                nodes.append(value)
+                if id(value) not in seen:
+                    nodes.append(value)
+                    seen.add(id(value))
             else:
                 for item in value.values():
                     visit(item)
 
+    statements = document.get('s')
+    if isinstance(statements, list):
+        for statement in statements:
+            if not isinstance(statement, dict) or not isinstance(statement.get('c'), list):
+                continue
+            for command in statement['c']:
+                if not isinstance(command, dict):
+                    continue
+                visit(command.get('n'))
+                visit(command.get('a'))
+                visit(command.get('r'))
     visit(document)
     return nodes
 

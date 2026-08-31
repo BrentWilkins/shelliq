@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "experiment": "documentation-compiler-input-complete-v5",
+  "status": "passed-capability-gate",
+  "metrics": {
+    "examples": 100,
+    "distinct_commands": 100,
+    "ready": 90,
+    "needs_input": 10,
+    "no_documentation": 0,
+    "ready_rust_valid": 90,
+    "template_exact": 100,
+    "delivered_exact": 90,
+    "exact_coverage": 0.90,
+    "ready_precision": 1.0
+  },
+  "benchmark_sha256": "d023fb742fbe7878a124d50c861a09296bda79dd7ee47cf171d45e1a1311d1db",
+  "raw_report_sha256": "6f2cad469971462026ca7dcf8c298c2c378b73f2f72db39f1a5ce9d319f0bf68",
+  "documentation_index_sha256": "17b3b2e9feb215f858e893ba4f761088f9edfbd674ec89633c26d4332a6ab64b",
+  "decision": "capability achieved; retain abstention for ten ambiguous or unresolved requests"
+}

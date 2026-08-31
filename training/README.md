@@ -55,6 +55,37 @@ On NVIDIA, JAX's normal float32 policy may use TF32; that is a reasonable
 training policy but can make an architecture comparison against PyTorch CPU
 float32 fail for numerical rather than structural reasons.
 
+## Documentation-template compiler prototype
+
+The target-blind documentation compiler retrieves Rust-typed TLDR templates,
+binds request-visible values, scores whole candidates, and returns `needs_input`
+instead of inventing unresolved operands. Build the versioned index once, then
+compile requests without executing the generated command:
+
+```sh
+uv run python scripts/build_documentation_template_index_v2.py \
+  --semantic-corpus artifacts/distributable-semantic-v3.jsonl \
+  --actions ../target/debug/semantic-actions \
+  --output artifacts/documentation-template-index-v2/index.jsonl \
+  --manifest artifacts/documentation-template-index-v2/manifest.json
+
+uv run python scripts/compile_documented_command.py \
+  --documentation-index artifacts/documentation-template-index-v2/index.jsonl \
+  --index-manifest artifacts/documentation-template-index-v2/manifest.json \
+  --actions ../target/debug/semantic-actions \
+  --command base64 \
+  --platform linux \
+  --instruction 'Encode report.bin without wrapping.' \
+  --context 'base64: -w 0 disables wrapping. -d decodes input.'
+```
+
+`ready` results include the Rust-validated semantic document, rendered command,
+source template IDs, bindings, and per-word provenance. `needs_input` results do
+not expose a rendered command and list unresolved slots. The 100-command
+input-complete v5 capability benchmark reached 90% exact coverage, 100% ready
+precision, and 90/90 Rust-valid ready outputs; it is capability evidence, not a
+release or protected-test result.
+
 ## Measured GPU smoke test
 
 On 2026-08-06, an RTX 4090 with 23,028 MiB ran the real 0.5B model using

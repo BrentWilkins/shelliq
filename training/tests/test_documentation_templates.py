@@ -290,6 +290,16 @@ def test_target_blind_compiler_selects_relevant_option_and_binds_request_literal
     assert result.document == document('base64', '-w', '0', 'report.bin')
     assert result.unresolved_slots == ()
 
+    scored = compile_documented_command_scored(
+        index,
+        command='base64',
+        platform=Platform.LINUX,
+        instruction='Encode report.bin without wrapping.',
+        context=context,
+    )
+    assert scored.status == 'ready'
+    assert scored.document == document('base64', '-w', '0', 'report.bin')
+
 
 def test_target_blind_compiler_abstains_when_required_literal_is_missing() -> None:
     template = DocumentationTemplate(
@@ -311,6 +321,18 @@ def test_target_blind_compiler_abstains_when_required_literal_is_missing() -> No
 
     assert result.status == 'needs_input'
     assert result.unresolved_slots == ('path/to/file',)
+
+    scored = compile_documented_command_scored(
+        DocumentationTemplateIndex([template]),
+        command='base64',
+        platform=Platform.LINUX,
+        instruction='Encode a file.',
+        context='base64 encodes a file to standard output.',
+    )
+    assert [(item.word, item.source) for item in scored.word_provenance] == [
+        ('base64', 'command'),
+        ('path/to/file', 'unresolved-placeholder'),
+    ]
 
 
 def test_scored_compiler_selects_complete_candidate_across_unseen_family() -> None:

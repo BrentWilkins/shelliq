@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "experiment": "documentation-template-index-v2",
+  "status": "complete",
+  "source": "tldr-pages",
+  "revision": "v2.3",
+  "records": 26463,
+  "commands": 4219,
+  "platforms": {"darwin": 751, "linux": 25712},
+  "rust_action_round_trips": 26463,
+  "source_sha256": "284f67e77913d2676598d80b323876a2fb0f15ce93ce3ae36fb5a4e3f371f1b4",
+  "index_sha256": "17b3b2e9feb215f858e893ba4f761088f9edfbd674ec89633c26d4332a6ab64b",
+  "manifest_sha256": "b64cbb606cb523715d0b6b5c14301a91ff74a076baaae079e5ac065937cc640e"
+}
