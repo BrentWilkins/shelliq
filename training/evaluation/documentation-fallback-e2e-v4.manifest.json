@@ -1,0 +1,24 @@
+{
+  "command_disjoint": true,
+  "development": {
+    "needs_input": 8,
+    "ready": 24,
+    "records": 32,
+    "sha256": "6b29ff93d2a2be570f087e092ff3042c20ba2f89a423517e556378e17769afd9"
+  },
+  "distinct_commands": 96,
+  "documentation_index_sha256": "17b3b2e9feb215f858e893ba4f761088f9edfbd674ec89633c26d4332a6ab64b",
+  "excluded_additional_commands": 288,
+  "excluded_neural_train_commands": 124,
+  "excluded_prior_benchmark_commands": 100,
+  "experiment": "documentation-fallback-e2e-v4",
+  "schema_version": 1,
+  "selection": "stable record-id order; Linux simple single-command typed TLDR recipes with at least one placeholder; one recipe per command",
+  "source_instructions_literal_free": true,
+  "test": {
+    "needs_input": 16,
+    "ready": 48,
+    "records": 64,
+    "sha256": "1b4bd3e26d3c041a82b46e731f480cdf9e5105408c00056936f8ba711b0b94ec"
+  }
+}
