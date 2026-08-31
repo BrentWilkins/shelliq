@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "experiment": "semantic-action-documentation-fragments-v1",
+  "status": "failed-feasibility-gate",
+  "metrics": {
+    "examples": 92,
+    "documentation_covered": 87,
+    "candidate_documents": 4810,
+    "rust_valid_candidates": 4810,
+    "skeleton_oracle": 6,
+    "skeleton_oracle_distinct_commands": 5,
+    "exact_oracle": 0
+  },
+  "observability": {
+    "reference_words": 439,
+    "request": 213,
+    "documentation": 36,
+    "placeholder_only": 96,
+    "unobservable": 94,
+    "fully_exact_observable_records": 16,
+    "fully_template_observable_records": 50
+  },
+  "raw_report_sha256": "d7826e7b2d62880dabfb46abb953fdfd210514febfde284e3b9c1fc689f8751d",
+  "observability_report_sha256": "2eec5aa039655053b253460cdd28d5bee9ea9f57b0d3e929a7bf92927f7d299f",
+  "decision": "stop whole-example supersequence composition; add authoritative-context fragments and explicit abstention for unresolved literals"
+}
