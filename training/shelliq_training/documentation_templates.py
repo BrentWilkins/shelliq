@@ -9,6 +9,7 @@ import re
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from itertools import combinations
 
 from shelliq_training.data import Platform, SFTRecord
 from shelliq_training.semantic_equivalence import canonicalize_semantic_document
@@ -19,6 +20,7 @@ _REMOTE_PATH = re.compile(r'[A-Za-z0-9_.-]+@[A-Za-z0-9_.-]+:[^\s,;]+')
 _URL = re.compile(r'(?:https?|ssh|rsync)://[^\s,;]+')
 _PATH = re.compile(r'(?:\.{0,2}/|/|~\/)[^\s,;]+|[A-Za-z0-9_.-]+\.[A-Za-z0-9]{1,8}')
 _INTEGER = re.compile(r'(?<![A-Za-z0-9_.-])\d+(?![A-Za-z0-9_-])')
+_OPTION = re.compile(r'(?<![A-Za-z0-9_])--?[A-Za-z0-9][A-Za-z0-9-]*(?:=[A-Za-z0-9_./:@%+,-]+)?')
 _PLACEHOLDER_PART = re.compile(
     r'(?:^|[_/.-])(?:'
     r'archive|command|count|date|directory|domain|extension|field|file|filename|'
@@ -201,6 +203,70 @@ def compose_template_candidates(
     return candidates[:limit]
 
 
+def compose_contextual_candidates(
+    retrieved: Sequence[RetrievedTemplate],
+    instruction: str,
+    context: str,
+    *,
+    limit: int = 256,
+    maximum_context_options: int = 8,
+) -> list[ComposedTemplate]:
+    """Overlay bounded prompt-documented option subsets onto typed templates."""
+    if not retrieved:
+        return []
+    options = documented_context_options(context)[:maximum_context_options]
+    option_sequences = [
+        tuple(options[index] for index in indices)
+        for size in range(1, min(len(options), maximum_context_options) + 1)
+        for indices in combinations(range(len(options)), size)
+    ]
+    states: dict[str, tuple[dict[str, object], tuple[str, ...], float, tuple[tuple[str, str], ...]]] = {}
+
+    def add(
+        document: dict[str, object],
+        source_ids: tuple[str, ...],
+        score: float,
+        bindings: tuple[tuple[str, str], ...],
+    ) -> None:
+        key = _document_key(document)
+        previous = states.get(key)
+        if previous is None or score > previous[2]:
+            states[key] = (document, source_ids, score, bindings)
+
+    for base in compose_template_candidates(retrieved, instruction, limit=64, maximum_sources=3):
+        add(base.document, base.source_record_ids, base.score, base.bindings)
+    for retrieved_item in retrieved:
+        base = retrieved_item.template.document
+        command = _argument_command(base)
+        if command is None:
+            continue
+        _, base_arguments = command
+        for option_sequence in option_sequences:
+            merged_arguments = _shortest_common_supersequence(option_sequence, base_arguments)
+            merged = _replace_arguments(base, merged_arguments)
+            source_ids = (retrieved_item.template.record_id, f'context:{"|".join(option_sequence)}')
+            bound, bindings = _bind_document(merged, instruction)
+            add(bound, source_ids, retrieved_item.score, bindings)
+
+    candidates = [
+        ComposedTemplate(source_ids, score, document, bindings) for document, source_ids, score, bindings in states.values()
+    ]
+    candidates.sort(
+        key=lambda item: (
+            -item.score,
+            len(item.source_record_ids),
+            item.source_record_ids,
+            _document_key(item.document),
+        )
+    )
+    return candidates[:limit]
+
+
+def documented_context_options(context: str) -> tuple[str, ...]:
+    """Extract stable option spellings from authoritative documentation text."""
+    return tuple(dict.fromkeys(match.group() for match in _OPTION.finditer(context)))
+
+
 def _bind_document(document: Mapping[str, object], instruction: str) -> tuple[dict[str, object], tuple[tuple[str, str], ...]]:
     bound = copy.deepcopy(dict(document))
     available = _request_literals(instruction)
@@ -346,6 +412,17 @@ def _merge_simple_command_documents(left: Mapping[str, object], right: Mapping[s
 
 
 def _simple_command(document: Mapping[str, object]) -> tuple[str, tuple[str, ...]] | None:
+    command = _argument_command(document)
+    if command is None:
+        return None
+    statements = document.get('s')
+    raw_command = statements[0]['c'][0]
+    if set(raw_command) - {'n', 'a'}:
+        return None
+    return command
+
+
+def _argument_command(document: Mapping[str, object]) -> tuple[str, tuple[str, ...]] | None:
     statements = document.get('s')
     if not isinstance(statements, list) or len(statements) != 1 or not isinstance(statements[0], dict):
         return None
@@ -354,7 +431,7 @@ def _simple_command(document: Mapping[str, object]) -> tuple[str, tuple[str, ...
     if statement.get('t') != 'p' or not isinstance(commands, list) or len(commands) != 1:
         return None
     command = commands[0]
-    if not isinstance(command, dict) or set(command) - {'n', 'a'}:
+    if not isinstance(command, dict):
         return None
     name = command.get('n')
     if not isinstance(name, dict) or set(name) != {'s'} or not isinstance(name['s'], str):
@@ -368,6 +445,16 @@ def _simple_command(document: Mapping[str, object]) -> tuple[str, tuple[str, ...
             return None
         arguments.append(argument['s'])
     return name['s'], tuple(arguments)
+
+
+def _replace_arguments(document: Mapping[str, object], arguments: Sequence[str]) -> dict[str, object]:
+    replaced = copy.deepcopy(dict(document))
+    command = replaced['s'][0]['c'][0]
+    if arguments:
+        command['a'] = [{'s': value} for value in arguments]
+    else:
+        command.pop('a', None)
+    return replaced
 
 
 def _shortest_common_supersequence(left: Sequence[str], right: Sequence[str]) -> tuple[str, ...]:

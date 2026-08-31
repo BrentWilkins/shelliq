@@ -9,8 +9,10 @@ from shelliq_training.documentation_templates import (
     DocumentationTemplateIndex,
     RetrievedTemplate,
     bind_template,
+    compose_contextual_candidates,
     compose_template_candidates,
     documentation_templates,
+    documented_context_options,
     is_placeholder,
     template_matches_document,
 )
@@ -153,3 +155,28 @@ def test_composer_combines_typed_fragments_without_command_rules() -> None:
         and item.source_record_ids == ('tldr:pytest:last-failed', 'tldr:pytest:exit-first')
         for item in candidates
     )
+
+
+def test_contextual_composer_overlays_documented_options_on_typed_structure() -> None:
+    target = document('cpio', '-idmv')
+    target['s'][0]['c'][0]['r'] = [{'o': '<', 't': {'s': 'initramfs.cpio'}}]
+    base_document = document('cpio', '-i')
+    base_document['s'][0]['c'][0]['r'] = [{'o': '<', 't': {'s': 'path/to/archive'}}]
+    base = DocumentationTemplate(
+        record_id='tldr:cpio:extract',
+        command='cpio',
+        platform=Platform.LINUX,
+        instruction='Extract an archive from standard input',
+        context='',
+        document=base_document,
+    )
+    context = 'cpio: -i extracts, -d creates directories, -m preserves times, and -v lists members.'
+
+    candidates = compose_contextual_candidates(
+        [RetrievedTemplate(base, 0.9)],
+        'Unpack an initramfs image.',
+        context,
+    )
+
+    assert documented_context_options(context) == ('-i', '-d', '-m', '-v')
+    assert any(template_matches_document(item.document, target) for item in candidates)
