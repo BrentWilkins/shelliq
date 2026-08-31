@@ -115,6 +115,17 @@ that feeds `find -print0` directly to line-oriented `sort` can contain only
 real options and still be functionally wrong. Treat the editable-buffer step as
 a required review boundary, especially for pipelines.
 
+### Documentation fallback
+
+If a model pass or its local option check fails, `suggest` tries a deterministic
+fallback compiled from the vendored TLDR recipe for the retrieved, installed
+command. It binds only typed values visible in the request, lowers through the
+same `SemanticDocumentV2` round trip, and runs the same local command/option
+verifier. It emits only a complete command. Missing values return `needs_input`
+with a nonzero exit and no standard output, so the Zsh widget never puts an
+abstention in the editable buffer. If no documentation matches, it returns
+`no_documentation`.
+
 ## Footprint
 
 The default build links no inference library, opens no socket, and needs no GPU. A model is

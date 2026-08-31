@@ -23,6 +23,8 @@ flowchart LR
     INTENT[User intent and context] --> MODEL[Local model]
     ART --> MODEL
     MODEL --> DECODE[Constrained semantic-AST decode]
+    MODEL -. failure .-> DOC[Vendored documentation compiler]
+    DOC --> DECODE
     DECODE --> VALIDATE[Schema, semantic, and safety validation]
     VALIDATE --> RENDER[Deterministic renderer]
     RENDER --> NATIVE[Native shell syntax check]

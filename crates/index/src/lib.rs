@@ -625,7 +625,7 @@ impl Index {
             |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )?;
 
-        let pages = shelliq_harvest::tldr::harvest_tldr(&name, &platform)?;
+        let pages = shelliq_harvest::tldr::harvest_tldr_family(&name, &platform)?;
 
         let tx = self.conn.transaction()?;
         tx.execute(

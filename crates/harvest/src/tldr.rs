@@ -11,6 +11,7 @@
 //! GNU-only flag must never become a fact on a Mac just because a page mentions it.
 
 use anyhow::{Context, Result};
+use std::collections::BTreeMap;
 use std::io::{Cursor, Read};
 use zip::ZipArchive;
 
@@ -26,6 +27,8 @@ static ARCHIVE: &[u8] = include_bytes!("../vendor/tldr-pages.en.zip");
 pub struct ParsedExample {
     pub description: String,
     pub text: String,
+    /// Original command recipe, including TLDR placeholder markup.
+    pub template: String,
     pub flags: Vec<String>,
 }
 
@@ -45,6 +48,42 @@ pub fn harvest_tldr(name: &str, platform: &str) -> Result<Vec<ParsedExample>> {
     let page = read_page(&mut archive, &format!("{}/{name}.md", tldr_platform(platform)))
         .or_else(|| read_page(&mut archive, &format!("common/{name}.md")));
     Ok(page.map(|text| parse_page(&text)).unwrap_or_default())
+}
+
+/// Examples for an executable and TLDR's separately filed subcommand pages.
+///
+/// Pages such as `aws-configure.md` and `cargo-add.md` document commands whose
+/// executable is `aws` or `cargo`. Selection remains generic: the filename must
+/// be the executable name or begin with `<name>-`; the compiler separately
+/// verifies the recipe's first command word.
+pub fn harvest_tldr_family(name: &str, platform: &str) -> Result<Vec<ParsedExample>> {
+    let mut archive = ZipArchive::new(Cursor::new(ARCHIVE)).context("opening vendored tldr archive")?;
+    let preferred = tldr_platform(platform);
+    let mut pages = BTreeMap::<String, (bool, String)>::new();
+    for index in 0..archive.len() {
+        let mut file = archive.by_index(index).context("reading vendored tldr member")?;
+        let path = file.name().to_string();
+        let Some((directory, filename)) = path.split_once('/') else {
+            continue;
+        };
+        if directory != preferred && directory != "common" {
+            continue;
+        }
+        let Some(stem) = filename.strip_suffix(".md") else {
+            continue;
+        };
+        if stem != name && !stem.strip_prefix(name).is_some_and(|suffix| suffix.starts_with('-')) {
+            continue;
+        }
+        let is_preferred = directory == preferred;
+        if pages.get(stem).is_some_and(|(current, _)| *current && !is_preferred) {
+            continue;
+        }
+        let mut text = String::new();
+        file.read_to_string(&mut text).context("reading vendored tldr page")?;
+        pages.insert(stem.to_string(), (is_preferred, text));
+    }
+    Ok(pages.into_values().flat_map(|(_, text)| parse_page(&text)).collect())
 }
 
 fn read_page(archive: &mut ZipArchive<Cursor<&[u8]>>, path: &str) -> Option<String> {
@@ -82,6 +121,7 @@ pub fn parse_page(text: &str) -> Vec<ParsedExample> {
         examples.push(ParsedExample {
             description: desc.trim_end_matches(':').trim().to_string(),
             text: render_placeholders(raw),
+            template: raw.to_string(),
             flags: extract_flags(raw),
         });
         i = j + 1;
@@ -186,6 +226,7 @@ mod tests {
         assert_eq!(examples.len(), 2);
         assert_eq!(examples[1].description, "Follow redirects and dump the reply headers");
         assert_eq!(examples[1].flags, vec!["--location", "-L"]);
+        assert_eq!(examples[1].template, "curl {{[-L|--location]}} {{https://example.com}}");
         assert!(examples[1].text.contains("curl"));
     }
 
@@ -210,5 +251,16 @@ mod tests {
     fn unknown_command_yields_no_examples_rather_than_an_error() {
         let examples = harvest_tldr("definitely-not-a-real-command-xyz", "linux").unwrap();
         assert!(examples.is_empty());
+    }
+
+    #[test]
+    fn family_harvest_includes_separately_filed_subcommands() {
+        let examples = harvest_tldr_family("aws", "linux").unwrap();
+        assert!(
+            examples
+                .iter()
+                .any(|example| { example.template.starts_with("aws configure") && example.template.contains("--profile") }),
+            "expected aws-configure page in aws family"
+        );
     }
 }

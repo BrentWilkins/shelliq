@@ -4,6 +4,8 @@
 //! no inference library is linked into this binary.
 
 #[cfg(feature = "model")]
+mod documentation;
+#[cfg(feature = "model")]
 mod model;
 
 use anyhow::{Context, Result};
@@ -57,7 +59,8 @@ enum Command {
         raw: bool,
     },
     /// Show exactly where a citation such as `grep(1):168` came from.
-    /// Generate an experimental command through a local model server.
+    /// Generate an experimental command through a local model server, with a
+    /// fail-closed vendored-documentation fallback.
     #[cfg(feature = "model")]
     Suggest {
         /// Natural-language task to turn into an editable command.
@@ -170,21 +173,99 @@ fn suggest_command(
         other => other,
     };
     let index = Index::open(path)?;
+    let shortlist = index.search_commands(instruction, 6)?;
+    if std::env::var_os("SHELLIQ_DEBUG_RETRIEVAL").is_some() {
+        eprintln!("retrieved command shortlist: {}", shortlist.join(", "));
+    }
+    let model_result = try_model_suggestion(
+        &index,
+        endpoint,
+        context,
+        instruction,
+        platform,
+        prompt_contract,
+        timeout_ms,
+        &shortlist,
+    );
+    let (suggestion, origin) = match model_result {
+        Ok(suggestion) => (suggestion, SuggestionOrigin::Model),
+        Err(model_error) => {
+            let fallback = documentation::compile(&index, &shortlist, platform, instruction)?;
+            match fallback.status {
+                documentation::CompilationStatus::Ready => {
+                    let suggestion = fallback
+                        .suggestion
+                        .context("ready documentation fallback omitted its command")?;
+                    let findings = shelliq_verify::verify(&index, &suggestion.command)?;
+                    if findings.iter().any(|finding| !finding.is_clean()) {
+                        anyhow::bail!(
+                            "model suggestion failed ({model_error:#}); documentation fallback failed local command/flag validation"
+                        );
+                    }
+                    eprintln!(
+                        "documentation fallback after model failure; source {}; selected command {}; command and option spellings locally verified",
+                        fallback.source.as_deref().unwrap_or("unknown"),
+                        fallback.command_name.as_deref().unwrap_or("unknown")
+                    );
+                    (suggestion, SuggestionOrigin::Documentation)
+                }
+                documentation::CompilationStatus::NeedsInput => {
+                    anyhow::bail!(
+                        "needs_input: documentation fallback requires {}; model path failed ({model_error:#})",
+                        fallback.unresolved_slots.join(", ")
+                    );
+                }
+                documentation::CompilationStatus::NoDocumentation => {
+                    anyhow::bail!(
+                        "no_documentation: no complete installed documentation recipe matched; model path failed ({model_error:#})"
+                    );
+                }
+            }
+        }
+    };
+
+    if origin == SuggestionOrigin::Model {
+        eprintln!(
+            "experimental model suggestion; option spellings checked, operand semantics and pipeline compatibility unverified; inspect and edit before running"
+        );
+    }
+    if json {
+        println!("{}", suggestion.semantic_json);
+    } else {
+        println!("{}", suggestion.command);
+    }
+    Ok(())
+}
+
+#[cfg(feature = "model")]
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum SuggestionOrigin {
+    Model,
+    Documentation,
+}
+
+#[cfg(feature = "model")]
+#[allow(clippy::too_many_arguments)]
+fn try_model_suggestion(
+    index: &Index,
+    endpoint: &str,
+    context: &str,
+    instruction: &str,
+    platform: &str,
+    prompt_contract: model::PromptContract,
+    timeout_ms: u64,
+    shortlist: &[String],
+) -> Result<model::Suggestion> {
     let deadline = std::time::Instant::now()
         .checked_add(std::time::Duration::from_millis(timeout_ms))
         .context("--timeout-ms is too large")?;
     let suggestion = if context.trim().is_empty() {
-        let shortlist = index.search_commands(instruction, 6)?;
-        if std::env::var_os("SHELLIQ_DEBUG_RETRIEVAL").is_some() {
-            eprintln!("retrieved command shortlist: {}", shortlist.join(", "));
-        }
         if shortlist.is_empty() {
             anyhow::bail!(
                 "no installed command documentation matched the instruction; run `shelliq index scan` or pass explicit `--context`"
             );
         }
-
-        let draft_context = shortlist_context(&shortlist);
+        let draft_context = shortlist_context(shortlist);
         let draft = model::suggest(
             endpoint,
             platform,
@@ -193,8 +274,7 @@ fn suggest_command(
             prompt_contract,
             remaining(deadline)?,
         )?;
-        enforce_shortlist(&draft.command_name, &shortlist)?;
-
+        enforce_shortlist(&draft.command_name, shortlist)?;
         let flags = index.search_flags(&draft.command_name, instruction, 16)?;
         let evidence = evidence_context(&draft.command_name, &flags);
         let final_suggestion = model::suggest(
@@ -217,7 +297,7 @@ fn suggest_command(
             remaining(deadline)?,
         )?
     };
-    let findings = shelliq_verify::verify(&index, &suggestion.command)?;
+    let findings = shelliq_verify::verify(index, &suggestion.command)?;
     let failures: Vec<_> = findings.iter().filter(|finding| !finding.is_clean()).collect();
     if !failures.is_empty() {
         for finding in failures {
@@ -225,16 +305,7 @@ fn suggest_command(
         }
         anyhow::bail!("model suggestion failed local command/flag validation");
     }
-
-    eprintln!(
-        "experimental model suggestion; option spellings checked, operand semantics and pipeline compatibility unverified; inspect and edit before running"
-    );
-    if json {
-        println!("{}", suggestion.semantic_json);
-    } else {
-        println!("{}", suggestion.command);
-    }
-    Ok(())
+    Ok(suggestion)
 }
 
 #[cfg(feature = "model")]
@@ -349,6 +420,7 @@ fn build(path: &std::path::Path, names: &[String], allow_writable_paths: &[std::
                 Ok(flag_count) => {
                     pages += 1;
                     flags += flag_count;
+                    index.insert_tldr_examples(name)?;
                     println!("  {name}(--help)  {flag_count} flags");
                 }
                 Err(help_err) => eprintln!("  {name}: no man page ({man_err}); --help crawl failed too: {help_err}"),
@@ -418,7 +490,10 @@ fn refresh(path: &std::path::Path, names: &[String], allow_writable_paths: &[std
                 fresh.insert_tldr_examples(name)?;
             }
             Err(man_err) => match harvest_via_help(&mut fresh, &target, name, allow_writable_paths) {
-                Ok(_) => pages += 1,
+                Ok(_) => {
+                    pages += 1;
+                    fresh.insert_tldr_examples(name)?;
+                }
                 Err(help_err) => eprintln!("  {name}: no man page ({man_err}); --help crawl failed too: {help_err}"),
             },
         }
