@@ -210,7 +210,9 @@ fn compile_recipe(index: &Index, command: &str, instruction: &str, example: &Par
             continue;
         }
         if from_placeholder && !instruction_contains(instruction, bare) {
-            return Ok(None);
+            unresolved.push(bare.to_string());
+            words.push(word);
+            continue;
         }
         words.push(word);
     }
