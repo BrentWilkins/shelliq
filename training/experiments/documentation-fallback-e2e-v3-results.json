@@ -1,0 +1,21 @@
+{
+  "binary_sha256": "8977ce96dd44810768ffe1941970fc93631065f8654e6f232d9494bd626e62ff",
+  "dataset_sha256": "308fe822c5b9fbb9491c0cb67cd223a0fd6dd74121d9841cd44e2e7836cece3f",
+  "experiment": "documentation-fallback-e2e-v3",
+  "gate_passed": false,
+  "metrics": {
+    "all_emitted_semantic_and_locally_valid": true,
+    "complete_emitted": 44,
+    "complete_exact": 44,
+    "complete_records": 48,
+    "incomplete_nonzero_empty_stdout": 16,
+    "maximum_latency_ms": 47.17337799957022,
+    "mean_latency_ms": 41.05197017123189,
+    "no_documentation_abstentions": 1,
+    "ready_precision": 1.0,
+    "safe_incomplete_abstentions": 15
+  },
+  "partition": "test",
+  "raw_report_sha256": "3ebabb3a1be2e779fb334632559312b79616d801d2bf656438efcac04f593d84",
+  "schema_version": 1
+}
