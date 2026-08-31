@@ -9,6 +9,7 @@ from shelliq_training.documentation_templates import (
     DocumentationTemplateIndex,
     RetrievedTemplate,
     bind_template,
+    compose_template_candidates,
     documentation_templates,
     is_placeholder,
     template_matches_document,
@@ -122,3 +123,33 @@ def test_bound_unseen_command_template_round_trips_through_rust() -> None:
 
     assert decoded.valid
     assert decoded.rendered == 'base64 -w 0 report.bin'
+
+
+def test_composer_combines_typed_fragments_without_command_rules() -> None:
+    last_failed = DocumentationTemplate(
+        record_id='tldr:pytest:last-failed',
+        command='pytest',
+        platform=Platform.LINUX,
+        instruction='Run tests that failed last time',
+        context='',
+        document=document('pytest', '--last-failed'),
+    )
+    exit_first = DocumentationTemplate(
+        record_id='tldr:pytest:exit-first',
+        command='pytest',
+        platform=Platform.LINUX,
+        instruction='Stop after the first failure',
+        context='',
+        document=document('pytest', '--exitfirst'),
+    )
+
+    candidates = compose_template_candidates(
+        [RetrievedTemplate(last_failed, 0.9), RetrievedTemplate(exit_first, 0.8)],
+        'Re-run failures and stop after the first failure.',
+    )
+
+    assert any(
+        item.document == document('pytest', '--last-failed', '--exitfirst')
+        and item.source_record_ids == ('tldr:pytest:last-failed', 'tldr:pytest:exit-first')
+        for item in candidates
+    )

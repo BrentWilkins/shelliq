@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import math
 import re
 from collections import Counter, defaultdict
@@ -53,12 +54,18 @@ class BoundTemplate:
     bindings: tuple[tuple[str, str], ...]
 
 
+@dataclass(frozen=True, slots=True)
+class ComposedTemplate:
+    source_record_ids: tuple[str, ...]
+    score: float
+    document: dict[str, object]
+    bindings: tuple[tuple[str, str], ...]
+
+
 def documentation_templates(
     records: Iterable[SFTRecord], *, allowed_sources: frozenset[str] = frozenset({'tldr-pages'})
 ) -> list[DocumentationTemplate]:
     """Select independently authored, already-converted semantic documents."""
-    import json
-
     templates: list[DocumentationTemplate] = []
     for record in records:
         if record.source not in allowed_sources:
@@ -119,7 +126,83 @@ class DocumentationTemplateIndex:
 
 def bind_template(retrieved: RetrievedTemplate, instruction: str) -> BoundTemplate:
     """Bind generic TLDR slots to compatible literals explicitly in a request."""
-    document = copy.deepcopy(retrieved.template.document)
+    document, bindings = _bind_document(retrieved.template.document, instruction)
+    return BoundTemplate(
+        template=retrieved.template,
+        score=retrieved.score,
+        document=document,
+        bindings=bindings,
+    )
+
+
+def compose_template_candidates(
+    retrieved: Sequence[RetrievedTemplate],
+    instruction: str,
+    *,
+    limit: int = 64,
+    maximum_sources: int = 3,
+) -> list[ComposedTemplate]:
+    """Compose bounded typed candidates from multiple same-command examples."""
+    if limit <= 0:
+        raise ValueError('composition limit must be positive')
+    if maximum_sources <= 0:
+        raise ValueError('maximum_sources must be positive')
+    states: dict[str, tuple[dict[str, object], tuple[str, ...], float]] = {}
+    frontier: list[tuple[dict[str, object], tuple[str, ...], float]] = []
+    for item in retrieved:
+        document = copy.deepcopy(item.template.document)
+        source_ids = (item.template.record_id,)
+        state = (document, source_ids, item.score)
+        key = _document_key(document)
+        if key not in states or item.score > states[key][2]:
+            states[key] = state
+            frontier.append(state)
+
+    for _ in range(1, maximum_sources):
+        expanded: list[tuple[dict[str, object], tuple[str, ...], float]] = []
+        for document, source_ids, score in frontier:
+            for item in retrieved:
+                if item.template.record_id in source_ids:
+                    continue
+                merged = _merge_simple_command_documents(document, item.template.document)
+                if merged is None:
+                    continue
+                merged_ids = (*source_ids, item.template.record_id)
+                merged_score = (score * len(source_ids) + item.score) / len(merged_ids)
+                key = _document_key(merged)
+                previous = states.get(key)
+                if previous is None or merged_score > previous[2]:
+                    state = (merged, merged_ids, merged_score)
+                    states[key] = state
+                    expanded.append(state)
+        frontier = expanded
+        if not frontier:
+            break
+
+    candidates: list[ComposedTemplate] = []
+    for document, source_ids, score in states.values():
+        bound, bindings = _bind_document(document, instruction)
+        candidates.append(
+            ComposedTemplate(
+                source_record_ids=source_ids,
+                score=score,
+                document=bound,
+                bindings=bindings,
+            )
+        )
+    candidates.sort(
+        key=lambda item: (
+            -item.score,
+            len(item.source_record_ids),
+            item.source_record_ids,
+            _document_key(item.document),
+        )
+    )
+    return candidates[:limit]
+
+
+def _bind_document(document: Mapping[str, object], instruction: str) -> tuple[dict[str, object], tuple[tuple[str, str], ...]]:
+    bound = copy.deepcopy(dict(document))
     available = _request_literals(instruction)
     assigned: dict[str, str] = {}
     used: set[int] = set()
@@ -148,13 +231,8 @@ def bind_template(retrieved: RetrievedTemplate, instruction: str) -> BoundTempla
         for item in value.values():
             visit(item)
 
-    visit(document)
-    return BoundTemplate(
-        template=retrieved.template,
-        score=retrieved.score,
-        document=document,
-        bindings=tuple(sorted(assigned.items())),
-    )
+    visit(bound)
+    return bound, tuple(sorted(assigned.items()))
 
 
 def is_placeholder(value: str) -> bool:
@@ -246,3 +324,89 @@ def _compatible(slot_kind: str, candidate_kind: str) -> bool:
     if slot_kind == candidate_kind:
         return True
     return slot_kind == 'text' or (slot_kind == 'path' and candidate_kind == 'remote')
+
+
+def _merge_simple_command_documents(left: Mapping[str, object], right: Mapping[str, object]) -> dict[str, object] | None:
+    left_command = _simple_command(left)
+    right_command = _simple_command(right)
+    if left_command is None or right_command is None:
+        return None
+    left_name, left_arguments = left_command
+    right_name, right_arguments = right_command
+    if left_name != right_name:
+        return None
+    merged = copy.deepcopy(dict(left))
+    command = merged['s'][0]['c'][0]
+    arguments = _shortest_common_supersequence(left_arguments, right_arguments)
+    if arguments:
+        command['a'] = [{'s': value} for value in arguments]
+    else:
+        command.pop('a', None)
+    return merged
+
+
+def _simple_command(document: Mapping[str, object]) -> tuple[str, tuple[str, ...]] | None:
+    statements = document.get('s')
+    if not isinstance(statements, list) or len(statements) != 1 or not isinstance(statements[0], dict):
+        return None
+    statement = statements[0]
+    commands = statement.get('c')
+    if statement.get('t') != 'p' or not isinstance(commands, list) or len(commands) != 1:
+        return None
+    command = commands[0]
+    if not isinstance(command, dict) or set(command) - {'n', 'a'}:
+        return None
+    name = command.get('n')
+    if not isinstance(name, dict) or set(name) != {'s'} or not isinstance(name['s'], str):
+        return None
+    raw_arguments = command.get('a', [])
+    if not isinstance(raw_arguments, list):
+        return None
+    arguments: list[str] = []
+    for argument in raw_arguments:
+        if not isinstance(argument, dict) or set(argument) != {'s'} or not isinstance(argument['s'], str):
+            return None
+        arguments.append(argument['s'])
+    return name['s'], tuple(arguments)
+
+
+def _shortest_common_supersequence(left: Sequence[str], right: Sequence[str]) -> tuple[str, ...]:
+    lengths = [[0] * (len(right) + 1) for _ in range(len(left) + 1)]
+    for left_index, left_value in enumerate(left, start=1):
+        for right_index, right_value in enumerate(right, start=1):
+            if left_value == right_value:
+                lengths[left_index][right_index] = lengths[left_index - 1][right_index - 1] + 1
+            else:
+                lengths[left_index][right_index] = max(lengths[left_index - 1][right_index], lengths[left_index][right_index - 1])
+    common: list[str] = []
+    left_index, right_index = len(left), len(right)
+    while left_index and right_index:
+        if left[left_index - 1] == right[right_index - 1]:
+            common.append(left[left_index - 1])
+            left_index -= 1
+            right_index -= 1
+        elif lengths[left_index - 1][right_index] >= lengths[left_index][right_index - 1]:
+            left_index -= 1
+        else:
+            right_index -= 1
+    common.reverse()
+
+    merged: list[str] = []
+    left_index = right_index = 0
+    for shared in common:
+        while left[left_index] != shared:
+            merged.append(left[left_index])
+            left_index += 1
+        while right[right_index] != shared:
+            merged.append(right[right_index])
+            right_index += 1
+        merged.append(shared)
+        left_index += 1
+        right_index += 1
+    merged.extend(left[left_index:])
+    merged.extend(right[right_index:])
+    return tuple(merged)
+
+
+def _document_key(document: Mapping[str, object]) -> str:
+    return json.dumps(document, separators=(',', ':'), sort_keys=True)
