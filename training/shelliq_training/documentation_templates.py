@@ -418,9 +418,9 @@ def compile_documented_command_scored(
         )
         rank_key: tuple[object, ...] = (
             missing_options,
-            len(missing_literals),
             len(candidate.source_record_ids),
             -source_similarity,
+            len(missing_literals),
             len(unsupported),
             extra_options,
             -candidate.score,

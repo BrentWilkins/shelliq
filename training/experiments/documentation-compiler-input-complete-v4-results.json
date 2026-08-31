@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "experiment": "documentation-compiler-input-complete-v4",
+  "status": "passed-capability-gate",
+  "metrics": {
+    "examples": 100,
+    "distinct_commands": 100,
+    "ready": 91,
+    "needs_input": 9,
+    "no_documentation": 0,
+    "ready_rust_valid": 91,
+    "template_exact": 99,
+    "delivered_exact": 90,
+    "exact_coverage": 0.90,
+    "ready_precision": 0.989010989010989
+  },
+  "benchmark_sha256": "d023fb742fbe7878a124d50c861a09296bda79dd7ee47cf171d45e1a1311d1db",
+  "raw_report_sha256": "012885d23f86d2ff20c29f3e6bc96cca05354c52990e084d12be6d003f16d1a6",
+  "decision": "passed; rank exact semantic intent before conflicting literal completeness to eliminate final false-ready"
+}
