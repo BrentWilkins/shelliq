@@ -28,6 +28,7 @@ pub struct Compilation {
     pub suggestion: Option<Suggestion>,
     pub command_name: Option<String>,
     pub source: Option<String>,
+    pub intent: Option<String>,
     pub unresolved_slots: Vec<String>,
     score: i64,
 }
@@ -147,6 +148,7 @@ pub fn compile(index: &Index, commands: &[String], platform: &str, instruction: 
                     suggestion: Some(suggestion),
                     command_name: Some(command.clone()),
                     source: Some(source),
+                    intent: Some(example.description.clone()),
                     unresolved_slots: Vec::new(),
                     score,
                 }
@@ -156,6 +158,7 @@ pub fn compile(index: &Index, commands: &[String], platform: &str, instruction: 
                     suggestion: None,
                     command_name: Some(command.clone()),
                     source: Some(source),
+                    intent: Some(example.description.clone()),
                     unresolved_slots: recipe.unresolved,
                     score,
                 }
@@ -171,6 +174,7 @@ pub fn compile(index: &Index, commands: &[String], platform: &str, instruction: 
             suggestion: None,
             command_name: None,
             source: None,
+            intent: None,
             unresolved_slots: vec!["ambiguous documentation intent".into()],
             score: best_documentation_score,
         });
@@ -180,6 +184,7 @@ pub fn compile(index: &Index, commands: &[String], platform: &str, instruction: 
         suggestion: None,
         command_name: None,
         source: None,
+        intent: None,
         unresolved_slots: Vec::new(),
         score: 0,
     }))

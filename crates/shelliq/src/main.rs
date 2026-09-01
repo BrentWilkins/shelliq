@@ -211,13 +211,14 @@ fn suggest_command(
             &shortlist,
         )
     };
-    let (suggestion, origin, source) = match model_result {
-        Ok(suggestion) => (suggestion, SuggestionOrigin::Model, "model".to_owned()),
+    let (suggestion, origin, source, documentation_intent) = match model_result {
+        Ok(suggestion) => (suggestion, SuggestionOrigin::Model, "model".to_owned(), None),
         Err(model_error) => {
             let fallback = documentation::compile(&index, &shortlist, platform, effective_instruction)?;
             match fallback.status {
                 documentation::CompilationStatus::Ready => {
                     let source = fallback.source.clone().unwrap_or_else(|| "unknown".into());
+                    let documentation_intent = fallback.intent.clone();
                     let suggestion = fallback
                         .suggestion
                         .context("ready documentation fallback omitted its command")?;
@@ -240,14 +241,22 @@ fn suggest_command(
                             fallback.command_name.as_deref().unwrap_or("unknown")
                         );
                     }
-                    (suggestion, SuggestionOrigin::Documentation, source)
+                    (suggestion, SuggestionOrigin::Documentation, source, documentation_intent)
                 }
                 documentation::CompilationStatus::NeedsInput => {
                     let clarification = fallback
                         .clarification()
                         .context("needs_input response omitted its clarification")?;
                     if json {
-                        println!("{}", response::needs_input(&clarification)?);
+                        println!(
+                            "{}",
+                            response::needs_input(
+                                &clarification,
+                                fallback.command_name.as_deref(),
+                                fallback.source.as_deref(),
+                                fallback.intent.as_deref(),
+                            )?
+                        );
                     } else {
                         eprintln!("needs_input: {}", clarification.question);
                         eprintln!("Add the answer to your request or pass --answer VALUE, then try again.");
@@ -273,7 +282,7 @@ fn suggest_command(
         );
     }
     if json {
-        println!("{}", response::ready(&suggestion, &source)?);
+        println!("{}", response::ready(&suggestion, &source, documentation_intent.as_deref())?);
     } else {
         println!("{}", suggestion.command);
     }
