@@ -124,9 +124,11 @@ same `SemanticDocumentV2` round trip, and runs the same local command/option
 verifier. It emits only a complete command. Missing values return `needs_input`
 with one focused question, a nonzero exit, and no standard output, so the Zsh
 widget keeps the original request and never puts an abstention in the editable
-buffer. Add the answer to that request and invoke the widget again, or pass
-`--answer VALUE` to recompile through documentation and the same local
-verification path. If no documentation matches, it returns `no_documentation`.
+buffer. The `needs_input` envelope includes a versioned `continuation.source`.
+Pass that source back with `--continue-from SOURCE --answer VALUE` to pin
+recompilation to the reported recipe and the same local verification path. For
+recipes needing more than one value, repeat `--answer` in question order on each
+continuation. If no documentation matches, it returns `no_documentation`.
 
 `shelliq suggest --json` prints a versioned envelope for all three outcomes:
 `ready`, `needs_input`, and `no_documentation`. A ready envelope contains the

@@ -1,0 +1,1464 @@
+{
+  "dataset_sha256": "8545310386998656358473c9f39ab3a0a8dfb1c80243f4165e3f39c18ee91f95",
+  "experiment": "documentation-clarification-continuation-v3",
+  "gate_passed": true,
+  "metrics": {
+    "all_emitted_semantic_and_locally_valid": true,
+    "answered_emitted": 48,
+    "answered_exact": 48,
+    "answered_ready_precision": 1.0,
+    "commandless_json_abstentions": 48,
+    "focused_questions": 48,
+    "invalid_continuations_fail_closed": 48,
+    "maximum_latency_ms": 18.209059999207966,
+    "mean_latency_ms": 14.749625362728306,
+    "records": 48,
+    "safe_default_abstentions": 48,
+    "source_aligned_clarifications": 48,
+    "stable_intermediate_abstentions": 48
+  },
+  "outcomes": [
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 14.389483010745607,
+      "answered_output": "pg_checksums -D /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:pg_checksums:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:pg_checksums:1; selected command pg_checksums; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "pg_checksums",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/data",
+          "safe": true,
+          "source": "tldr:linux:pg_checksums:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/data`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/pg_checksums:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 14.811893997830339,
+      "answered_output": "pg_controldata -D /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:pg_controldata:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:pg_controldata:1; selected command pg_controldata; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "pg_controldata",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/data",
+          "safe": true,
+          "source": "tldr:linux:pg_controldata:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/data`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/pg_controldata:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 18.209059999207966,
+      "answered_output": "pg_receivewal -D /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:pg_receivewal:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:pg_receivewal:1; selected command pg_receivewal; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "pg_receivewal",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "directory",
+          "safe": true,
+          "source": "tldr:linux:pg_receivewal:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `directory`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/pg_receivewal:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 16.216295000049286,
+      "answered_output": "pg_resetwal -D /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:pg_resetwal:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:pg_resetwal:1; selected command pg_resetwal; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "pg_resetwal",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/data",
+          "safe": true,
+          "source": "tldr:linux:pg_resetwal:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/data`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/pg_resetwal:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 14.825589998508804,
+      "answered_output": "pg_restore -l /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:pg_restore:4",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:pg_restore:4; selected command pg_restore; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "pg_restore",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "archive_file.dump",
+          "safe": true,
+          "source": "tldr:linux:pg_restore:4"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `archive_file.dump`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/pg_restore:4",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 15.329313988331705,
+      "answered_output": "pg_test_fsync -f /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:pg_test_fsync:3",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:pg_test_fsync:3; selected command pg_test_fsync; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "pg_test_fsync",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/file",
+          "safe": true,
+          "source": "tldr:linux:pg_test_fsync:3"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/file`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/pg_test_fsync:3",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 13.676711998414248,
+      "answered_output": "pg_verifybackup /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:pg_verifybackup:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:pg_verifybackup:1; selected command pg_verifybackup; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "pg_verifybackup",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/backup",
+          "safe": true,
+          "source": "tldr:linux:pg_verifybackup:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/backup`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/pg_verifybackup:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 15.02094000170473,
+      "answered_output": "pg_walsummary /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:pg_walsummary:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:pg_walsummary:1; selected command pg_walsummary; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "pg_walsummary",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/file",
+          "safe": true,
+          "source": "tldr:linux:pg_walsummary:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/file`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/pg_walsummary:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 14.65937499597203,
+      "answered_output": "pgmhist /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:pgmhist:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:pgmhist:1; selected command pgmhist; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "pgmhist",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/image.pgm",
+          "safe": true,
+          "source": "tldr:linux:pgmhist:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/image.pgm`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/pgmhist:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 16.74157900561113,
+      "answered_output": "phan --processes 4242",
+      "answered_source": "tldr:linux:phan:7",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:phan:7; selected command phan; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "4242"
+      ],
+      "command": "phan",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "number_of_processes",
+          "safe": true,
+          "source": "tldr:linux:phan:7"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which number should be used for `number_of_processes`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/phan:7",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 15.421738004079089,
+      "answered_output": "phing -i /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:phing:2",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:phing:2; selected command phing; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "phing",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/build.xml",
+          "safe": true,
+          "source": "tldr:linux:phing:2"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/build.xml`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/phing:2",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 14.29524399281945,
+      "answered_output": "php-coveralls -r /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:php-coveralls:2",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:php-coveralls:2; selected command php-coveralls; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "php-coveralls",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/directory",
+          "safe": true,
+          "source": "tldr:linux:php-coveralls:2"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/directory`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/php-coveralls:2",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 14.732743002241477,
+      "answered_output": "php-cs-fixer fix /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:php-cs-fixer:2",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:php-cs-fixer:2; selected command php-cs-fixer; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "php-cs-fixer",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/directory",
+          "safe": true,
+          "source": "tldr:linux:php-cs-fixer:2"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/directory`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/php-cs-fixer:2",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 15.48194199858699,
+      "answered_output": "php /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:php:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:php:1; selected command php; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "php",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/file",
+          "safe": true,
+          "source": "tldr:linux:php:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/file`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/php:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 14.273854001658037,
+      "answered_output": "phpcbf /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:phpcbf:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:phpcbf:1; selected command phpcbf; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "phpcbf",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/directory",
+          "safe": true,
+          "source": "tldr:linux:phpcbf:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/directory`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/phpcbf:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 14.127135000308044,
+      "answered_output": "phpcpd /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:phpcpd:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:phpcpd:1; selected command phpcpd; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "phpcpd",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/file_or_directory",
+          "safe": true,
+          "source": "tldr:linux:phpcpd:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/file_or_directory`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/phpcpd:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 14.777006988879293,
+      "answered_output": "phpcs /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:phpcs:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:phpcs:1; selected command phpcs; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "phpcs",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/directory",
+          "safe": true,
+          "source": "tldr:linux:phpcs:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/directory`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/phpcs:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 14.762629987671971,
+      "answered_output": "phpdox -f /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:phpdox:3",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:phpdox:3; selected command phpdox; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "phpdox",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/phpdox.xml",
+          "safe": true,
+          "source": "tldr:linux:phpdox:3"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/phpdox.xml`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/phpdox:3",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 13.9108360017417,
+      "answered_output": "phploc /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:phploc:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:phploc:1; selected command phploc; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "phploc",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/directory",
+          "safe": true,
+          "source": "tldr:linux:phploc:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/directory`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/phploc:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 13.966001002700068,
+      "answered_output": "phpspec run /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:phpspec:3",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:phpspec:3; selected command phpspec; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "phpspec",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/class_specification_file",
+          "safe": true,
+          "source": "tldr:linux:phpspec:3"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/class_specification_file`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/phpspec:3",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 15.387003004434519,
+      "answered_output": "phpstorm /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:phpstorm:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:phpstorm:1; selected command phpstorm; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "phpstorm",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/directory",
+          "safe": true,
+          "source": "tldr:linux:phpstorm:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/directory`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/phpstorm:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 14.27832200715784,
+      "answered_output": "phpunit /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:phpunit:2",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:phpunit:2; selected command phpunit; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "phpunit",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/TestFile.php",
+          "safe": true,
+          "source": "tldr:linux:phpunit:2"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/TestFile.php`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/phpunit:2",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 15.265262001776136,
+      "answered_output": "piactl login /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:piactl:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:piactl:1; selected command piactl; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "piactl",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/login_file",
+          "safe": true,
+          "source": "tldr:linux:piactl:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/login_file`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/piactl:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 14.392598997801542,
+      "answered_output": "picgo upload /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:picgo:3",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:picgo:3; selected command picgo; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "picgo",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/image",
+          "safe": true,
+          "source": "tldr:linux:picgo:3"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/image`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/picgo:3",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 14.070168006583117,
+      "answered_output": "pickle convert /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:pickle:2",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:pickle:2; selected command pickle; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "pickle",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/directory",
+          "safe": true,
+          "source": "tldr:linux:pickle:2"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/directory`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/pickle:2",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 13.644471997395158,
+      "answered_output": "pico /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:pico:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:pico:1; selected command pico; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "pico",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/file",
+          "safe": true,
+          "source": "tldr:linux:pico:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/file`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/pico:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 14.262803000747226,
+      "answered_output": "picom --config /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:picom:3",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:picom:3; selected command picom; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "picom",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/config_file",
+          "safe": true,
+          "source": "tldr:linux:picom:3"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/config_file`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/picom:3",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 13.593894997029565,
+      "answered_output": "picotool load /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:picotool:2",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:picotool:2; selected command picotool; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "picotool",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/binary",
+          "safe": true,
+          "source": "tldr:linux:picotool:2"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/binary`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/picotool:2",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 14.427334011998028,
+      "answered_output": "pie repository:remove https://example.com/item/1",
+      "answered_source": "tldr:linux:pie:6",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:pie:6; selected command pie; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "https://example.com/item/1"
+      ],
+      "command": "pie",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "url",
+          "safe": true,
+          "source": "tldr:linux:pie:6"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which URL should be used for `url`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/pie:6",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 15.151276005781256,
+      "answered_output": "pigz /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:pigz:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:pigz:1; selected command pigz; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "pigz",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/file",
+          "safe": true,
+          "source": "tldr:linux:pigz:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/file`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/pigz:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 14.894539010128938,
+      "answered_output": "ping6 user1@example.com:/tmp/data",
+      "answered_source": "tldr:linux:ping6:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:ping6:1; selected command ping6; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "user1@example.com:/tmp/data"
+      ],
+      "command": "ping6",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "host",
+          "safe": true,
+          "source": "tldr:linux:ping6:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which remote host or path should be used for `host`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/ping6:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 15.063239014125429,
+      "answered_output": "pint --config /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:pint:4",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:pint:4; selected command pint; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "pint",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/pint.json",
+          "safe": true,
+          "source": "tldr:linux:pint:4"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/pint.json`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/pint:4",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 15.403252997202799,
+      "answered_output": "pio check -d /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:pio:19",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:pio:19; selected command pio; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "pio",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "project_directory",
+          "safe": true,
+          "source": "tldr:linux:pio:19"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `project_directory`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/pio-check:2",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 12.85075698979199,
+      "answered_output": "pixi init /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:pixi:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:pixi:1; selected command pixi; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "pixi",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/project",
+          "safe": true,
+          "source": "tldr:linux:pixi:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/project`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/pixi:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 14.033689003554173,
+      "answered_output": "pixterm /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:pixterm:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:pixterm:1; selected command pixterm; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "pixterm",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/file",
+          "safe": true,
+          "source": "tldr:linux:pixterm:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/file`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/pixterm:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 13.908451001043431,
+      "answered_output": "pkl user1@example.com:/tmp/data",
+      "answered_source": "tldr:linux:pkl:2",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:pkl:2; selected command pkl; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "user1@example.com:/tmp/data"
+      ],
+      "command": "pkl",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "server",
+          "safe": true,
+          "source": "tldr:linux:pkl:2"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which remote host or path should be used for `server`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/pkl:2",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 14.831861000857316,
+      "answered_output": "plantuml /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:plantuml:3",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:plantuml:3; selected command plantuml; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "plantuml",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/diagrams",
+          "safe": true,
+          "source": "tldr:linux:plantuml:3"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/diagrams`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/plantuml:3",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 15.107131999684498,
+      "answered_output": "play /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:play:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:play:1; selected command play; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "play",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/audio_file",
+          "safe": true,
+          "source": "tldr:linux:play:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/audio_file`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/play:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 13.938017989858054,
+      "answered_output": "plesk bin user1@example.com:/tmp/data --list",
+      "answered_source": "tldr:linux:plesk:2",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:plesk:2; selected command plesk; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "user1@example.com:/tmp/data"
+      ],
+      "command": "plesk",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "domain",
+          "safe": true,
+          "source": "tldr:linux:plesk:2"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which remote host or path should be used for `domain`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/plesk:2",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 13.683825003681704,
+      "answered_output": "plocate /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:plocate:2",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:plocate:2; selected command plocate; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "plocate",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "*/filename",
+          "safe": true,
+          "source": "tldr:linux:plocate:2"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `*/filename`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/plocate:2",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 14.138817001366988,
+      "answered_output": "pngcheck /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:pngcheck:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:pngcheck:1; selected command pngcheck; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "pngcheck",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/image.png",
+          "safe": true,
+          "source": "tldr:linux:pngcheck:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/image.png`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/pngcheck:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 14.624428004026413,
+      "answered_output": "pngquant /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:pngquant:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:pngquant:1; selected command pngquant; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "pngquant",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/file.png",
+          "safe": true,
+          "source": "tldr:linux:pngquant:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/file.png`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/pngquant:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 13.399677001871169,
+      "answered_output": "pocount /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:pocount:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:pocount:1; selected command pocount; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "pocount",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/file.po",
+          "safe": true,
+          "source": "tldr:linux:pocount:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/file.po`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/pocount:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 15.741294002509676,
+      "answered_output": "poetry build -o /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:poetry:19",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:poetry:19; selected command poetry; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "poetry",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/directory",
+          "safe": true,
+          "source": "tldr:linux:poetry:19"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/directory`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/poetry-build:5",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 14.016045010066591,
+      "answered_output": "postcss /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:postcss:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:postcss:1; selected command postcss; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "postcss",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/file",
+          "safe": true,
+          "source": "tldr:linux:postcss:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/file`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/postcss:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 15.015488999779336,
+      "answered_output": "ppmfade -f /tmp/shelliq-clarification-answer-1.dat -mix",
+      "answered_source": "tldr:linux:ppmfade:2",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:ppmfade:2; selected command ppmfade; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "ppmfade",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/image.ppm",
+          "safe": true,
+          "source": "tldr:linux:ppmfade:2"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/image.ppm`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/ppmfade:2",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 16.0173769982066,
+      "answered_output": "ppmhist -nom /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:ppmhist:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:ppmhist:1; selected command ppmhist; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "ppmhist",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/image.ppm",
+          "safe": true,
+          "source": "tldr:linux:ppmhist:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/image.ppm`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/ppmhist:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    },
+    {
+      "answered_emitted": true,
+      "answered_exact": true,
+      "answered_expected": "pinned recipe with every accumulated typed answer",
+      "answered_latency_ms": 15.312752002500929,
+      "answered_output": "ppmtompeg /tmp/shelliq-clarification-answer-1.dat",
+      "answered_source": "tldr:linux:ppmtompeg:1",
+      "answered_stderr": "documentation clarification compiled; source tldr:linux:ppmtompeg:1; selected command ppmtompeg; command and option spellings locally verified",
+      "answered_valid": true,
+      "answers": [
+        "/tmp/shelliq-clarification-answer-1.dat"
+      ],
+      "command": "ppmtompeg",
+      "commandless_json_abstention": true,
+      "continuation_steps": [
+        {
+          "label": "path/to/parameter_file",
+          "safe": true,
+          "source": "tldr:linux:ppmtompeg:1"
+        }
+      ],
+      "focused_question": true,
+      "human_stderr": "needs_input: Which file or directory should be used for `path/to/parameter_file`?\nAdd the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again.\nError: needs_input",
+      "invalid_continuations_fail_closed": true,
+      "record_id": "documentation-clarification-continuation-v3:tldr:linux:common/ppmtompeg:1",
+      "safe_default_abstention": true,
+      "source_aligned": true,
+      "stable_intermediate_abstentions": true,
+      "structured_stderr": "Error: needs_input"
+    }
+  ],
+  "partition": "test",
+  "schema_version": 1
+}
