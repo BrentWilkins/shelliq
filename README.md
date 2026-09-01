@@ -3,8 +3,38 @@
 A local CLI assistant. It answers "is it `-r` or `-R`?" from the man pages installed on
 *this* machine, and cites the line it got the answer from.
 
-Status: P0 is shipped. Trust hardening and the separate custom-model experiment are
-active; the shipping CLI remains model-free.
+Current release line: `0.1.0-alpha.1`. Trust hardening and the separate
+custom-model experiment are active; the shipping CLI remains model-free.
+
+## Install
+
+The alpha release provides a checksum-verifying shell installer:
+
+```console
+curl --proto '=https' --tlsv1.2 -LsSf \
+  https://github.com/brentwilkins/shelliq/releases/download/v0.1.0-alpha.1/shelliq-installer.sh | sh
+```
+
+Or build the default, model-free CLI from source:
+
+```console
+cargo install --locked --path crates/shelliq
+```
+
+Release archives include `shelliq.bash` and `shelliq.zsh` beside the binary.
+Copy the integration you use to a stable location and source it from your shell
+startup file. The installer installs only the `shelliq` executable.
+
+Prebuilt alpha archives target:
+
+| System | Architectures | Notes |
+| --- | --- | --- |
+| Linux (glibc) | x86_64, ARM64 | Includes Ubuntu and Ubuntu under WSL2 |
+| macOS | Intel, Apple silicon | Bash widgets support the bundled Bash 3.2 |
+
+Other Unix-like systems, including BSDs, are best-effort source builds. Native
+Windows is not an alpha target because ShellIQ depends on Unix man pages and
+shell semantics; use the Linux build inside WSL2.
 
 ## Try it
 
@@ -110,10 +140,12 @@ buffer-preservation behavior through Readline; completed commands remain
 editable and require an explicit Enter. `Ctrl-X Ctrl-H` explains the current
 buffer against the local index without changing it.
 
-Bash Tab completion offers indexed flags only for commands without a native
-completion specification and only while completing a `-`-prefixed word. If the
-user already has a default completion policy, ShellIQ leaves it untouched;
-otherwise ordinary Bash and filename completion remain enabled as fallbacks.
+On Bash 4 or newer, Tab completion offers indexed flags only for commands
+without a native completion specification and only while completing a
+`-`-prefixed word. If the user already has a default completion policy, ShellIQ
+leaves it untouched; otherwise ordinary Bash and filename completion remain
+enabled as fallbacks. The suggestion and explanation widgets also support the
+Bash 3.2 version bundled with macOS.
 
 `suggest` defaults to the versioned `context-authoritative-v1` prompt contract.
 Use `--prompt-contract legacy-user-v1` only with an older adapter trained on

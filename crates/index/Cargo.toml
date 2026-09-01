@@ -10,4 +10,4 @@ description = "SQLite index of command flags, subcommands, and examples for shel
 anyhow = "1.0.104"
 rusqlite = { version = "0.40.1", features = ["bundled"] }
 serde = "1.0.229"
-shelliq-harvest = { version = "0.1.0", path = "../harvest" }
+shelliq-harvest = { version = "0.1.0-alpha.1", path = "../harvest" }

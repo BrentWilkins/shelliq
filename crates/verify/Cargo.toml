@@ -8,7 +8,7 @@ description = "Command line scanning, flag bundle decomposition, and index-backe
 
 [dependencies]
 anyhow = "1.0.104"
-shelliq-index = { version = "0.1.0", path = "../index" }
+shelliq-index = { version = "0.1.0-alpha.1", path = "../index" }
 
 [dev-dependencies]
 shelliq-harvest = { path = "../harvest" }

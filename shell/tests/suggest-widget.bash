@@ -101,23 +101,25 @@ if _shelliq_bash_complete; then
 fi
 assert_equal "${#COMPREPLY[@]}" 0
 
-fixture_default_completion() { :; }
-complete -D -F fixture_default_completion
-_shelliq_bash_register_completion
-existing_default=$(complete -p -D)
-[[ $existing_default == *fixture_default_completion* ]]
-complete -r -D
+if (( BASH_VERSINFO[0] >= 4 )); then
+  fixture_default_completion() { :; }
+  complete -D -F fixture_default_completion
+  _shelliq_bash_register_completion
+  existing_default=$(complete -p -D)
+  [[ $existing_default == *fixture_default_completion* ]]
+  complete -r -D
 
-fixture_native_completion() { :; }
-complete -F fixture_native_completion git
-_shelliq_bash_register_completion
-registered_default=$(complete -p -D)
-registered_native=$(complete -p git)
-[[ $registered_default == *'_shelliq_bash_complete -D'* ]]
-[[ $registered_default == *'-o bashdefault'* && $registered_default == *'-o default'* ]]
-[[ $registered_native == *fixture_native_completion* ]]
-complete -r -D
-complete -r git
+  fixture_native_completion() { :; }
+  complete -F fixture_native_completion git
+  _shelliq_bash_register_completion
+  registered_default=$(complete -p -D)
+  registered_native=$(complete -p git)
+  [[ $registered_default == *'_shelliq_bash_complete -D'* ]]
+  [[ $registered_default == *'-o bashdefault'* && $registered_default == *'-o default'* ]]
+  [[ $registered_native == *fixture_native_completion* ]]
+  complete -r -D
+  complete -r git
+fi
 
 reset_fixture 'find regular files'
 TEST_SCENARIO=ready

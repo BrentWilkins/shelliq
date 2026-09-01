@@ -854,6 +854,8 @@ Designed not to fight oh-my-zsh, zsh-autosuggestions, or zsh-syntax-highlighting
   `ollama`. Bash uses its `-D` default specification only when no command-specific
   completion exists, preserves any pre-existing user default, and enables
   `bashdefault` plus `default` fallback behavior whenever ShellIQ declines.
+  macOS's bundled Bash 3.2 lacks that safe default layer, so it receives the
+  widgets but no ShellIQ Tab registration.
   **[verified]** interactive keystroke-level proof, done by hand in a real
   terminal: `ollama --help<TAB>` offers real flag candidates while `git chec<TAB>` still
   completes to `checkout` via `_git`, untouched. Inherits the existing `menu select` dropdown

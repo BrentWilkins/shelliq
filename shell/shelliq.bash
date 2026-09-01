@@ -38,7 +38,7 @@ _shelliq_bash_complete() {
   COMPREPLY=()
   local command_name=${COMP_WORDS[0]-}
   local current=${COMP_WORDS[COMP_CWORD]-}
-  local flags
+  local flags candidate
 
   [[ -n $command_name && $current == -* ]] || return 1
   if ! flags=$(shelliq flags "$command_name" --raw 2>/dev/null); then
@@ -46,11 +46,15 @@ _shelliq_bash_complete() {
   fi
   [[ -n $flags ]] || return 1
 
-  mapfile -t COMPREPLY < <(compgen -W "$flags" -- "$current")
+  while IFS= read -r candidate; do
+    COMPREPLY+=("$candidate")
+  done < <(compgen -W "$flags" -- "$current")
   (( ${#COMPREPLY[@]} > 0 ))
 }
 
 _shelliq_bash_register_completion() {
+  # Bash 3.2 (still shipped by macOS) has no safe default completion spec.
+  (( BASH_VERSINFO[0] >= 4 )) || return
   # Bash invokes -D only when the command has no command-specific completion.
   # Preserve a user's existing default policy rather than replacing it.
   complete -p -D &>/dev/null && return

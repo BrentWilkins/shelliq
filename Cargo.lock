@@ -740,7 +740,7 @@ dependencies = [
 
 [[package]]
 name = "shelliq"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "anstyle",
  "anyhow",
@@ -756,7 +756,7 @@ dependencies = [
 
 [[package]]
 name = "shelliq-harvest"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "anyhow",
  "libc",
@@ -766,7 +766,7 @@ dependencies = [
 
 [[package]]
 name = "shelliq-index"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "anyhow",
  "rusqlite",
@@ -776,7 +776,7 @@ dependencies = [
 
 [[package]]
 name = "shelliq-syntax"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -786,7 +786,7 @@ dependencies = [
 
 [[package]]
 name = "shelliq-verify"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "anyhow",
  "shelliq-harvest",

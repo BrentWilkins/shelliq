@@ -6,6 +6,9 @@ license.workspace = true
 repository.workspace = true
 description = "Zsh-first lossless syntax contract and corpus audit"
 
+[package.metadata.dist]
+dist = false
+
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
