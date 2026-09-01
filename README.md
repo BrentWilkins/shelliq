@@ -122,9 +122,16 @@ fallback compiled from the vendored TLDR recipe for the retrieved, installed
 command. It binds only typed values visible in the request, lowers through the
 same `SemanticDocumentV2` round trip, and runs the same local command/option
 verifier. It emits only a complete command. Missing values return `needs_input`
-with a nonzero exit and no standard output, so the Zsh widget never puts an
-abstention in the editable buffer. If no documentation matches, it returns
-`no_documentation`.
+with one focused question, a nonzero exit, and no standard output, so the Zsh
+widget keeps the original request and never puts an abstention in the editable
+buffer. Add the answer to that request and invoke the widget again, or pass
+`--answer VALUE` to recompile through documentation and the same local
+verification path. If no documentation matches, it returns `no_documentation`.
+
+`shelliq suggest --json` prints a versioned envelope for all three outcomes:
+`ready`, `needs_input`, and `no_documentation`. A ready envelope contains the
+rendered command, semantic document, and provenance. Abstention envelopes never
+contain a command or semantic document.
 
 On two independent literal-clean sealed sets, the unchanged runtime delivered
 81/96 complete requests exactly with 100% ready precision and local/semantic

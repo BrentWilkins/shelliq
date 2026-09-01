@@ -32,6 +32,47 @@ pub struct Compilation {
     score: i64,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Clarification {
+    pub kind: &'static str,
+    pub label: String,
+    pub question: String,
+}
+
+impl Compilation {
+    pub fn clarification(&self) -> Option<Clarification> {
+        let unresolved = self.unresolved_slots.first()?;
+        if unresolved == "ambiguous documentation intent" {
+            return Some(Clarification {
+                kind: "intent",
+                label: "documented operation".into(),
+                question: "Which documented operation do you want?".into(),
+            });
+        }
+        if let Some(value) = unresolved.strip_prefix("unused request value ") {
+            return Some(Clarification {
+                kind: "usage",
+                label: value.into(),
+                question: format!("How should {value} be used?"),
+            });
+        }
+
+        let kind = placeholder_kind(unresolved).unwrap_or(SlotKind::Text);
+        let noun = match kind {
+            SlotKind::Path => "file or directory",
+            SlotKind::Url => "URL",
+            SlotKind::Remote => "remote host or path",
+            SlotKind::Integer => "number",
+            SlotKind::Text => "value",
+        };
+        Some(Clarification {
+            kind: kind.as_str(),
+            label: unresolved.clone(),
+            question: format!("Which {noun} should be used for `{unresolved}`?"),
+        })
+    }
+}
+
 #[derive(Clone, Debug)]
 struct Literal {
     kind: SlotKind,
@@ -45,6 +86,18 @@ enum SlotKind {
     Remote,
     Integer,
     Text,
+}
+
+impl SlotKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Path => "path",
+            Self::Url => "url",
+            Self::Remote => "remote",
+            Self::Integer => "integer",
+            Self::Text => "text",
+        }
+    }
 }
 
 struct RecipeCompilation {

@@ -31,7 +31,9 @@ zle -N _shelliq_explain_widget
 bindkey '^X^H' _shelliq_explain_widget
 
 # C-x C-g turns the current English buffer into an editable suggestion. It never
-# accepts or executes the result; Enter remains an explicit user action.
+# accepts or executes the result; Enter remains an explicit user action. When a
+# value is missing, the focused question is printed and the request stays in the
+# buffer so the answer can be added before invoking the widget again.
 _shelliq_suggest_widget() {
   emulate -L zsh
   if [[ -z $BUFFER ]]; then

@@ -1,0 +1,18 @@
+{
+  "command_disjoint": true,
+  "development": {
+    "records": 16,
+    "sha256": "bc15ce65b82c6fe1a7a3965e033ac9e4bfea30a28760b58e6df25dcc7dee5256"
+  },
+  "distinct_commands": 64,
+  "documentation_index_sha256": "17b3b2e9feb215f858e893ba4f761088f9edfbd674ec89633c26d4332a6ab64b",
+  "excluded_commands_total": 603,
+  "excluded_neural_train_commands": 124,
+  "experiment": "documentation-clarification-flow-v1",
+  "schema_version": 1,
+  "selection": "stable record-id order; Linux literal-free simple single-command TLDR recipes with exactly one bindable placeholder; one recipe per command",
+  "test": {
+    "records": 48,
+    "sha256": "4c57bec632a79208e8ba5549c8c803b9fa8dde83b776f2335112307120c8d9b8"
+  }
+}

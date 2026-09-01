@@ -7,6 +7,8 @@
 mod documentation;
 #[cfg(feature = "model")]
 mod model;
+#[cfg(feature = "model")]
+mod response;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -78,7 +80,10 @@ enum Command {
         /// Entire request deadline in milliseconds.
         #[arg(long, default_value_t = 5_000)]
         timeout_ms: u64,
-        /// Print validated semantic JSON instead of rendered shell.
+        /// Answer the focused question from a prior needs_input response.
+        #[arg(long, value_name = "VALUE")]
+        answer: Option<String>,
+        /// Print a versioned response envelope for every outcome.
         #[arg(long)]
         json: bool,
     },
@@ -141,6 +146,7 @@ fn main() -> Result<()> {
             context,
             prompt_contract,
             timeout_ms,
+            answer,
             json,
         } => suggest_command(
             &path,
@@ -149,6 +155,7 @@ fn main() -> Result<()> {
             &instruction.join(" "),
             prompt_contract,
             timeout_ms,
+            answer.as_deref(),
             json,
         ),
         Command::Source { citation } => source(&path, &citation),
@@ -156,6 +163,7 @@ fn main() -> Result<()> {
 }
 
 #[cfg(feature = "model")]
+#[allow(clippy::too_many_arguments)]
 fn suggest_command(
     path: &std::path::Path,
     endpoint: &str,
@@ -163,6 +171,7 @@ fn suggest_command(
     instruction: &str,
     prompt_contract: model::PromptContract,
     timeout_ms: u64,
+    answer: Option<&str>,
     json: bool,
 ) -> Result<()> {
     if timeout_ms == 0 {
@@ -172,27 +181,43 @@ fn suggest_command(
         "macos" => "darwin",
         other => other,
     };
+    let answered_instruction;
+    let effective_instruction = if let Some(answer) = answer {
+        let answer = answer.trim();
+        if answer.is_empty() {
+            anyhow::bail!("--answer must not be empty");
+        }
+        answered_instruction = format!("{instruction}. Use {answer}.");
+        answered_instruction.as_str()
+    } else {
+        instruction
+    };
     let index = Index::open(path)?;
-    let shortlist = index.search_commands(instruction, 6)?;
+    let shortlist = index.search_commands(effective_instruction, 6)?;
     if std::env::var_os("SHELLIQ_DEBUG_RETRIEVAL").is_some() {
         eprintln!("retrieved command shortlist: {}", shortlist.join(", "));
     }
-    let model_result = try_model_suggestion(
-        &index,
-        endpoint,
-        context,
-        instruction,
-        platform,
-        prompt_contract,
-        timeout_ms,
-        &shortlist,
-    );
-    let (suggestion, origin) = match model_result {
-        Ok(suggestion) => (suggestion, SuggestionOrigin::Model),
+    let model_result = if answer.is_some() {
+        Err(anyhow::anyhow!("clarification answers are recompiled from documentation"))
+    } else {
+        try_model_suggestion(
+            &index,
+            endpoint,
+            context,
+            effective_instruction,
+            platform,
+            prompt_contract,
+            timeout_ms,
+            &shortlist,
+        )
+    };
+    let (suggestion, origin, source) = match model_result {
+        Ok(suggestion) => (suggestion, SuggestionOrigin::Model, "model".to_owned()),
         Err(model_error) => {
-            let fallback = documentation::compile(&index, &shortlist, platform, instruction)?;
+            let fallback = documentation::compile(&index, &shortlist, platform, effective_instruction)?;
             match fallback.status {
                 documentation::CompilationStatus::Ready => {
+                    let source = fallback.source.clone().unwrap_or_else(|| "unknown".into());
                     let suggestion = fallback
                         .suggestion
                         .context("ready documentation fallback omitted its command")?;
@@ -202,23 +227,41 @@ fn suggest_command(
                             "model suggestion failed ({model_error:#}); documentation fallback failed local command/flag validation"
                         );
                     }
-                    eprintln!(
-                        "documentation fallback after model failure; source {}; selected command {}; command and option spellings locally verified",
-                        fallback.source.as_deref().unwrap_or("unknown"),
-                        fallback.command_name.as_deref().unwrap_or("unknown")
-                    );
-                    (suggestion, SuggestionOrigin::Documentation)
+                    if answer.is_some() {
+                        eprintln!(
+                            "documentation clarification compiled; source {}; selected command {}; command and option spellings locally verified",
+                            source,
+                            fallback.command_name.as_deref().unwrap_or("unknown")
+                        );
+                    } else {
+                        eprintln!(
+                            "documentation fallback after model failure; source {}; selected command {}; command and option spellings locally verified",
+                            source,
+                            fallback.command_name.as_deref().unwrap_or("unknown")
+                        );
+                    }
+                    (suggestion, SuggestionOrigin::Documentation, source)
                 }
                 documentation::CompilationStatus::NeedsInput => {
-                    anyhow::bail!(
-                        "needs_input: documentation fallback requires {}; model path failed ({model_error:#})",
-                        fallback.unresolved_slots.join(", ")
-                    );
+                    let clarification = fallback
+                        .clarification()
+                        .context("needs_input response omitted its clarification")?;
+                    if json {
+                        println!("{}", response::needs_input(&clarification)?);
+                    } else {
+                        eprintln!("needs_input: {}", clarification.question);
+                        eprintln!("Add the answer to your request or pass --answer VALUE, then try again.");
+                    }
+                    anyhow::bail!("needs_input");
                 }
                 documentation::CompilationStatus::NoDocumentation => {
-                    anyhow::bail!(
-                        "no_documentation: no complete installed documentation recipe matched; model path failed ({model_error:#})"
-                    );
+                    let message = "no complete installed documentation recipe matched";
+                    if json {
+                        println!("{}", response::no_documentation(message)?);
+                    } else {
+                        eprintln!("no_documentation: {message}");
+                    }
+                    anyhow::bail!("no_documentation: {model_error:#}");
                 }
             }
         }
@@ -230,7 +273,7 @@ fn suggest_command(
         );
     }
     if json {
-        println!("{}", suggestion.semantic_json);
+        println!("{}", response::ready(&suggestion, &source)?);
     } else {
         println!("{}", suggestion.command);
     }
