@@ -150,9 +150,19 @@ pub fn verify(index: &Index, line: &str) -> Result<Vec<Finding>> {
                 continue;
             }
 
-            // A long flag may carry its argument inline: `--block-size=M`.
-            let (token, inline_arg) = match arg.text.split_once('=') {
-                Some((t, v)) if t.starts_with("--") => (t.to_string(), Some(v.to_string())),
+            // Long flags and exact multi-character single-dash flags may carry
+            // their arguments inline: `--block-size=M`, `-type=AXFR`.
+            let inline = arg.text.split_once('=');
+            let exact_single_dash_inline = if let Some((candidate, _)) = inline {
+                candidate.starts_with('-')
+                    && !candidate.starts_with("--")
+                    && candidate.len() > 2
+                    && matches!(index.lookup_flag(&segment.command.text, candidate)?, FlagLookup::Exact(_))
+            } else {
+                false
+            };
+            let (token, inline_arg) = match inline {
+                Some((t, v)) if t.starts_with("--") || exact_single_dash_inline => (t.to_string(), Some(v.to_string())),
                 _ => (arg.text.clone(), None),
             };
 
@@ -328,6 +338,37 @@ mod tests {
             split_bundle(&idx, "find", "-type").unwrap(),
             vec![BundlePart::Flag("-type".into())]
         );
+
+        let findings = verify(&idx, "find -type=f .").unwrap();
+        assert_eq!(findings.len(), 1);
+        assert!(findings.iter().all(Finding::is_clean), "got {findings:?}");
+    }
+
+    #[test]
+    fn unknown_or_wrong_case_single_dash_inline_option_is_not_accepted() {
+        let mut idx = seeded();
+        idx.insert_command(
+            &shelliq_harvest::resolve_target("find", false),
+            &ParsedCommand {
+                name: "find".into(),
+                section: "1".into(),
+                platform: std::env::consts::OS.into(),
+                synopsis: String::new(),
+                description: String::new(),
+                source_path: String::new(),
+                source_hash: String::new(),
+                flags: vec![f("-type", "", Some("c"), 1)],
+            },
+        )
+        .unwrap();
+
+        for line in ["find -Type=f .", "find -bogus=f ."] {
+            let findings = verify(&idx, line).unwrap();
+            assert!(
+                findings.iter().any(|finding| !finding.is_clean()),
+                "unexpectedly accepted {line:?}: {findings:?}"
+            );
+        }
     }
 
     #[test]

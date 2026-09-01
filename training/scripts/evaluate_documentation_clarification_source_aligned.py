@@ -32,6 +32,7 @@ from shelliq_training.documentation_templates import (
 EXPERIMENTS = {
     'documentation-clarification-continuation-v1',
     'documentation-clarification-continuation-v2',
+    'documentation-clarification-continuation-v3',
     'documentation-clarification-source-aligned-v1',
 }
 
