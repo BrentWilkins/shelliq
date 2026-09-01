@@ -37,6 +37,22 @@ fn real_curated_conversion_is_deterministic_and_lossless() {
 }
 
 #[test]
+fn conversion_ignores_reviewed_preference_schema() {
+    let fixture = FixtureDirectory::new();
+    fixture.write_exemptions("", "");
+    fixture.write_records(&[source_record("fixture:valid", "print ok")]);
+    fs::write(
+        fixture.path.join("reviewed-preference-v1.jsonl"),
+        "{\"schema_version\":1,\"pair_id\":\"preference:fixture\",\"chosen\":{},\"rejected\":{}}\n",
+    )
+    .unwrap();
+
+    let conversion = convert_curated_corpus(&fixture.path).unwrap();
+    assert_eq!(conversion.manifest.total_records, 1);
+    assert_eq!(conversion.manifest.input_files, ["fixture.jsonl"]);
+}
+
+#[test]
 fn conversion_rejects_unexplained_and_stale_exemptions() {
     let fixture = FixtureDirectory::new();
     fixture.write_exemptions("", "");

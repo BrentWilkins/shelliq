@@ -177,12 +177,25 @@ fn corpus_files(directory: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
     let mut files = fs::read_dir(directory)?
         .map(|entry| entry.map(|value| value.path()))
         .collect::<Result<Vec<_>, _>>()?;
-    files.retain(|path| path.extension().is_some_and(|extension| extension == "jsonl"));
+    files.retain(|path| is_supervised_corpus_file(path));
     files.sort();
     if files.is_empty() {
         return Err(invalid(format!("{} contains no JSONL files", directory.display())).into());
     }
     Ok(files)
+}
+
+/// Whether a checked-in JSONL file uses the supervised
+/// `{record_id, instruction, response, ...}` corpus schema.
+///
+/// Reviewed preference pairs deliberately live beside the supervised corpus,
+/// but use the distinct `{pair_id, chosen, rejected, ...}` schema.
+pub fn is_supervised_corpus_file(path: &Path) -> bool {
+    path.extension().is_some_and(|extension| extension == "jsonl")
+        && !path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.starts_with("reviewed-preference-"))
 }
 
 fn read_exemptions(directory: &Path, name: &str) -> Result<BTreeSet<String>, Box<dyn Error>> {

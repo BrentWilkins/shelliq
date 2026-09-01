@@ -10,6 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from shelliq_training.corpus import supervised_corpus_paths  # noqa: E402
 from shelliq_training.curated_development import (  # noqa: E402
     audit_curated_development,
     load_manifest,
@@ -46,9 +47,7 @@ def _load_paths(paths: list[Path]) -> list[SFTRecord]:
 
 def main() -> None:
     args = parse_args()
-    corpus_paths = [
-        path for path in sorted((TRAINING_ROOT / 'corpus').glob('*.jsonl')) if not path.name.startswith('reviewed-preference-')
-    ]
+    corpus_paths = [*supervised_corpus_paths(TRAINING_ROOT / 'corpus')]
     holdout_paths = [
         TRAINING_ROOT / 'evaluation' / 'pipeline-compatibility-v1.jsonl',
         TRAINING_ROOT / 'evaluation' / 'semantic-retention-v1.jsonl',

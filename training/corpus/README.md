@@ -6,6 +6,12 @@ hand.
 
 The corpus currently contains 786 rows across 17 command-family files.
 
+Files named `reviewed-preference-*.jsonl` share this reviewable directory but
+form a separate, strict preference schema: `pair_id`, `chosen`, and `rejected`
+replace the supervised corpus's `record_id` and `response`. Supervised corpus
+loaders and syntax ratchets must exclude those files; preference consumers use
+`shelliq_training.preference_data.load_preference_jsonl` explicitly.
+
 `targeted-finishing.jsonl` and `targeted-finishing-v2.jsonl` form a standalone 100-row finishing family.
 Their commands are deliberately disjoint
 from the 35-row release benchmark; `scripts/build_targeted_semantic_dataset.py` enforces that boundary and

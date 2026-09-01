@@ -10,6 +10,11 @@ from pathlib import Path
 from shelliq_training.data import Corpus, DatasetFormatError, SFTRecord, load_jsonl
 
 
+def supervised_corpus_paths(directory: str | Path) -> tuple[Path, ...]:
+    """Return only JSONL files using the supervised record/response schema."""
+    return tuple(path for path in sorted(Path(directory).glob('*.jsonl')) if not path.name.startswith('reviewed-preference-'))
+
+
 @dataclass(frozen=True, slots=True)
 class CorpusInputSummary:
     """Auditable facts about one input file."""
@@ -58,9 +63,7 @@ def merge_distributable_corpus(
     """Load TLDR then curated families, rejecting IDs repeated across files."""
     tldr_file = Path(tldr_path)
     curated_directory = Path(curated_directory)
-    curated_files = [
-        path for path in sorted(curated_directory.glob('*.jsonl')) if not path.name.startswith('reviewed-preference-')
-    ]
+    curated_files = supervised_corpus_paths(curated_directory)
     if not curated_files:
         raise DatasetFormatError(f'{curated_directory}: no curated JSONL files found')
 

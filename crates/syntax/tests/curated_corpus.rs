@@ -22,7 +22,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
-use shelliq_syntax::{SyntaxDocumentV1, semantic::SemanticDocumentV2};
+use shelliq_syntax::{SyntaxDocumentV1, corpus::is_supervised_corpus_file, semantic::SemanticDocumentV2};
 
 #[derive(Deserialize)]
 struct CuratedRecord {
@@ -49,7 +49,7 @@ fn read_records(directory: &Path) -> Vec<CuratedRecord> {
     let mut files: Vec<PathBuf> = fs::read_dir(directory)
         .unwrap_or_else(|error| panic!("{}: {error}", directory.display()))
         .map(|entry| entry.expect("readable directory entry").path())
-        .filter(|path| path.extension().is_some_and(|extension| extension == "jsonl"))
+        .filter(|path| is_supervised_corpus_file(path))
         .collect();
     files.sort();
     assert!(!files.is_empty(), "curated corpus must contain at least one JSONL file");

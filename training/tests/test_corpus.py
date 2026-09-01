@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from shelliq_training.corpus import supervised_corpus_paths
 from shelliq_training.data import Corpus, Platform, load_jsonl
 from shelliq_training.sources import shell_command_name
 
@@ -22,7 +23,7 @@ PORTABLE_SHELLS = (
 
 
 def corpus_files():
-    files = [path for path in sorted(CORPUS_DIRECTORY.glob('*.jsonl')) if not path.name.startswith('reviewed-preference-')]
+    files = list(supervised_corpus_paths(CORPUS_DIRECTORY))
     assert files, 'curated corpus must contain at least one JSONL file'
     return files
 

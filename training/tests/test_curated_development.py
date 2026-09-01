@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from shelliq_training.corpus import supervised_corpus_paths
 from shelliq_training.curated_development import (
     ChallengeAnnotation,
     CuratedDevelopmentManifest,
@@ -152,9 +153,7 @@ def test_checked_in_frozen_suite_is_disjoint_and_closed() -> None:
     suite_path = evaluation_root / 'curated-development-v1.jsonl'
     manifest_path = evaluation_root / 'curated-development-v1.manifest.json'
     grounding_path = evaluation_root / 'curated-development-grounding-v1.json'
-    corpus_paths = [
-        path for path in sorted((TRAINING_ROOT / 'corpus').glob('*.jsonl')) if not path.name.startswith('reviewed-preference-')
-    ]
+    corpus_paths = [*supervised_corpus_paths(TRAINING_ROOT / 'corpus')]
     holdout_paths = [
         evaluation_root / 'pipeline-compatibility-v1.jsonl',
         evaluation_root / 'semantic-retention-v1.jsonl',

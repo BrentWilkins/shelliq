@@ -1,6 +1,7 @@
 from collections import Counter
 from pathlib import Path
 
+from shelliq_training.corpus import supervised_corpus_paths
 from shelliq_training.data import Corpus, load_jsonl
 from shelliq_training.semantic_evaluation import load_grounding_audit
 
@@ -11,7 +12,7 @@ GROUNDING_PATH = TRAINING_ROOT / 'evaluation' / 'semantic-shadow-release-groundi
 
 
 def _all_training_records():
-    return [record for path in sorted(CORPUS_ROOT.glob('*.jsonl')) for record in load_jsonl(path, corpus=Corpus.DISTRIBUTABLE)]
+    return [record for path in supervised_corpus_paths(CORPUS_ROOT) for record in load_jsonl(path, corpus=Corpus.DISTRIBUTABLE)]
 
 
 def test_shadow_release_is_balanced_closed_and_training_disjoint():
