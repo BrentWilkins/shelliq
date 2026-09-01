@@ -182,6 +182,12 @@ after an upgrade is what keeps it honest.
 
 ## Experimental model alpha
 
+The current 0.5B GGUF is a development baseline, not a release candidate. It
+failed the frozen P1B production-path gate after unsafe and unsupported requests
+crossed the ready boundary; see
+[`p1b-runtime-v1-results.md`](training/experiments/p1b-runtime-v1-results.md).
+The model-free CLI release is unaffected.
+
 An opt-in `cargo build --release --features model` build adds
 `shelliq suggest`. It can query an OpenAI-compatible model server bound to numeric
 loopback, deserialize compact SemanticDocumentV2 JSON, validate its Rust

@@ -1,5 +1,10 @@
 # Experimental two-pass alpha
 
+> **Model release status:** rejected by the preregistered P1B production gate.
+> The model-free CLI alpha remains valid, but the 0.5B GGUF must not be shipped
+> as an AI release. See
+> [`p1b-runtime-v1-results.md`](../training/experiments/p1b-runtime-v1-results.md).
+
 The context-free alpha is a Rust client plus a separately served local model. It never
 executes a suggestion. Automatic mode searches the local documentation index, offers the
 model at most six installed commands, retrieves at most sixteen cited flags for the selected
