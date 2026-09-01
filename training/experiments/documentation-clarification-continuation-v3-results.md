@@ -5,18 +5,18 @@ Status: accepted.
 The preregistered exact-indexed single-dash inline-argument change passed both
 fresh command-disjoint partitions:
 
-| Metric | Development | Sealed test |
-| --- | ---: | ---: |
-| Records | 16 | 48 |
-| Safe initial abstentions | 16/16 | 48/48 |
-| Source-aligned questions | 16/16 | 48/48 |
-| Stable intermediate abstentions | 16/16 | 48/48 |
-| Invalid continuations failed closed | 16/16 | 48/48 |
-| Exact completed flows | 16/16 | 48/48 |
-| Ready precision | 100% | 100% |
-| Semantic and local validity | 100% | 100% |
-| Mean latency | 16.19 ms | 14.75 ms |
-| Maximum latency | 27.56 ms | 18.21 ms |
+| Metric                              | Development | Sealed test |
+| ----------------------------------- | ----------: | ----------: |
+| Records                             |          16 |          48 |
+| Safe initial abstentions            |       16/16 |       48/48 |
+| Source-aligned questions            |       16/16 |       48/48 |
+| Stable intermediate abstentions     |       16/16 |       48/48 |
+| Invalid continuations failed closed |       16/16 |       48/48 |
+| Exact completed flows               |       16/16 |       48/48 |
+| Ready precision                     |        100% |        100% |
+| Semantic and local validity         |        100% |        100% |
+| Mean latency                        |    16.19 ms |    14.75 ms |
+| Maximum latency                     |    27.56 ms |    18.21 ms |
 
 The sealed partition was opened once after the runtime, harness, dataset, and
 hashes were frozen. Its completion rate was 100%, above the 95% gate.
