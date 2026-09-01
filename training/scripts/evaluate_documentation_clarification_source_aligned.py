@@ -31,6 +31,7 @@ from shelliq_training.documentation_templates import (
 
 EXPERIMENTS = {
     'documentation-clarification-continuation-v1',
+    'documentation-clarification-continuation-v2',
     'documentation-clarification-source-aligned-v1',
 }
 
@@ -63,10 +64,14 @@ def main() -> None:
 
     templates = documentation_templates(load_semantic_jsonl(args.documentation_index))
     by_intent: dict[tuple[str, str], list[object]] = {}
+    options_by_command: dict[str, set[str]] = {}
     for template in templates:
         by_intent.setdefault((template.command, _normalize(template.instruction)), []).append(template)
+        words = _simple_words(template.document)
+        if words is not None:
+            options_by_command.setdefault(template.command, set()).update(word for word in words[1:] if word.startswith('-'))
 
-    outcomes = [_evaluate(args.shelliq.resolve(), row, by_intent) for row in rows]
+    outcomes = [_evaluate(args.shelliq.resolve(), row, by_intent, options_by_command) for row in rows]
     emitted = [item for item in outcomes if item['answered_emitted']]
     latencies = sorted(float(item['answered_latency_ms']) for item in outcomes)
     measured = latencies[1:] if len(latencies) > 1 else latencies
@@ -119,6 +124,7 @@ def _evaluate(
     shelliq: Path,
     row: dict[str, object],
     by_intent: dict[tuple[str, str], list[object]],
+    options_by_command: dict[str, set[str]],
 ) -> dict[str, object]:
     with tempfile.TemporaryDirectory(prefix='shelliq-source-aligned-') as temp_value:
         temp = Path(temp_value)
@@ -126,7 +132,7 @@ def _evaluate(
         bin_dir.mkdir()
         command = str(row['command'])
         executable = bin_dir / command
-        options = [str(value) for value in row['documented_options']]
+        options = sorted(options_by_command.get(command, set()))
         help_lines = ['Usage: ' + command + ' [OPTIONS]', '', 'Options:']
         help_lines.extend(f'  {option}  documented option' for option in options)
         help_lines.append('  -h, --help  Print help')
@@ -181,7 +187,7 @@ def _evaluate(
             )
             is not None
         )
-        source_aligned = source_well_formed and len(initial_templates) == 1 and _recipe_has_operand(initial_templates[0], label)
+        source_aligned = source_well_formed and any(_recipe_has_operand(template, label) for template in initial_templates)
 
         return _evaluate_continuation(
             shelliq,
@@ -289,7 +295,7 @@ def _evaluate_continuation(
         question = clarification.get('question')
         matched = _reported_templates(documentation, by_intent)
         commandless = current_result.returncode != 0 and 'command' not in current_envelope and 'semantic' not in current_envelope
-        aligned = len(matched) == 1 and _recipe_has_operand(matched[0], label)
+        aligned = any(_recipe_has_operand(template, label) for template in matched)
         state = (source, label)
         step_safe = (
             commandless
