@@ -23,6 +23,13 @@ shelliq() {
     printf '%s\n' 'verified fixture explanation'
     return 0
   fi
+  if [[ ${1-} == flags ]]; then
+    if [[ ${2-} == grep && ${3-} == --raw ]]; then
+      printf '%s\n' -r --recursive --regexp
+      return 0
+    fi
+    return 1
+  fi
 
   local call
   call=$(calls)
@@ -80,6 +87,37 @@ original_point=$READLINE_POINT
 _shelliq_bash_explain_widget
 assert_equal "$READLINE_LINE" 'grep -r needle .'
 assert_equal "$READLINE_POINT" "$original_point"
+
+COMP_WORDS=(grep --re)
+COMP_CWORD=1
+_shelliq_bash_complete
+assert_equal "${COMPREPLY[*]}" '--recursive --regexp'
+
+COMP_WORDS=(grep ordinary)
+COMP_CWORD=1
+if _shelliq_bash_complete; then
+  printf '%s\n' 'ordinary operands must fall through to Bash completion' >&2
+  exit 1
+fi
+assert_equal "${#COMPREPLY[@]}" 0
+
+fixture_default_completion() { :; }
+complete -D -F fixture_default_completion
+_shelliq_bash_register_completion
+existing_default=$(complete -p -D)
+[[ $existing_default == *fixture_default_completion* ]]
+complete -r -D
+
+fixture_native_completion() { :; }
+complete -F fixture_native_completion git
+_shelliq_bash_register_completion
+registered_default=$(complete -p -D)
+registered_native=$(complete -p git)
+[[ $registered_default == *'_shelliq_bash_complete -D'* ]]
+[[ $registered_default == *'-o bashdefault'* && $registered_default == *'-o default'* ]]
+[[ $registered_native == *fixture_native_completion* ]]
+complete -r -D
+complete -r git
 
 reset_fixture 'find regular files'
 TEST_SCENARIO=ready

@@ -110,6 +110,11 @@ buffer-preservation behavior through Readline; completed commands remain
 editable and require an explicit Enter. `Ctrl-X Ctrl-H` explains the current
 buffer against the local index without changing it.
 
+Bash Tab completion offers indexed flags only for commands without a native
+completion specification and only while completing a `-`-prefixed word. If the
+user already has a default completion policy, ShellIQ leaves it untouched;
+otherwise ordinary Bash and filename completion remain enabled as fallbacks.
+
 `suggest` defaults to the versioned `context-authoritative-v1` prompt contract.
 Use `--prompt-contract legacy-user-v1` only with an older adapter trained on
 that exact prompt shape; the prompt contract must match the served model.

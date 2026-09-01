@@ -171,7 +171,7 @@ crates/shelliq/   [done] clap CLI: explain, search, flags, index build/stats
 crates/harvest/   [done] man parser   · [plan] --help crawler
 crates/index/     [done] schema, FTS5 · [plan] fuzzy ranking, RRF, refresh, target identity
 crates/verify/    [done] bundle splitter, flag checker · [plan] shell-syntax abstention
-shell/            [built] shelliq.zsh (explain, completion, suggestion widgets) · [built] shelliq.bash (suggestion widget)
+shell/            [built] shelliq.zsh (explain, completion, suggestion widgets) · [built] shelliq.bash (explain, completion, suggestion widgets)
 training/         [built] nnx Qwen, HF loader, LoRA step, source builders, privacy/canary gates, held-out evaluation, Orbax resume, PEFT/HF/GGUF export · [plan] real fine-tune and benchmark
 ```
 
@@ -851,7 +851,10 @@ Designed not to fight oh-my-zsh, zsh-autosuggestions, or zsh-syntax-highlighting
   Candidate logic (`shelliq flags <command> --raw`, a plain one-spelling-per-line mode added
   for this, since the decorated, truncated, colour-coded output people read is not something
   a completer should have to parse) resolves correctly for a `--help`-crawled command like
-  `ollama`. **[verified]** interactive keystroke-level proof, done by hand in a real
+  `ollama`. Bash uses its `-D` default specification only when no command-specific
+  completion exists, preserves any pre-existing user default, and enables
+  `bashdefault` plus `default` fallback behavior whenever ShellIQ declines.
+  **[verified]** interactive keystroke-level proof, done by hand in a real
   terminal: `ollama --help<TAB>` offers real flag candidates while `git chec<TAB>` still
   completes to `checkout` via `_git`, untouched. Inherits the existing `menu select` dropdown
   UI.

@@ -34,6 +34,29 @@ _shelliq_bash_decode_hex() {
   REPLY=$decoded
 }
 
+_shelliq_bash_complete() {
+  COMPREPLY=()
+  local command_name=${COMP_WORDS[0]-}
+  local current=${COMP_WORDS[COMP_CWORD]-}
+  local flags
+
+  [[ -n $command_name && $current == -* ]] || return 1
+  if ! flags=$(shelliq flags "$command_name" --raw 2>/dev/null); then
+    return 1
+  fi
+  [[ -n $flags ]] || return 1
+
+  mapfile -t COMPREPLY < <(compgen -W "$flags" -- "$current")
+  (( ${#COMPREPLY[@]} > 0 ))
+}
+
+_shelliq_bash_register_completion() {
+  # Bash invokes -D only when the command has no command-specific completion.
+  # Preserve a user's existing default policy rather than replacing it.
+  complete -p -D &>/dev/null && return
+  complete -D -o bashdefault -o default -F _shelliq_bash_complete
+}
+
 # C-x C-g turns the current English Readline buffer into an editable suggestion.
 # Missing values stay pinned to the initially reported documentation source.
 # Cancellation and invalid responses leave the original request untouched.
@@ -136,4 +159,5 @@ _shelliq_bash_suggest_widget() {
 if [[ $- == *i* ]]; then
   bind -x '"\C-x\C-h":_shelliq_bash_explain_widget'
   bind -x '"\C-x\C-g":_shelliq_bash_suggest_widget'
+  _shelliq_bash_register_completion
 fi
