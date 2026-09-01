@@ -346,8 +346,14 @@ pub fn render(name: &str) -> Result<String> {
 pub fn render_section(name: &str, section: Option<&str>) -> Result<String> {
     let mut cmd = Command::new("man");
     cmd.env("MANWIDTH", MAN_WIDTH)
-        .env("LC_ALL", "C.UTF-8")
-        .args(["--no-hyphenation", "--no-justification", "--pager", "cat"]);
+        .env("LC_ALL", "C")
+        .env("MANPAGER", "cat")
+        .env("PAGER", "cat");
+    // GNU man-db provides deterministic layout controls that Apple's BSD man
+    // does not recognize. macOS still emits parseable output through `cat`,
+    // and `strip_overstrike` below removes its terminal formatting.
+    #[cfg(target_os = "linux")]
+    cmd.args(["--no-hyphenation", "--no-justification", "--pager", "cat"]);
     if let Some(s) = section {
         cmd.arg(s);
     }

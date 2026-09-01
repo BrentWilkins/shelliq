@@ -13,16 +13,17 @@ use std::collections::BTreeSet;
 use std::process::Command;
 
 fn have_page(name: &str) -> bool {
-    Command::new("man")
-        .args(["-w", name])
-        .output()
-        .map(|o| o.status.success())
+    shelliq_harvest::man_paths(name)
+        .map(|paths| !paths.is_empty())
         .unwrap_or(false)
 }
 
 /// Long flags as the tool's own `--help` reports them.
 fn help_flags(cmd: &str, args: &[&str]) -> Option<BTreeSet<String>> {
     let out = Command::new(cmd).args(args).output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
     let text = format!(
         "{}{}",
         String::from_utf8_lossy(&out.stdout),
