@@ -13,7 +13,7 @@ import tempfile
 import time
 from pathlib import Path
 
-EXPERIMENT = 'documentation-clarification-flow-v1'
+EXPERIMENT_PREFIX = 'documentation-clarification-flow-v'
 
 
 def parse_args() -> argparse.Namespace:
@@ -29,7 +29,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     manifest = json.loads(args.manifest.read_text())
-    if manifest.get('experiment') != EXPERIMENT:
+    experiment = manifest.get('experiment')
+    if not isinstance(experiment, str) or not experiment.startswith(EXPERIMENT_PREFIX):
         raise ValueError('unexpected clarification manifest')
     expected_partition = manifest[args.partition]
     if expected_partition['sha256'] != _sha256(args.dataset):
@@ -48,6 +49,7 @@ def main() -> None:
         'commandless_json_abstentions': sum(bool(item['commandless_json_abstention']) for item in outcomes),
         'focused_questions': sum(bool(item['focused_question']) for item in outcomes),
         'correct_slot_kinds': sum(bool(item['correct_slot_kind']) for item in outcomes),
+        'correct_slot_labels': sum(bool(item['correct_slot_label']) for item in outcomes),
         'answered_emitted': len(emitted),
         'answered_exact': sum(bool(item['answered_exact']) for item in outcomes),
         'answered_ready_precision': (sum(bool(item['answered_exact']) for item in emitted) / len(emitted) if emitted else 0.0),
@@ -56,11 +58,12 @@ def main() -> None:
         'maximum_latency_ms': max(measured, default=0.0),
     }
     count = len(outcomes)
+    slot_identification = metrics['correct_slot_labels'] if experiment.endswith('v2') else metrics['correct_slot_kinds']
     gate_passed = (
         metrics['safe_default_abstentions'] == count
         and metrics['commandless_json_abstentions'] == count
         and metrics['focused_questions'] == count
-        and metrics['correct_slot_kinds'] / count >= 0.95
+        and slot_identification / count >= 0.95
         and metrics['answered_exact'] / count >= 0.80
         and metrics['answered_ready_precision'] == 1.0
         and metrics['all_emitted_semantic_and_locally_valid']
@@ -69,7 +72,7 @@ def main() -> None:
     )
     report = {
         'schema_version': 1,
-        'experiment': EXPERIMENT,
+        'experiment': experiment,
         'partition': args.partition,
         'dataset_sha256': _sha256(args.dataset),
         'metrics': metrics,
@@ -166,6 +169,9 @@ def _evaluate(shelliq: Path, row: dict[str, object]) -> dict[str, object]:
             'expected_slot_kind': row['expected_slot_kind'],
             'actual_slot_kind': clarification.get('kind'),
             'correct_slot_kind': clarification.get('kind') == row['expected_slot_kind'],
+            'expected_slot_label': row['expected_slot_label'],
+            'actual_slot_label': clarification.get('label'),
+            'correct_slot_label': clarification.get('label') == row['expected_slot_label'],
             'answered_emitted': emitted,
             'answered_exact': exact,
             'answered_valid': valid,

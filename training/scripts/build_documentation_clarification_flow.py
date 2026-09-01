@@ -25,7 +25,7 @@ from shelliq_training.documentation_templates import (
     unresolved_placeholders,
 )
 
-EXPERIMENT = 'documentation-clarification-flow-v1'
+DEFAULT_EXPERIMENT = 'documentation-clarification-flow-v1'
 SAFE_COMMAND = re.compile(r'^[A-Za-z0-9][A-Za-z0-9+._-]*$')
 
 
@@ -36,6 +36,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--documentation-index', type=Path, required=True)
     parser.add_argument('--prior-benchmark', type=Path, required=True)
     parser.add_argument('--exclude-dataset', type=Path, action='append', default=[])
+    parser.add_argument('--experiment', default=DEFAULT_EXPERIMENT)
     parser.add_argument('--development-output', type=Path, required=True)
     parser.add_argument('--test-output', type=Path, required=True)
     parser.add_argument('--manifest', type=Path, required=True)
@@ -91,7 +92,7 @@ def main() -> None:
             continue
         selected.append(
             {
-                'record_id': f'{EXPERIMENT}:{template.record_id}',
+                'record_id': f'{args.experiment}:{template.record_id}',
                 'template_record_id': template.record_id,
                 'command': template.command,
                 'platform': template.platform.value,
@@ -116,7 +117,7 @@ def main() -> None:
     _write_jsonl(args.test_output, test)
     manifest = {
         'schema_version': 1,
-        'experiment': EXPERIMENT,
+        'experiment': args.experiment,
         'command_disjoint': True,
         'selection': (
             'stable record-id order; Linux literal-free simple single-command TLDR '
