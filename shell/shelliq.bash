@@ -5,6 +5,21 @@ _shelliq_bash_widget_message() {
   printf '\n%s\n' "$1"
 }
 
+# C-x C-h explains the current command against the local index. It never writes
+# READLINE_LINE or READLINE_POINT.
+_shelliq_bash_explain_widget() {
+  local request=${READLINE_LINE-} out
+  if [[ -z $request ]]; then
+    _shelliq_bash_widget_message 'shelliq: buffer is empty'
+    return
+  fi
+
+  if out=$(shelliq explain -- "$request" 2>&1); then
+    :
+  fi
+  _shelliq_bash_widget_message "$out"
+}
+
 _shelliq_bash_decode_hex() {
   local encoded=$1 decoded='' pair byte
   (( ${#encoded} % 2 == 0 )) || return 1
@@ -119,5 +134,6 @@ _shelliq_bash_suggest_widget() {
 }
 
 if [[ $- == *i* ]]; then
+  bind -x '"\C-x\C-h":_shelliq_bash_explain_widget'
   bind -x '"\C-x\C-g":_shelliq_bash_suggest_widget'
 fi

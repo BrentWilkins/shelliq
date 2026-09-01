@@ -43,6 +43,13 @@ repos:
         files: '(\.rs|Cargo\.toml|Cargo\.lock)$'
         pass_filenames: false
 
+      - id: shell-integration
+        name: shell integration tests
+        entry: bash shell/tests/run.bash
+        language: system
+        files: '^shell/.*\.(bash|zsh)$'
+        pass_filenames: false
+
       # ruff comes from the root uv lockfile, so the hook and the CLI are one version.
       - id: ruff-check
         name: ruff check

@@ -825,9 +825,9 @@ selected IDs, rank/alpha, seed, schedule, peak memory, and all gate reports.
 
 Designed not to fight oh-my-zsh, zsh-autosuggestions, or zsh-syntax-highlighting:
 
-- **[built]** `C-x C-h` — explain the current buffer against the local index, printed below
-  the prompt. Never touches `$BUFFER`, so there is nothing to undo (`shell/shelliq.zsh`).
-  Index-only, no model.
+- **[built]** `C-x C-h` — explain the current buffer against the local index in
+  Zsh or Bash, printed below the prompt. Never touches `$BUFFER` or
+  `$READLINE_LINE`, so there is nothing to undo. Index-only, no model.
 - **[built]** `C-x C-g` — ZLE and Bash Readline suggestion widgets replace the
   English buffer only after a versioned `ready` response. Documentation
   clarifications remain pinned to one source; cancellation, malformed replies,

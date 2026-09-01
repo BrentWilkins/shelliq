@@ -19,6 +19,11 @@ calls() {
 }
 
 shelliq() {
+  if [[ ${1-} == explain ]]; then
+    printf '%s\n' 'verified fixture explanation'
+    return 0
+  fi
+
   local call
   call=$(calls)
   (( call++ )) || true
@@ -68,6 +73,13 @@ assert_equal() {
 
 _shelliq_bash_decode_hex 636166c3a9
 assert_equal "$REPLY" 'café'
+
+reset_fixture 'grep -r needle .'
+READLINE_POINT=4
+original_point=$READLINE_POINT
+_shelliq_bash_explain_widget
+assert_equal "$READLINE_LINE" 'grep -r needle .'
+assert_equal "$READLINE_POINT" "$original_point"
 
 reset_fixture 'find regular files'
 TEST_SCENARIO=ready
