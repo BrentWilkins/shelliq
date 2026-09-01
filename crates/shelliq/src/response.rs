@@ -20,6 +20,8 @@ enum SuggestResponse<'a> {
         v: u8,
         #[serde(skip_serializing_if = "Option::is_none")]
         documentation: Option<DocumentationResponse<'a>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        continuation: Option<ContinuationResponse<'a>>,
         clarification: ClarificationResponse<'a>,
     },
     NoDocumentation {
@@ -40,6 +42,12 @@ struct DocumentationResponse<'a> {
     command: &'a str,
     source: &'a str,
     intent: &'a str,
+}
+
+#[derive(Debug, Serialize)]
+struct ContinuationResponse<'a> {
+    v: u8,
+    source: &'a str,
 }
 
 pub fn ready(suggestion: &Suggestion, source: &str, intent: Option<&str>) -> Result<String> {
@@ -69,6 +77,10 @@ pub fn needs_input(
             .zip(source)
             .zip(intent)
             .map(|((command, source), intent)| DocumentationResponse { command, source, intent }),
+        continuation: source.map(|source| ContinuationResponse {
+            v: RESPONSE_VERSION,
+            source,
+        }),
         clarification: ClarificationResponse {
             kind: clarification.kind,
             label: &clarification.label,
@@ -111,6 +123,8 @@ mod tests {
         assert_eq!(value["status"], "needs_input");
         assert_eq!(value["documentation"]["command"], "demo");
         assert_eq!(value["documentation"]["source"], "tldr:linux:demo:1");
+        assert_eq!(value["continuation"]["v"], 1);
+        assert_eq!(value["continuation"]["source"], "tldr:linux:demo:1");
         assert!(value.get("command").is_none());
         assert!(value.get("semantic").is_none());
     }

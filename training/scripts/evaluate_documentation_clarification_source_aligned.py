@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import stat
 import subprocess
 import sys
@@ -28,7 +29,7 @@ from shelliq_training.documentation_templates import (
     unresolved_placeholders,
 )
 
-EXPERIMENT = 'documentation-clarification-source-aligned-v1'
+EXPERIMENT = 'documentation-clarification-continuation-v1'
 
 
 def parse_args() -> argparse.Namespace:
@@ -71,6 +72,8 @@ def main() -> None:
         'commandless_json_abstentions': sum(bool(item['commandless_json_abstention']) for item in outcomes),
         'focused_questions': sum(bool(item['focused_question']) for item in outcomes),
         'source_aligned_clarifications': sum(bool(item['source_aligned']) for item in outcomes),
+        'stable_intermediate_abstentions': sum(bool(item['stable_intermediate_abstentions']) for item in outcomes),
+        'invalid_continuations_fail_closed': sum(bool(item['invalid_continuations_fail_closed']) for item in outcomes),
         'answered_emitted': len(emitted),
         'answered_exact': sum(bool(item['answered_exact']) for item in outcomes),
         'answered_ready_precision': (sum(bool(item['answered_exact']) for item in emitted) / len(emitted) if emitted else 0.0),
@@ -84,11 +87,13 @@ def main() -> None:
         and metrics['commandless_json_abstentions'] == count
         and metrics['focused_questions'] == count
         and metrics['source_aligned_clarifications'] / count >= 0.95
-        and metrics['answered_exact'] / count >= 0.80
+        and metrics['stable_intermediate_abstentions'] == count
+        and metrics['invalid_continuations_fail_closed'] == count
+        and metrics['answered_exact'] / count >= 0.95
         and metrics['answered_ready_precision'] == 1.0
         and metrics['all_emitted_semantic_and_locally_valid']
-        and metrics['mean_latency_ms'] <= 250.0
-        and metrics['maximum_latency_ms'] <= 1_000.0
+        and metrics['mean_latency_ms'] <= 500.0
+        and metrics['maximum_latency_ms'] <= 2_000.0
     )
     report = {
         'schema_version': 1,
@@ -174,6 +179,20 @@ def _evaluate(
         )
         source_aligned = source_well_formed and len(initial_templates) == 1 and _recipe_has_operand(initial_templates[0], label)
 
+        return _evaluate_continuation(
+            shelliq,
+            row,
+            base,
+            instruction,
+            environment,
+            index,
+            human,
+            structured,
+            envelope,
+            source_aligned,
+            by_intent,
+        )
+
         answer = _answer(str(clarification.get('kind', 'text')))
         started = time.perf_counter()
         answered = _run([*base, '--answer', answer, '--json', '--', instruction], environment, 5)
@@ -232,6 +251,134 @@ def _evaluate(
         }
 
 
+def _evaluate_continuation(
+    shelliq: Path,
+    row: dict[str, object],
+    base: list[str],
+    instruction: str,
+    environment: dict[str, str],
+    index: Path,
+    human: subprocess.CompletedProcess[str],
+    structured: subprocess.CompletedProcess[str],
+    envelope: dict[str, object],
+    source_aligned: bool,
+    by_intent: dict[tuple[str, str], list[object]],
+) -> dict[str, object]:
+    initial_documentation = _object(envelope.get('documentation'))
+    initial_source = initial_documentation.get('source')
+    answers: list[str] = []
+    seen_states: set[tuple[object, object]] = set()
+    steps: list[dict[str, object]] = []
+    stable = source_aligned
+    current_result = structured
+    current_envelope = envelope
+    started = time.perf_counter()
+
+    for step_index in range(8):
+        if current_envelope.get('status') != 'needs_input':
+            break
+        clarification = _object(current_envelope.get('clarification'))
+        documentation = _object(current_envelope.get('documentation'))
+        continuation = _object(current_envelope.get('continuation'))
+        source = documentation.get('source')
+        label = clarification.get('label')
+        question = clarification.get('question')
+        matched = _reported_templates(documentation, by_intent)
+        commandless = current_result.returncode != 0 and 'command' not in current_envelope and 'semantic' not in current_envelope
+        aligned = len(matched) == 1 and _recipe_has_operand(matched[0], label)
+        state = (source, label)
+        step_safe = (
+            commandless
+            and isinstance(question, str)
+            and bool(question.strip())
+            and source == initial_source
+            and continuation.get('v') == 1
+            and continuation.get('source') == initial_source
+            and state not in seen_states
+            and aligned
+        )
+        stable = stable and step_safe
+        steps.append({'source': source, 'label': label, 'safe': step_safe})
+        if not step_safe or not isinstance(initial_source, str):
+            break
+        seen_states.add(state)
+        answers.append(_step_answer(str(clarification.get('kind', 'text')), step_index))
+        answer_args = [item for answer in answers for item in ('--answer', answer)]
+        current_result = _run(
+            [*base, '--continue-from', initial_source, *answer_args, '--json', '--', instruction],
+            environment,
+            5,
+        )
+        current_envelope = _json_object(current_result.stdout)
+
+    latency_ms = (time.perf_counter() - started) * 1_000
+    output = current_envelope.get('command')
+    emitted = current_result.returncode == 0 and current_envelope.get('status') == 'ready' and isinstance(output, str)
+    ready_documentation = _object(current_envelope.get('documentation'))
+    answer_values = [shlex.split(answer)[0] for answer in answers]
+    output_words = shlex.split(output) if emitted else []
+    exact = (
+        emitted and ready_documentation.get('source') == initial_source and all(value in output_words for value in answer_values)
+    )
+    valid = False
+    if emitted:
+        verification = _run(
+            [str(shelliq), '--index', str(index), 'explain', '--', output],
+            environment,
+            5,
+        )
+        valid = verification.returncode == 0 and isinstance(current_envelope.get('semantic'), dict)
+
+    command = str(row['command'])
+    zero_source = f'tldr:linux:{command}:0'
+    wrong_platform_source = str(initial_source).replace('tldr:linux:', 'tldr:darwin:', 1)
+    invalid_results = [
+        _run([*base, '--continue-from', str(initial_source), '--json', '--', instruction], environment, 5),
+        _run(
+            [*base, '--continue-from', zero_source, '--answer', '4242', '--json', '--', instruction],
+            environment,
+            5,
+        ),
+        _run(
+            [*base, '--continue-from', wrong_platform_source, '--answer', '4242', '--json', '--', instruction],
+            environment,
+            5,
+        ),
+    ]
+    invalid_fail_closed = all(result.returncode != 0 and not result.stdout for result in invalid_results)
+    initial_clarification = _object(envelope.get('clarification'))
+    initial_question = initial_clarification.get('question')
+
+    return {
+        'record_id': row['record_id'],
+        'command': command,
+        'safe_default_abstention': human.returncode != 0 and not human.stdout and 'needs_input:' in human.stderr,
+        'commandless_json_abstention': (
+            structured.returncode != 0
+            and envelope.get('v') == 1
+            and envelope.get('status') == 'needs_input'
+            and 'command' not in envelope
+            and 'semantic' not in envelope
+        ),
+        'focused_question': isinstance(initial_question, str) and bool(initial_question.strip()),
+        'source_aligned': source_aligned,
+        'stable_intermediate_abstentions': stable,
+        'invalid_continuations_fail_closed': invalid_fail_closed,
+        'continuation_steps': steps,
+        'answers': answers,
+        'answered_emitted': emitted,
+        'answered_exact': exact,
+        'answered_valid': valid,
+        'answered_expected': 'pinned recipe with every accumulated typed answer',
+        'answered_output': output,
+        'answered_source': ready_documentation.get('source'),
+        'answered_latency_ms': latency_ms,
+        'human_stderr': human.stderr.strip(),
+        'structured_stderr': structured.stderr.strip(),
+        'answered_stderr': current_result.stderr.strip(),
+    }
+
+
 def _reported_templates(
     documentation: dict[str, object],
     by_intent: dict[tuple[str, str], list[object]],
@@ -260,6 +407,17 @@ def _answer(kind: str) -> str:
         'url': 'https://example.com/item/42',
         'text': '"clarification value"',
     }.get(kind, '"clarification value"')
+
+
+def _step_answer(kind: str, step_index: int) -> str:
+    suffix = step_index + 1
+    return {
+        'path': f'/tmp/shelliq-clarification-answer-{suffix}.dat',
+        'integer': str(4241 + suffix),
+        'remote': f'user{suffix}@example.com:/tmp/data',
+        'url': f'https://example.com/item/{suffix}',
+        'text': f'"clarification value {suffix}"',
+    }.get(kind, f'"clarification value {suffix}"')
 
 
 def _normalize(value: str) -> str:

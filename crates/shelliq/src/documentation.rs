@@ -58,13 +58,13 @@ impl Compilation {
             });
         }
 
-        let kind = placeholder_kind(unresolved).unwrap_or(SlotKind::Text);
+        let kind = unresolved_slot_kind(unresolved);
         let noun = match kind {
             SlotKind::Path => "file or directory",
             SlotKind::Url => "URL",
             SlotKind::Remote => "remote host or path",
             SlotKind::Integer => "number",
-            SlotKind::Text => "value",
+            SlotKind::Text | SlotKind::GenericText => "value",
         };
         Some(Clarification {
             kind: kind.as_str(),
@@ -87,6 +87,7 @@ enum SlotKind {
     Remote,
     Integer,
     Text,
+    GenericText,
 }
 
 impl SlotKind {
@@ -96,7 +97,7 @@ impl SlotKind {
             Self::Url => "url",
             Self::Remote => "remote",
             Self::Integer => "integer",
-            Self::Text => "text",
+            Self::Text | Self::GenericText => "text",
         }
     }
 }
@@ -190,6 +191,53 @@ pub fn compile(index: &Index, commands: &[String], platform: &str, instruction: 
     }))
 }
 
+pub fn compile_source(index: &Index, platform: &str, instruction: &str, source: &str) -> Result<Compilation> {
+    let mut parts = source.split(':');
+    let scheme = parts.next();
+    let source_platform = parts.next();
+    let command = parts.next();
+    let ordinal = parts.next();
+    if scheme != Some("tldr") || source_platform != Some(platform) || parts.next().is_some() {
+        anyhow::bail!("invalid documentation continuation source");
+    }
+    let command = command
+        .filter(|value| !value.is_empty())
+        .context("continuation source omitted its command")?;
+    let ordinal = ordinal
+        .context("continuation source omitted its recipe ordinal")?
+        .parse::<usize>()
+        .context("continuation recipe ordinal is not an integer")?;
+    if ordinal == 0 || !index.command_exists(command)? {
+        anyhow::bail!("documentation continuation source is unavailable");
+    }
+    let examples = shelliq_harvest::tldr::harvest_tldr_family(command, platform)?;
+    let example = examples
+        .get(ordinal - 1)
+        .context("documentation continuation recipe is unavailable")?;
+    let mut recipe =
+        compile_recipe(index, command, instruction, example)?.context("documentation continuation recipe is unsupported")?;
+    recipe.unresolved.extend(
+        recipe
+            .unused_literals
+            .into_iter()
+            .map(|value| format!("unused request value {value}")),
+    );
+    let (status, suggestion) = if recipe.unresolved.is_empty() {
+        (CompilationStatus::Ready, Some(lower_suggestion(&recipe.command)?))
+    } else {
+        (CompilationStatus::NeedsInput, None)
+    };
+    Ok(Compilation {
+        status,
+        suggestion,
+        command_name: Some(command.to_owned()),
+        source: Some(source.to_owned()),
+        intent: Some(example.description.clone()),
+        unresolved_slots: recipe.unresolved,
+        score: 0,
+    })
+}
+
 fn is_better(candidate: &Compilation, previous: Option<&Compilation>) -> bool {
     let Some(previous) = previous else {
         return true;
@@ -249,7 +297,9 @@ fn compile_recipe(index: &Index, command: &str, instruction: &str, example: &Par
             words.push(word);
             continue;
         }
-        if let Some(kind) = placeholder_kind(bare) {
+        if let Some(kind) =
+            placeholder_kind(bare).or_else(|| (from_placeholder && !bare.starts_with('-')).then(|| unresolved_slot_kind(bare)))
+        {
             let match_index = literals
                 .iter()
                 .enumerate()
@@ -510,10 +560,16 @@ fn placeholder_kind(value: &str) -> Option<SlotKind> {
     None
 }
 
+fn unresolved_slot_kind(value: &str) -> SlotKind {
+    placeholder_kind(value)
+        .or_else(|| request_literals(value).into_iter().next().map(|literal| literal.kind))
+        .unwrap_or(SlotKind::GenericText)
+}
+
 fn compatible(slot: SlotKind, literal: SlotKind) -> bool {
     slot == literal
         || (slot == SlotKind::Path && literal == SlotKind::Remote)
-        || (slot == SlotKind::Text && literal == SlotKind::Integer)
+        || (slot == SlotKind::GenericText && literal == SlotKind::Text)
 }
 
 fn strip_shell_quotes(value: &str) -> &str {
@@ -555,7 +611,10 @@ const STOPWORDS: &[&str] = &[
 
 #[cfg(test)]
 mod tests {
-    use super::{CompilationStatus, SlotKind, compile, normalize_phrase, placeholder_kind, request_literals, shell_word};
+    use super::{
+        CompilationStatus, SlotKind, compile, compile_source, normalize_phrase, placeholder_kind, request_literals, shell_word,
+        unresolved_slot_kind,
+    };
     use shelliq_harvest::{ParsedCommand, ParsedFlag};
     use shelliq_index::Index;
 
@@ -576,6 +635,8 @@ mod tests {
         assert_eq!(placeholder_kind("repository_url"), Some(SlotKind::Url));
         assert_eq!(placeholder_kind("port"), Some(SlotKind::Integer));
         assert_eq!(placeholder_kind("playbook"), None);
+        assert_eq!(unresolved_slot_kind("8000"), SlotKind::Integer);
+        assert_eq!(unresolved_slot_kind("console"), SlotKind::GenericText);
     }
 
     #[test]
@@ -629,8 +690,20 @@ mod tests {
             "Search exact string (disables regexes). Use \"needle\" and /tmp/input.dat.",
         )
         .unwrap();
+        let ready_source = ready.source.clone().unwrap();
         assert_eq!(ready.status, CompilationStatus::Ready);
         assert_eq!(ready.suggestion.unwrap().command, "grep -F needle /tmp/input.dat");
+
+        let pinned = compile_source(
+            &index,
+            "linux",
+            "Search exact string (disables regexes). Use \"needle\" and /tmp/input.dat.",
+            &ready_source,
+        )
+        .unwrap();
+        assert_eq!(pinned.status, CompilationStatus::Ready);
+        assert_eq!(pinned.suggestion.unwrap().command, "grep -F needle /tmp/input.dat");
+        assert!(compile_source(&index, "linux", "anything", "tldr:linux:grep:0").is_err());
 
         let incomplete = compile(&index, &["grep".into()], "linux", "Search exact string (disables regexes)").unwrap();
         assert_eq!(incomplete.status, CompilationStatus::NeedsInput);

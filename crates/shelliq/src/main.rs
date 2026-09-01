@@ -80,9 +80,12 @@ enum Command {
         /// Entire request deadline in milliseconds.
         #[arg(long, default_value_t = 5_000)]
         timeout_ms: u64,
-        /// Answer the focused question from a prior needs_input response.
+        /// Answer a focused question. Repeat for accumulated continuation answers.
         #[arg(long, value_name = "VALUE")]
-        answer: Option<String>,
+        answer: Vec<String>,
+        /// Pin answers to the documentation source from a needs_input continuation.
+        #[arg(long, value_name = "SOURCE")]
+        continue_from: Option<String>,
         /// Print a versioned response envelope for every outcome.
         #[arg(long)]
         json: bool,
@@ -147,6 +150,7 @@ fn main() -> Result<()> {
             prompt_contract,
             timeout_ms,
             answer,
+            continue_from,
             json,
         } => suggest_command(
             &path,
@@ -155,7 +159,8 @@ fn main() -> Result<()> {
             &instruction.join(" "),
             prompt_contract,
             timeout_ms,
-            answer.as_deref(),
+            &answer,
+            continue_from.as_deref(),
             json,
         ),
         Command::Source { citation } => source(&path, &citation),
@@ -171,7 +176,8 @@ fn suggest_command(
     instruction: &str,
     prompt_contract: model::PromptContract,
     timeout_ms: u64,
-    answer: Option<&str>,
+    answers: &[String],
+    continue_from: Option<&str>,
     json: bool,
 ) -> Result<()> {
     if timeout_ms == 0 {
@@ -181,23 +187,34 @@ fn suggest_command(
         "macos" => "darwin",
         other => other,
     };
-    let answered_instruction;
-    let effective_instruction = if let Some(answer) = answer {
+    if continue_from.is_some() && answers.is_empty() {
+        anyhow::bail!("--continue-from requires at least one --answer");
+    }
+    let mut answered_instruction = instruction.to_owned();
+    for answer in answers {
         let answer = answer.trim();
         if answer.is_empty() {
             anyhow::bail!("--answer must not be empty");
         }
-        answered_instruction = format!("{instruction}. Use {answer}.");
-        answered_instruction.as_str()
-    } else {
+        answered_instruction.push_str(". Use ");
+        answered_instruction.push_str(answer);
+        answered_instruction.push('.');
+    }
+    let effective_instruction = if answers.is_empty() {
         instruction
+    } else {
+        &answered_instruction
     };
     let index = Index::open(path)?;
-    let shortlist = index.search_commands(effective_instruction, 6)?;
+    let shortlist = if continue_from.is_some() {
+        Vec::new()
+    } else {
+        index.search_commands(effective_instruction, 6)?
+    };
     if std::env::var_os("SHELLIQ_DEBUG_RETRIEVAL").is_some() {
         eprintln!("retrieved command shortlist: {}", shortlist.join(", "));
     }
-    let model_result = if answer.is_some() {
+    let model_result = if !answers.is_empty() {
         Err(anyhow::anyhow!("clarification answers are recompiled from documentation"))
     } else {
         try_model_suggestion(
@@ -214,7 +231,11 @@ fn suggest_command(
     let (suggestion, origin, source, documentation_intent) = match model_result {
         Ok(suggestion) => (suggestion, SuggestionOrigin::Model, "model".to_owned(), None),
         Err(model_error) => {
-            let fallback = documentation::compile(&index, &shortlist, platform, effective_instruction)?;
+            let fallback = if let Some(source) = continue_from {
+                documentation::compile_source(&index, platform, effective_instruction, source)?
+            } else {
+                documentation::compile(&index, &shortlist, platform, effective_instruction)?
+            };
             match fallback.status {
                 documentation::CompilationStatus::Ready => {
                     let source = fallback.source.clone().unwrap_or_else(|| "unknown".into());
@@ -228,7 +249,7 @@ fn suggest_command(
                             "model suggestion failed ({model_error:#}); documentation fallback failed local command/flag validation"
                         );
                     }
-                    if answer.is_some() {
+                    if !answers.is_empty() {
                         eprintln!(
                             "documentation clarification compiled; source {}; selected command {}; command and option spellings locally verified",
                             source,
@@ -259,7 +280,9 @@ fn suggest_command(
                         );
                     } else {
                         eprintln!("needs_input: {}", clarification.question);
-                        eprintln!("Add the answer to your request or pass --answer VALUE, then try again.");
+                        eprintln!(
+                            "Add the answer to your request or pass --continue-from SOURCE --answer VALUE, then try again."
+                        );
                     }
                     anyhow::bail!("needs_input");
                 }
