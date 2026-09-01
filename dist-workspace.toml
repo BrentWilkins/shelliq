@@ -13,8 +13,8 @@ installers = ["shell"]
 targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu"]
 # Bundle the opt-in interactive integrations beside the binary.
 include = ["shell/shelliq.bash", "shell/shelliq.zsh"]
-# Path that installers should place binaries in
-install-path = "CARGO_HOME"
+# Rust-independent destination for prebuilt installer binaries.
+install-path = "~/.local/bin"
 # Where to host releases
 hosting = "github"
 # Pull requests validate the release graph without building every artifact.

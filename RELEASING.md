@@ -16,6 +16,10 @@ prerelease when its semantic version contains a prerelease suffix.
    dist plan
    ```
 
+   Confirm the plan contains the shell installer, unified and per-archive SHA-256
+   checksums, and only the four supported target triples. Confirm the installer
+   destination is `~/.local/bin`; prebuilt installation must not require Rust.
+
 4. Run the same gates as CI:
 
    ```console
@@ -37,20 +41,30 @@ prerelease when its semantic version contains a prerelease suffix.
    ```
 
 The archive must contain the binary, both licenses, the README, changelog, and
-the Bash and Zsh integrations. The plan must contain only the `shelliq` app and
-the four supported target triples.
+the Bash and Zsh integrations. Verify the documented manual installation commands
+against this archive.
 
 ## Publish
 
-After the release commit passes CI, create and push its annotated version tag:
+After the release commit passes CI, confirm the tag does not already exist on
+GitHub, create its annotated version tag, and push only that tag:
 
 ```console
+git ls-remote --tags origin refs/tags/v0.1.0-alpha.1
 git tag -a v0.1.0-alpha.1 -m 'shelliq 0.1.0-alpha.1'
 git push origin v0.1.0-alpha.1
 ```
 
+The first command must print nothing. If the tag already exists remotely, do not move
+it; prepare the next prerelease version instead.
+
 The release workflow builds native x86_64 and ARM64 archives on Linux and macOS,
 generates per-artifact and unified SHA-256 checksums, creates the shell
-installer, and publishes a GitHub prerelease. Download one archive after the
-workflow completes, verify its checksum, and smoke-test `shelliq --version` and
-`shelliq index build` on representative Linux and macOS hosts.
+installer, and publishes a GitHub prerelease. After it completes:
+
+1. Verify every workflow job succeeded and all documented artifacts exist.
+2. Download an archive, verify its checksum, and follow the README's manual install.
+3. Run the installer on a representative machine without Rust installed and confirm
+   that `~/.local/bin/shelliq` works after a fresh shell starts.
+4. Smoke-test `shelliq --version`, `shelliq index build grep`, and
+   `shelliq explain grep -r` on representative Linux and macOS hosts.

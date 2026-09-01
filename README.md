@@ -1,40 +1,124 @@
 # ShellIQ
 
 A local CLI assistant. It answers "is it `-r` or `-R`?" from the man pages installed on
-*this* machine, and cites the line it got the answer from.
+_this_ machine, and cites the line it got the answer from.
 
 Current release line: `0.1.0-alpha.1`. Trust hardening and the separate
 custom-model experiment are active; the shipping CLI remains model-free.
 
 ## Install
 
-The alpha release provides a checksum-verifying shell installer:
+Installing a prebuilt release does **not** require Rust or Cargo.
+
+### Shell installer
+
+The recommended method is the checksum-verifying shell installer:
 
 ```console
 curl --proto '=https' --tlsv1.2 -LsSf \
   https://github.com/brentwilkins/shelliq/releases/download/v0.1.0-alpha.1/shelliq-installer.sh | sh
 ```
 
-Or build the default, model-free CLI from source:
+It selects the archive for the current machine, verifies it, and installs the `shelliq`
+executable in `~/.local/bin`. It creates that directory when necessary, writes a small
+`PATH` setup file, and attempts to load it from the shell profile. Make the command
+available immediately with:
 
-```console
-cargo install --locked --path crates/shelliq
+```sh
+source "$HOME/.local/bin/env"
 ```
 
-Release archives include `shelliq.bash` and `shelliq.zsh` beside the binary.
-Copy the integration you use to a stable location and source it from your shell
-startup file. The installer installs only the `shelliq` executable.
+If a future shell still cannot find `shelliq`, add this to its startup file:
 
-Prebuilt alpha archives target:
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+```
 
-| System | Architectures | Notes |
-| --- | --- | --- |
-| Linux (glibc) | x86_64, ARM64 | Includes Ubuntu and Ubuntu under WSL2 |
-| macOS | Intel, Apple silicon | Bash widgets support the bundled Bash 3.2 |
+### Download an archive manually
 
-Other Unix-like systems, including BSDs, are best-effort source builds. Native
-Windows is not an alpha target because ShellIQ depends on Unix man pages and
-shell semantics; use the Linux build inside WSL2.
+Download the archive and its matching `.sha256` file from the
+[GitHub release](https://github.com/brentwilkins/shelliq/releases/tag/v0.1.0-alpha.1).
+Choose the target matching the machine:
+
+| System                        | Architecture  | Release target              |
+| ----------------------------- | ------------- | --------------------------- |
+| macOS                         | Apple silicon | `aarch64-apple-darwin`      |
+| macOS                         | Intel         | `x86_64-apple-darwin`       |
+| Linux (glibc), including WSL2 | ARM64         | `aarch64-unknown-linux-gnu` |
+| Linux (glibc), including WSL2 | x86-64        | `x86_64-unknown-linux-gnu`  |
+
+For example, on x86-64 Linux or WSL2:
+
+```console
+curl -LO https://github.com/brentwilkins/shelliq/releases/download/v0.1.0-alpha.1/shelliq-x86_64-unknown-linux-gnu.tar.xz
+curl -LO https://github.com/brentwilkins/shelliq/releases/download/v0.1.0-alpha.1/shelliq-x86_64-unknown-linux-gnu.tar.xz.sha256
+sha256sum -c shelliq-x86_64-unknown-linux-gnu.tar.xz.sha256
+tar -xJf shelliq-x86_64-unknown-linux-gnu.tar.xz
+install -d "$HOME/.local/bin"
+install -m 0755 shelliq-x86_64-unknown-linux-gnu/shelliq "$HOME/.local/bin/shelliq"
+```
+
+On macOS, use this checksum command (the generated file contains a harmless blank line
+that macOS `shasum` otherwise warns about):
+
+```console
+grep -v '^$' FILE.sha256 | shasum -a 256 -c -
+```
+
+Ensure `~/.local/bin` is on `PATH` as shown above.
+
+### Optional shell integration
+
+Release archives contain `shelliq.bash` and `shelliq.zsh` alongside the executable in
+the extracted target directory. The shell installer intentionally installs only the
+executable. To enable an integration from a manually extracted archive, replace
+`TARGET` below with the release target selected above:
+
+```console
+install -d "$HOME/.local/share/shelliq"
+install -m 0644 shelliq-TARGET/shelliq.bash shelliq-TARGET/shelliq.zsh \
+  "$HOME/.local/share/shelliq/"
+```
+
+Then add one matching line to the shell startup file:
+
+```sh
+# ~/.zshrc
+source "$HOME/.local/share/shelliq/shelliq.zsh"
+
+# ~/.bashrc
+source "$HOME/.local/share/shelliq/shelliq.bash"
+```
+
+### Build from source
+
+This is the only installation method that requires a Rust toolchain. From a ShellIQ
+source checkout:
+
+```console
+cargo install --locked --path crates/shelliq --root "$HOME/.local"
+```
+
+Other Unix-like systems, including BSDs, are best-effort source builds. Native Windows
+is not an alpha target because ShellIQ depends on Unix man pages and shell semantics;
+use the Linux build inside WSL2.
+
+### First run
+
+Build the local documentation index before asking ShellIQ about commands:
+
+```console
+shelliq --version
+shelliq index scan
+shelliq index stats
+shelliq explain grep -r
+```
+
+For a smaller initial index, replace `index scan` with:
+
+```console
+shelliq index build grep tar curl ls find
+```
 
 ## Try it
 
@@ -75,13 +159,13 @@ shelliq index stats
 
 Facts and fluency are kept apart:
 
-| Concern                              | Owner                        |
-| ------------------------------------ | ---------------------------- |
-| Flag facts, case, arguments          | SQLite index, built locally  |
-| English → command shape              | A small model (later phases) |
-| Whether each option spelling exists  | Option checker, index-backed |
+| Concern                             | Owner                        |
+| ----------------------------------- | ---------------------------- |
+| Flag facts, case, arguments         | SQLite index, built locally  |
+| English → command shape             | A small model (later phases) |
+| Whether each option spelling exists | Option checker, index-backed |
 
-A local small model on its own is *less* reliable than a cloud one. What makes ShellIQ
+A local small model on its own is _less_ reliable than a cloud one. What makes ShellIQ
 useful is not that it runs locally — it is that every option it reports is looked up in the
 man page on your disk and carries a citation. Running locally is the privacy story, not the
 accuracy story.
