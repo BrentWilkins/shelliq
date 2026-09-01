@@ -464,9 +464,6 @@ fn placeholder_kind(value: &str) -> Option<SlotKind> {
     if lowered.contains('@') || parts().any(|part| matches!(part, "host" | "hostname" | "server" | "domain")) {
         return Some(SlotKind::Remote);
     }
-    if parts().any(|part| matches!(part, "count" | "id" | "line" | "number" | "pid" | "port" | "time" | "width")) {
-        return Some(SlotKind::Integer);
-    }
     if lowered.contains("path/to/")
         || parts().any(|part| {
             matches!(
@@ -476,6 +473,9 @@ fn placeholder_kind(value: &str) -> Option<SlotKind> {
         })
     {
         return Some(SlotKind::Path);
+    }
+    if parts().any(|part| matches!(part, "count" | "id" | "line" | "number" | "pid" | "port" | "time" | "width")) {
+        return Some(SlotKind::Integer);
     }
     if matches!(lowered.as_str(), "command" | "name" | "pattern" | "string" | "text")
         || parts().any(|part| {
@@ -567,6 +567,7 @@ mod tests {
     #[test]
     fn classifies_generic_documentation_slots_without_command_rules() {
         assert_eq!(placeholder_kind("path/to/file.apk"), Some(SlotKind::Path));
+        assert_eq!(placeholder_kind("path/to/file.pid"), Some(SlotKind::Path));
         assert_eq!(placeholder_kind("repository_url"), Some(SlotKind::Url));
         assert_eq!(placeholder_kind("port"), Some(SlotKind::Integer));
         assert_eq!(placeholder_kind("playbook"), None);
