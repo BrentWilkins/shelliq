@@ -5,10 +5,9 @@
 //! BSD and macOS pages work identically — but mandoc is not installed everywhere, so the
 //! rendered path is what ships first. Both paths must agree on the same fixtures.
 //!
-//! The rendered layout comes from the roff `.TP` macro: a tag at column 7 and its body at
-//! column 14. Rendering with hyphenation and justification disabled at a very wide
-//! `MANWIDTH` keeps descriptions on predictable lines and stops words being split across
-//! them.
+//! GNU man-db and BSD mandoc render roff `.TP` and mdoc `.It` entries at different
+//! margins. The parser discovers each section's option-tag margin from its structure;
+//! `MANWIDTH` merely reduces wrapping and is not part of the grammar.
 
 use anyhow::{Context, Result, bail};
 use sha2::{Digest, Sha256};
@@ -23,12 +22,8 @@ pub mod tldr;
 /// The index stores this alongside each row's `source_hash`. A parser fix must invalidate
 /// previously harvested rows even though every source file is byte-identical, otherwise
 /// the index silently keeps serving output built by older, buggier code.
-pub const PARSER_VERSION: u32 = 1;
+pub const PARSER_VERSION: u32 = 2;
 
-/// Column where a `.TP` tag begins in rendered output.
-const TAG_INDENT: usize = 7;
-/// Column where a `.TP` body begins.
-const BODY_INDENT: usize = 14;
 /// Rendering width. Wide enough that descriptions rarely wrap at all.
 const MAN_WIDTH: &str = "400";
 
@@ -445,6 +440,7 @@ pub fn parse_rendered(name: &str, section: &str, source_path: &str, source_hash:
 
     let mut section_name = String::new();
     let mut group: Option<String> = None;
+    let mut tag_indent: Option<usize> = None;
     let mut i = 0;
 
     while i < lines.len() {
@@ -456,21 +452,22 @@ pub fn parse_rendered(name: &str, section: &str, source_path: &str, source_hash:
         if indent == 0 && !trimmed.is_empty() {
             section_name = trimmed.trim().to_string();
             group = None;
+            tag_indent = option_tag_indent(&lines, i + 1);
             i += 1;
             continue;
         }
 
         // Subsection heading sits between the section margin and the tag margin.
-        if indent > 0 && indent < TAG_INDENT && !trimmed.is_empty() {
+        if indent > 0 && tag_indent.is_some_and(|tag_indent| indent < tag_indent) && !trimmed.is_empty() {
             group = Some(trimmed.trim().to_string());
             i += 1;
             continue;
         }
 
-        if section_name == "SYNOPSIS" && synopsis.is_empty() && indent >= TAG_INDENT {
+        if section_name == "SYNOPSIS" && synopsis.is_empty() && indent > 0 {
             synopsis = trimmed.trim().to_string();
         }
-        if section_name == "DESCRIPTION" && description.is_empty() && indent >= TAG_INDENT {
+        if section_name == "DESCRIPTION" && description.is_empty() && indent > 0 {
             let t = trimmed.trim();
             if !t.starts_with('-') {
                 description = t.to_string();
@@ -478,8 +475,8 @@ pub fn parse_rendered(name: &str, section: &str, source_path: &str, source_hash:
         }
 
         let skipped = SKIP_SECTIONS.contains(&section_name.as_str());
-        if !skipped && indent == TAG_INDENT && trimmed[TAG_INDENT..].starts_with('-') {
-            let content = &trimmed[TAG_INDENT..];
+        if !skipped && tag_indent == Some(indent) && looks_like_option_tag(&lines, i) {
+            let content = trimmed.trim_start();
             let (spec, inline) = split_tag(content);
             if let Some(mut parsed) = parse_spec(spec) {
                 let mut alias_specs = vec![spec];
@@ -496,7 +493,7 @@ pub fn parse_rendered(name: &str, section: &str, source_path: &str, source_hash:
                 let mut j = i + 1;
                 while j < lines.len() {
                     let b = lines[j];
-                    if b.trim().is_empty() || indent_of(b) < BODY_INDENT {
+                    if b.trim().is_empty() || indent_of(b) <= indent {
                         break;
                     }
                     excerpt_lines.push(b);
@@ -567,7 +564,76 @@ pub(crate) fn push_unique(flags: &mut Vec<ParsedFlag>, incoming: ParsedFlag) {
 }
 
 fn indent_of(line: &str) -> usize {
-    line.len() - line.trim_start_matches(' ').len()
+    line.chars()
+        .take_while(|character| matches!(character, ' ' | '\t'))
+        .fold(
+            0,
+            |column, character| {
+                if character == '\t' { (column / 8 + 1) * 8 } else { column + 1 }
+            },
+        )
+}
+
+/// Discover the option-tag margin used by the current rendered section.
+///
+/// GNU man-db and BSD mandoc choose different absolute columns. In both
+/// renderings, continuation and description lines are deeper than the tag, so
+/// the shallowest flag-shaped line is the stable structural boundary.
+fn option_tag_indent(lines: &[&str], start: usize) -> Option<usize> {
+    lines[start..]
+        .iter()
+        .enumerate()
+        .take_while(|(_, line)| indent_of(line) > 0 || line.trim().is_empty())
+        .filter(|(offset, _)| looks_like_option_tag(lines, start + offset))
+        .map(|(_, line)| indent_of(line))
+        .min()
+}
+
+/// A definition tag introduces a more deeply indented body, or carries its
+/// description after spacing on the same line. This excludes command examples
+/// such as curl's standalone `--expand-url = ...` line.
+fn looks_like_option_tag(lines: &[&str], index: usize) -> bool {
+    let Some(line) = lines.get(index) else {
+        return false;
+    };
+    let content = line.trim_start();
+    if !content.starts_with('-') {
+        return false;
+    }
+    let (spec, inline) = split_tag(content);
+    if parse_spec(spec).is_none() {
+        return false;
+    }
+    if !inline.trim().is_empty() && !inline.trim_start().starts_with('-') {
+        return true;
+    }
+    if has_unpadded_inline_description(content) {
+        return true;
+    }
+    lines[index + 1..]
+        .iter()
+        .find(|body| !body.trim().is_empty())
+        .is_some_and(|body| indent_of(body) > indent_of(line))
+}
+
+/// BSD mandoc and a few GNU pages use one space between a flag and a short
+/// inline description. Argument placeholders and shell assignment examples are
+/// deliberately excluded.
+fn has_unpadded_inline_description(content: &str) -> bool {
+    let Some((_, tail)) = content.split_once(char::is_whitespace) else {
+        return false;
+    };
+    let tail = tail.trim_start();
+    if tail.is_empty()
+        || !tail.contains(char::is_whitespace)
+        || tail.starts_with(['-', '=', '<', '[', '\'', '"'])
+        || tail
+            .chars()
+            .all(|character| character.is_ascii_uppercase() || character.is_ascii_digit() || matches!(character, '_' | '-' | '.'))
+    {
+        return false;
+    }
+    true
 }
 
 /// Split a `.TP` tag line into its flag spec and any description on the same line.
@@ -632,8 +698,9 @@ pub(crate) fn parse_spec(spec: &str) -> Option<ParsedFlag> {
 /// one-short/one-long record, preserving the same facts and citation.
 fn additional_aliases(spec: &str, template: &ParsedFlag) -> Vec<ParsedFlag> {
     spec.split(',')
+        .flat_map(|part| part.split_whitespace().take_while(|token| token.starts_with('-')))
         .filter_map(|part| {
-            let part = part.trim();
+            let part = part.trim().trim_end_matches(',');
             if !part.starts_with('-') || part == "-" || part == "--" {
                 return None;
             }
@@ -829,6 +896,51 @@ mod tests {
         assert!(upper.is_some(), "grouped -R alias must be indexed");
         assert_eq!(lower.unwrap().source_line, upper.unwrap().source_line);
         assert_eq!(lower.unwrap().description, "Search directories recursively.");
+    }
+
+    #[test]
+    fn discovers_gnu_and_macos_option_margins() {
+        for fixture in [
+            "OPTIONS\n       -R, -r, --recursive\n              Search directories recursively.\n",
+            "OPTIONS\n     -R, -r, --recursive\n             Search directories recursively.\n",
+        ] {
+            let parsed = parse_rendered("grep", "1", "grep.1", "hash", fixture);
+            assert!(parsed.flags.iter().any(|flag| flag.short.as_deref() == Some("-R")));
+            assert!(parsed.flags.iter().any(|flag| flag.short.as_deref() == Some("-r")));
+            assert!(parsed.flags.iter().any(|flag| flag.long.as_deref() == Some("--recursive")));
+        }
+    }
+
+    #[test]
+    fn preserves_aliases_when_renderer_omits_commas() {
+        let parsed = parse_rendered(
+            "grep",
+            "1",
+            "grep.1",
+            "hash",
+            "OPTIONS\n     -R -r --recursive\n             Search directories recursively.\n",
+        );
+        assert!(parsed.flags.iter().any(|flag| flag.short.as_deref() == Some("-R")));
+        assert!(parsed.flags.iter().any(|flag| flag.short.as_deref() == Some("-r")));
+        assert!(parsed.flags.iter().any(|flag| flag.long.as_deref() == Some("--recursive")));
+    }
+
+    #[test]
+    fn tab_indented_command_examples_are_not_option_tags() {
+        let parsed = parse_rendered(
+            "curl",
+            "1",
+            "curl.1",
+            "hash",
+            "DESCRIPTION\n       --variable <name=content>\n              Set a variable.\n\n\t --expand-variable fix@{{HOME}}/.secret\n\t https://example.com/\n",
+        );
+        assert!(parsed.flags.iter().any(|flag| flag.long.as_deref() == Some("--variable")));
+        assert!(
+            !parsed
+                .flags
+                .iter()
+                .any(|flag| flag.long.as_deref() == Some("--expand-variable"))
+        );
     }
 
     #[test]

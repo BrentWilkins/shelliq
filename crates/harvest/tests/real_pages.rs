@@ -130,8 +130,9 @@ fn grep_r_and_capital_r_are_indexed_as_documented() {
     let cmd = shelliq_harvest::harvest("grep").expect("harvest grep");
     let find = |s: &str| cmd.flags.iter().find(|f| f.short.as_deref() == Some(s));
 
-    let lower = find("-r").expect("grep -r must be indexed");
-    let upper = find("-R").expect("grep -R must be indexed");
+    let spellings = || cmd.flags.iter().map(|flag| flag.spelling()).collect::<Vec<_>>();
+    let lower = find("-r").unwrap_or_else(|| panic!("grep -r must be indexed; harvested spellings: {:?}", spellings()));
+    let upper = find("-R").unwrap_or_else(|| panic!("grep -R must be indexed; harvested spellings: {:?}", spellings()));
 
     #[cfg(not(target_os = "macos"))]
     {
