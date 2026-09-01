@@ -4,6 +4,7 @@ use serde::Serialize;
 use crate::{documentation::Clarification, model::Suggestion};
 
 const RESPONSE_VERSION: u8 = 1;
+const WIDGET_PROTOCOL: &str = "shelliq-widget-v1";
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
@@ -96,13 +97,40 @@ pub fn no_documentation(message: &str) -> Result<String> {
     })
 }
 
+pub fn widget_ready(command: &str) -> String {
+    format!("{WIDGET_PROTOCOL}\tready\t{}", hex(command))
+}
+
+pub fn widget_needs_input(clarification: &Clarification, source: Option<&str>) -> Result<String> {
+    let source = source.context("needs_input response omitted continuation source")?;
+    Ok(format!(
+        "{WIDGET_PROTOCOL}\tneeds_input\t{}\t{}",
+        hex(source),
+        hex(&clarification.question)
+    ))
+}
+
+pub fn widget_no_documentation(message: &str) -> String {
+    format!("{WIDGET_PROTOCOL}\tno_documentation\t{}", hex(message))
+}
+
+fn hex(value: &str) -> String {
+    const DIGITS: &[u8; 16] = b"0123456789abcdef";
+    let mut encoded = String::with_capacity(value.len() * 2);
+    for byte in value.bytes() {
+        encoded.push(DIGITS[usize::from(byte >> 4)] as char);
+        encoded.push(DIGITS[usize::from(byte & 0x0f)] as char);
+    }
+    encoded
+}
+
 fn serialize(response: &SuggestResponse<'_>) -> Result<String> {
     serde_json::to_string(response).context("serializing suggestion response")
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{needs_input, no_documentation};
+    use super::{needs_input, no_documentation, widget_needs_input, widget_ready};
     use crate::documentation::Clarification;
 
     #[test]
@@ -135,5 +163,23 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&response).unwrap();
         assert_eq!(value["status"], "no_documentation");
         assert!(value.get("command").is_none());
+    }
+
+    #[test]
+    fn widget_protocol_hex_encodes_untrusted_payloads() {
+        assert_eq!(
+            widget_ready("printf 'a b'"),
+            "shelliq-widget-v1\tready\t7072696e7466202761206227"
+        );
+
+        let clarification = Clarification {
+            kind: "text",
+            label: "file".into(),
+            question: "Which file?".into(),
+        };
+        assert_eq!(
+            widget_needs_input(&clarification, Some("tldr:linux:demo:1")).unwrap(),
+            "shelliq-widget-v1\tneeds_input\t746c64723a6c696e75783a64656d6f3a31\t57686963682066696c653f"
+        );
     }
 }

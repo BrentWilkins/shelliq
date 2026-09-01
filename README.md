@@ -93,8 +93,12 @@ non-empty value uses the existing single model pass. Targeted
 `shelliq index build NAME` may use its guarded `--help` crawler when no man page
 exists, but broad `index scan` never executes discovered programs.
 
-For zsh, source `shell/shelliq.zsh`, type an English request at an empty
-prompt, and press `Ctrl-X Ctrl-G`. The suggestion is placed in the editable
+For zsh, source `shell/shelliq.zsh`, type an English request at an empty prompt,
+and press `Ctrl-X Ctrl-G`. The widget asks focused questions for
+missing documentation values and pins every answer to the initially reported
+recipe.
+Cancellation, empty answers, invalid responses, and changed sources leave the
+original request untouched. The completed suggestion is placed in the editable
 command buffer; it is never executed automatically, and Enter remains an
 explicit choice. Alternatively, `shelliq-suggest find large files` preloads
 the next input line. VS Code may intercept terminal chords; on this development

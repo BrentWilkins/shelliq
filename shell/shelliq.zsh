@@ -31,9 +31,32 @@ zle -N _shelliq_explain_widget
 bindkey '^X^H' _shelliq_explain_widget
 
 # C-x C-g turns the current English buffer into an editable suggestion. It never
-# accepts or executes the result; Enter remains an explicit user action. When a
-# value is missing, the focused question is printed and the request stays in the
-# buffer so the answer can be added before invoking the widget again.
+# accepts or executes the result; Enter remains an explicit user action. Missing
+# values are prompted for against one source-pinned continuation. Cancellation
+# and invalid responses leave the original request in the buffer.
+_shelliq_widget_message() {
+  emulate -L zsh
+  zle -I
+  print
+  print -r -- "$1"
+  zle reset-prompt
+}
+
+_shelliq_decode_hex() {
+  emulate -L zsh
+  local encoded=$1 decoded='' pair byte
+  (( ${#encoded} % 2 == 0 )) || return 1
+  [[ $encoded != *[^0-9a-f]* ]] || return 1
+  while [[ -n $encoded ]]; do
+    pair=${encoded[1,2]}
+    [[ $pair != 00 ]] || return 1
+    printf -v byte '%b' "\\x$pair" || return 1
+    decoded+=$byte
+    encoded=${encoded[3,-1]}
+  done
+  REPLY=$decoded
+}
+
 _shelliq_suggest_widget() {
   emulate -L zsh
   if [[ -z $BUFFER ]]; then
@@ -41,30 +64,91 @@ _shelliq_suggest_widget() {
     return
   fi
 
-  local request=$BUFFER out command
-  local -a lines
-  out=$(shelliq suggest -- "$request" 2>&1)
-  local exit_status=$?
-  lines=("${(@f)out}")
-  if (( exit_status != 0 || ${#lines} == 0 )); then
+  local request=$BUFFER out response_status command source next_source question answer message
+  local -a fields answer_args
+  integer steps=0 exit_status
+
+  while (( steps <= 8 )); do
+    if (( steps == 0 )); then
+      out=$(shelliq suggest --zsh-widget -- "$request" 2>/dev/null)
+    else
+      out=$(shelliq suggest --continue-from "$source" "${answer_args[@]}" --zsh-widget -- "$request" 2>/dev/null)
+    fi
+    exit_status=$?
+    fields=("${(@ps:\t:)out}")
+
+    if (( ${#fields} < 2 )) || [[ ${fields[1]} != shelliq-widget-v1 ]]; then
+      _shelliq_widget_message 'shelliq: suggestion failed without a valid response'
+      return
+    fi
+    response_status=${fields[2]}
+
+    if [[ $response_status == ready ]]; then
+      if (( exit_status != 0 || ${#fields} != 3 )) || ! _shelliq_decode_hex "${fields[3]}"; then
+        _shelliq_widget_message 'shelliq: inconsistent ready response rejected'
+        return
+      fi
+      command=$REPLY
+      if [[ -z $command || $command == *$'\n'* ]]; then
+        _shelliq_widget_message 'shelliq: invalid command response rejected'
+        return
+      fi
+      zle split-undo
+      BUFFER=$command
+      CURSOR=${#BUFFER}
+      zle -M 'shelliq: suggestion loaded; inspect it before pressing Enter'
+      return
+    fi
+
+    if [[ $response_status != needs_input || exit_status == 0 || ${#fields} != 4 ]]; then
+      message=$response_status
+      if (( ${#fields} == 3 )) && _shelliq_decode_hex "${fields[3]}"; then
+        message="$response_status: $REPLY"
+      fi
+      _shelliq_widget_message "shelliq: ${message:-unknown}; request unchanged"
+      return
+    fi
+    if (( steps == 8 )); then
+      _shelliq_widget_message 'shelliq: clarification limit reached; request unchanged'
+      return
+    fi
+
+    _shelliq_decode_hex "${fields[3]}" || {
+      _shelliq_widget_message 'shelliq: invalid continuation rejected; request unchanged'
+      return
+    }
+    next_source=$REPLY
+    _shelliq_decode_hex "${fields[4]}" || {
+      _shelliq_widget_message 'shelliq: invalid clarification rejected; request unchanged'
+      return
+    }
+    question=$REPLY
+    if [[ -z $next_source || -z $question ]]; then
+      _shelliq_widget_message 'shelliq: incomplete clarification rejected; request unchanged'
+      return
+    fi
+    if [[ -n $source && $next_source != $source ]]; then
+      _shelliq_widget_message 'shelliq: continuation source changed; request unchanged'
+      return
+    fi
+    source=$next_source
+
     zle -I
     print
-    print -r -- "$out"
+    answer=''
+    if ! read -r "answer?$question "; then
+      zle reset-prompt
+      _shelliq_widget_message 'shelliq: clarification cancelled; request unchanged'
+      return
+    fi
     zle reset-prompt
-    return
-  fi
-
-  command=${lines[-1]}
-  lines[-1]=()
-  zle split-undo
-  BUFFER=$command
-  CURSOR=${#BUFFER}
-  zle -I
-  if (( ${#lines} )); then
-    print
-    print -r -- "${(F)lines}"
-  fi
-  zle reset-prompt
+    if [[ -z $answer ]]; then
+      _shelliq_widget_message 'shelliq: empty clarification cancelled; request unchanged'
+      return
+    fi
+    answer_args+=(--answer "$answer")
+    (( steps++ ))
+  done
 }
 zle -N _shelliq_suggest_widget
 bindkey '^X^G' _shelliq_suggest_widget

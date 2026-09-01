@@ -89,6 +89,9 @@ enum Command {
         /// Print a versioned response envelope for every outcome.
         #[arg(long)]
         json: bool,
+        /// Print the stable response protocol consumed by the Zsh widget.
+        #[arg(long, conflicts_with = "json")]
+        zsh_widget: bool,
     },
     Source {
         citation: String,
@@ -152,6 +155,7 @@ fn main() -> Result<()> {
             answer,
             continue_from,
             json,
+            zsh_widget,
         } => suggest_command(
             &path,
             &endpoint,
@@ -162,6 +166,7 @@ fn main() -> Result<()> {
             &answer,
             continue_from.as_deref(),
             json,
+            zsh_widget,
         ),
         Command::Source { citation } => source(&path, &citation),
     }
@@ -179,6 +184,7 @@ fn suggest_command(
     answers: &[String],
     continue_from: Option<&str>,
     json: bool,
+    zsh_widget: bool,
 ) -> Result<()> {
     if timeout_ms == 0 {
         anyhow::bail!("--timeout-ms must be positive");
@@ -268,7 +274,12 @@ fn suggest_command(
                     let clarification = fallback
                         .clarification()
                         .context("needs_input response omitted its clarification")?;
-                    if json {
+                    if zsh_widget {
+                        println!(
+                            "{}",
+                            response::widget_needs_input(&clarification, fallback.source.as_deref())?
+                        );
+                    } else if json {
                         println!(
                             "{}",
                             response::needs_input(
@@ -288,7 +299,9 @@ fn suggest_command(
                 }
                 documentation::CompilationStatus::NoDocumentation => {
                     let message = "no complete installed documentation recipe matched";
-                    if json {
+                    if zsh_widget {
+                        println!("{}", response::widget_no_documentation(message));
+                    } else if json {
                         println!("{}", response::no_documentation(message)?);
                     } else {
                         eprintln!("no_documentation: {message}");
@@ -304,7 +317,9 @@ fn suggest_command(
             "experimental model suggestion; option spellings checked, operand semantics and pipeline compatibility unverified; inspect and edit before running"
         );
     }
-    if json {
+    if zsh_widget {
+        println!("{}", response::widget_ready(&suggestion.command));
+    } else if json {
         println!("{}", response::ready(&suggestion, &source, documentation_intent.as_deref())?);
     } else {
         println!("{}", suggestion.command);
@@ -832,6 +847,12 @@ mod tests {
                 action: IndexAction::Scan
             }
         ));
+    }
+
+    #[test]
+    fn zsh_widget_protocol_conflicts_with_json_output() {
+        let parsed = Cli::try_parse_from(["shelliq", "suggest", "--zsh-widget", "--json", "find files"]);
+        assert!(parsed.is_err());
     }
 
     #[test]
