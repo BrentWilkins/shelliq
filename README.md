@@ -104,6 +104,11 @@ explicit choice. Alternatively, `shelliq-suggest find large files` preloads
 the next input line. VS Code may intercept terminal chords; on this development
 machine, `Ctrl-Alt-G` is configured to send the widget sequence to zsh.
 
+For Bash, source `shell/shelliq.bash` from an interactive shell and use the same
+`Ctrl-X Ctrl-G` binding. It provides the same source-pinned clarification and
+buffer-preservation behavior through Readline; completed commands remain
+editable and require an explicit Enter.
+
 `suggest` defaults to the versioned `context-authoritative-v1` prompt contract.
 Use `--prompt-contract legacy-user-v1` only with an older adapter trained on
 that exact prompt shape; the prompt contract must match the served model.
@@ -163,7 +168,7 @@ crates/shelliq/   CLI entrypoint
 crates/harvest/   man page parser, --help crawler
 crates/index/     schema, FTS5, ranking
 crates/verify/    tokenizer, bundle decomposition, option checking
-shell/            zsh and bash integration (not written yet)
+shell/            Zsh and Bash interactive integrations
 training/         JAX/Flax fine-tuning (uv, Python 3.14, development only)
 ```
 

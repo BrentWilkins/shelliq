@@ -171,7 +171,7 @@ crates/shelliq/   [done] clap CLI: explain, search, flags, index build/stats
 crates/harvest/   [done] man parser   · [plan] --help crawler
 crates/index/     [done] schema, FTS5 · [plan] fuzzy ranking, RRF, refresh, target identity
 crates/verify/    [done] bundle splitter, flag checker · [plan] shell-syntax abstention
-shell/            [built] shelliq.zsh (explain widget, fallback Tab completer) · [plan] shelliq.bash
+shell/            [built] shelliq.zsh (explain, completion, suggestion widgets) · [built] shelliq.bash (suggestion widget)
 training/         [built] nnx Qwen, HF loader, LoRA step, source builders, privacy/canary gates, held-out evaluation, Orbax resume, PEFT/HF/GGUF export · [plan] real fine-tune and benchmark
 ```
 
@@ -828,9 +828,11 @@ Designed not to fight oh-my-zsh, zsh-autosuggestions, or zsh-syntax-highlighting
 - **[built]** `C-x C-h` — explain the current buffer against the local index, printed below
   the prompt. Never touches `$BUFFER`, so there is nothing to undo (`shell/shelliq.zsh`).
   Index-only, no model.
-- `C-x C-n` — ZLE widget: buffer treated as English, replaced with the verified command.
-  Needs a model, so this is P1B, not here — see "never pull a model from inside a shell
-  widget." Never touches Tab.
+- **[built]** `C-x C-g` — ZLE and Bash Readline suggestion widgets replace the
+  English buffer only after a versioned `ready` response. Documentation
+  clarifications remain pinned to one source; cancellation, malformed replies,
+  and source changes preserve the original buffer. Enter remains explicit and
+  the widgets never execute commands.
 - **[built]** Tab, safely — a **fallback** completer, never a replacement. `shelliq.zsh`
   reads the existing `:completion:*` `completer` style (whatever the user's own `.zshrc`
   already set, oh-my-zsh's included) and inserts `_shelliq` before `_approximate` rather

@@ -147,7 +147,7 @@ _shelliq_suggest_widget() {
       return
     fi
     answer_args+=(--answer "$answer")
-    (( steps++ ))
+    (( ++steps ))
   done
 }
 zle -N _shelliq_suggest_widget
