@@ -69,7 +69,9 @@ def main() -> None:
         by_intent.setdefault((template.command, _normalize(template.instruction)), []).append(template)
         words = _simple_words(template.document)
         if words is not None:
-            options_by_command.setdefault(template.command, set()).update(word for word in words[1:] if word.startswith('-'))
+            options_by_command.setdefault(template.command, set()).update(
+                word.split('=', 1)[0] for word in words[1:] if word.startswith('-')
+            )
 
     outcomes = [_evaluate(args.shelliq.resolve(), row, by_intent, options_by_command) for row in rows]
     emitted = [item for item in outcomes if item['answered_emitted']]
@@ -141,6 +143,9 @@ def _evaluate(
         index = temp / 'index.sqlite'
         environment = os.environ.copy()
         environment['PATH'] = f'{bin_dir}:{environment.get("PATH", "/usr/bin:/bin")}'
+        man_dir = temp / 'man'
+        man_dir.mkdir()
+        environment['MANPATH'] = str(man_dir)
         build = _run(
             [
                 str(shelliq),
