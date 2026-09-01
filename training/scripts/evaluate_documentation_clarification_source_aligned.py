@@ -29,7 +29,10 @@ from shelliq_training.documentation_templates import (
     unresolved_placeholders,
 )
 
-EXPERIMENT = 'documentation-clarification-continuation-v1'
+EXPERIMENTS = {
+    'documentation-clarification-continuation-v1',
+    'documentation-clarification-source-aligned-v1',
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -46,7 +49,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     manifest = json.loads(args.manifest.read_text())
-    if manifest.get('experiment') != EXPERIMENT:
+    experiment = manifest.get('experiment')
+    if experiment not in EXPERIMENTS:
         raise ValueError('unexpected experiment manifest')
     if manifest['documentation_index_sha256'] != _sha256(args.documentation_index):
         raise ValueError('documentation index hash differs from frozen manifest')
@@ -97,7 +101,7 @@ def main() -> None:
     )
     report = {
         'schema_version': 1,
-        'experiment': EXPERIMENT,
+        'experiment': experiment,
         'partition': args.partition,
         'dataset_sha256': _sha256(args.dataset),
         'metrics': metrics,
