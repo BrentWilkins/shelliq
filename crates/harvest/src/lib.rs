@@ -482,10 +482,15 @@ pub fn parse_rendered(name: &str, section: &str, source_path: &str, source_hash:
             let content = &trimmed[TAG_INDENT..];
             let (spec, inline) = split_tag(content);
             if let Some(mut parsed) = parse_spec(spec) {
+                let mut alias_specs = vec![spec];
                 let mut desc_parts: Vec<String> = Vec::new();
                 let mut excerpt_lines: Vec<&str> = vec![line];
                 if !inline.trim().is_empty() {
-                    desc_parts.push(inline.trim().to_string());
+                    if inline.trim_start().starts_with('-') {
+                        alias_specs.push(inline.trim());
+                    } else {
+                        desc_parts.push(inline.trim().to_string());
+                    }
                 }
                 // Body lines sit at BODY_INDENT until a blank line ends the entry.
                 let mut j = i + 1;
@@ -494,15 +499,22 @@ pub fn parse_rendered(name: &str, section: &str, source_path: &str, source_hash:
                     if b.trim().is_empty() || indent_of(b) < BODY_INDENT {
                         break;
                     }
-                    desc_parts.push(b.trim().to_string());
                     excerpt_lines.push(b);
+                    if desc_parts.is_empty() && b.trim_start().starts_with('-') {
+                        alias_specs.push(b.trim());
+                    } else {
+                        desc_parts.push(b.trim().to_string());
+                    }
                     j += 1;
                 }
                 parsed.description = strip_control_chars(&desc_parts.join(" "));
                 parsed.group = group.clone().map(|g| strip_control_chars(&g));
                 parsed.source_line = i + 1;
                 parsed.excerpt = strip_control_chars(&excerpt_lines.join("\n"));
-                let aliases = additional_aliases(spec, &parsed);
+                let aliases: Vec<_> = alias_specs
+                    .into_iter()
+                    .flat_map(|alias_spec| additional_aliases(alias_spec, &parsed))
+                    .collect();
                 push_unique(&mut flags, parsed);
                 for alias in aliases {
                     push_unique(&mut flags, alias);
@@ -809,13 +821,14 @@ mod tests {
             "1",
             "/usr/share/man/man1/grep.1",
             "hash",
-            "OPTIONS\n       -R, -r, --recursive\n              Search directories recursively.\n",
+            "OPTIONS\n       -R,\n              -r, --recursive\n              Search directories recursively.\n",
         );
         let lower = parsed.flags.iter().find(|flag| flag.short.as_deref() == Some("-r"));
         let upper = parsed.flags.iter().find(|flag| flag.short.as_deref() == Some("-R"));
         assert!(lower.is_some(), "grouped -r alias must be indexed");
         assert!(upper.is_some(), "grouped -R alias must be indexed");
         assert_eq!(lower.unwrap().source_line, upper.unwrap().source_line);
+        assert_eq!(lower.unwrap().description, "Search directories recursively.");
     }
 
     #[test]
