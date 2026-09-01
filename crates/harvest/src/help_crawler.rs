@@ -228,7 +228,14 @@ fn reverify_target(exec_path: &Path, expected_hash: Option<&str>, limits: &Crawl
     if let Some(dir) = real.parent() {
         let dir_meta = std::fs::metadata(dir).with_context(|| format!("stat `{}`", dir.display()))?;
         let root_owned_and_locked_down = dir_meta.uid() == 0 && dir_meta.permissions().mode() & 0o022 == 0;
-        let opted_in = limits.allow_paths.iter().any(|p| real.starts_with(p));
+        // macOS exposes `/var` through a symlink to `/private/var`. Compare
+        // resolved directories so an explicitly approved path still contains
+        // the resolved executable, without weakening the containment check.
+        let opted_in = limits.allow_paths.iter().any(|path| {
+            std::fs::canonicalize(path)
+                .map(|allowed| real.starts_with(allowed))
+                .unwrap_or(false)
+        });
         if !root_owned_and_locked_down && !opted_in {
             bail!(
                 "`{}` lives in `{}`, which is writable outside root; add it to `allow_paths` to opt in",

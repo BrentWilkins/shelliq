@@ -113,6 +113,22 @@ fn pid_alive(pid: &str) -> bool {
 }
 
 #[test]
+fn resolves_an_opted_in_directory_before_checking_containment() {
+    let script = HostileScript::new("canonical_path.sh", "echo done");
+    let alias = std::env::temp_dir().join(format!("shelliq-hostile-{}-canonical-alias", std::process::id()));
+    std::os::unix::fs::symlink(script.path().parent().unwrap(), &alias).expect("create fixture directory symlink");
+
+    let alias_script = alias.join(script.path().file_name().unwrap());
+    let mut limits = CrawlLimits::default();
+    limits.allow_paths.push(alias.clone());
+    let result = run_help_contained(&alias_script, None, &["--help".to_string()], &limits);
+
+    std::fs::remove_file(&alias).expect("remove fixture directory symlink");
+    let bytes = result.expect("crawl through an explicitly approved directory symlink");
+    assert_eq!(String::from_utf8_lossy(&bytes).trim(), "done");
+}
+
+#[test]
 fn a_quickly_exiting_hostile_binary_does_not_leave_its_forked_child_running() {
     let script = HostileScript::new(
         "forks_and_exits.sh",
