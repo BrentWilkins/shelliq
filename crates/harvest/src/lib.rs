@@ -502,7 +502,11 @@ pub fn parse_rendered(name: &str, section: &str, source_path: &str, source_hash:
                 parsed.group = group.clone().map(|g| strip_control_chars(&g));
                 parsed.source_line = i + 1;
                 parsed.excerpt = strip_control_chars(&excerpt_lines.join("\n"));
+                let aliases = additional_aliases(spec, &parsed);
                 push_unique(&mut flags, parsed);
+                for alias in aliases {
+                    push_unique(&mut flags, alias);
+                }
                 i = j;
                 continue;
             }
@@ -610,6 +614,36 @@ pub(crate) fn parse_spec(spec: &str) -> Option<ParsedFlag> {
     }
 
     saw_any.then_some(flag)
+}
+
+/// Return additional spellings from a tag that cannot fit in the primary
+/// one-short/one-long record, preserving the same facts and citation.
+fn additional_aliases(spec: &str, template: &ParsedFlag) -> Vec<ParsedFlag> {
+    spec.split(',')
+        .filter_map(|part| {
+            let part = part.trim();
+            if !part.starts_with('-') || part == "-" || part == "--" {
+                return None;
+            }
+            let (name, _, _) = split_arg(part);
+            if name.len() < 2 || !is_flag_name(name) {
+                return None;
+            }
+            if template.short.as_deref() == Some(name) || template.long.as_deref() == Some(name) {
+                return None;
+            }
+
+            let mut alias = template.clone();
+            alias.short = None;
+            alias.long = None;
+            if name.starts_with("--") {
+                alias.long = Some(name.to_string());
+            } else {
+                alias.short = Some(name.to_string());
+            }
+            Some(alias)
+        })
+        .collect()
 }
 
 /// Separate a flag from its argument: `--color[=WHEN]`, `--width=COLS`, `-w COLS`,
@@ -766,6 +800,22 @@ mod tests {
         let lower = parse_spec("-r, --recursive").unwrap();
         let upper = parse_spec("-R, --dereference-recursive").unwrap();
         assert_ne!(lower.short, upper.short);
+    }
+
+    #[test]
+    fn grouped_short_aliases_are_all_preserved() {
+        let parsed = parse_rendered(
+            "grep",
+            "1",
+            "/usr/share/man/man1/grep.1",
+            "hash",
+            "OPTIONS\n       -R, -r, --recursive\n              Search directories recursively.\n",
+        );
+        let lower = parsed.flags.iter().find(|flag| flag.short.as_deref() == Some("-r"));
+        let upper = parsed.flags.iter().find(|flag| flag.short.as_deref() == Some("-R"));
+        assert!(lower.is_some(), "grouped -r alias must be indexed");
+        assert!(upper.is_some(), "grouped -R alias must be indexed");
+        assert_eq!(lower.unwrap().source_line, upper.unwrap().source_line);
     }
 
     #[test]
