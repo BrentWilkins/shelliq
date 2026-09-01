@@ -131,7 +131,9 @@ verification path. If no documentation matches, it returns `no_documentation`.
 `shelliq suggest --json` prints a versioned envelope for all three outcomes:
 `ready`, `needs_input`, and `no_documentation`. A ready envelope contains the
 rendered command, semantic document, and provenance. Abstention envelopes never
-contain a command or semantic document.
+contain a command or semantic document. Documentation-backed envelopes identify
+the selected command family, recipe source, and intent so clients can associate
+a clarification with the recipe that produced it.
 
 On two independent literal-clean sealed sets, the unchanged runtime delivered
 81/96 complete requests exactly with 100% ready precision and local/semantic
