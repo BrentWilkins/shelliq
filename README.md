@@ -3,12 +3,14 @@
 A local CLI assistant. It answers "is it `-r` or `-R`?" from the man pages installed on
 _this_ machine, and cites the line it got the answer from.
 
-Current release line: `0.1.0-alpha.1`. Trust hardening and the separate
-custom-model experiment are active; the shipping CLI remains model-free.
+Current release line: `0.1.0-alpha.1`. The downloaded CLI is a standalone Rust
+binary. Its normal commands remain model-free; optional AI is installed only
+after an explicit `shelliq model setup`.
 
 ## Install
 
-Installing a prebuilt release does **not** require Rust or Cargo.
+Installing and using the model-free CLI requires no Rust, Cargo, Python, uv, or
+GPU. The optional model setup manages its own dependencies separately.
 
 ### Shell installer
 
@@ -114,17 +116,51 @@ shelliq index stats
 shelliq explain grep -r
 ```
 
+The broad scan can take a few minutes because it reads documentation for
+thousands of installed commands without executing them.
+
 For a smaller initial index, replace `index scan` with:
 
 ```console
 shelliq index build grep tar curl ls find
 ```
 
+### Optional AI first run
+
+Nothing AI-related is installed or started automatically. Check readiness at any
+time without installing anything:
+
+```console
+shelliq model doctor
+```
+
+The only prerequisite for optional AI is uv. On macOS, Linux, and WSL2, use its
+[official installer](https://docs.astral.sh/uv/getting-started/installation/):
+
+```console
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Open a new shell, then let ShellIQ acquire Python, create an isolated environment,
+install the locked CPU dependencies, download the pinned model, and build the
+local command index:
+
+```console
+shelliq model setup --scan
+shelliq model run --json 'Show information about all CPUs'
+```
+
+The first setup downloads about 500 MB. It requires no root access or Rust
+toolchain. To undo it while preserving the Rust CLI and command index:
+
+```console
+shelliq model remove
+```
+
 ## Try it
 
 ```console
-$ cargo build --release
-$ ./target/release/shelliq index build grep tar curl ls find
+$ shelliq index build grep tar curl ls find
   grep(1)  47 flags
   tar(1)  156 flags
   curl(1)  258 flags
@@ -180,35 +216,26 @@ The index is built per machine and never shipped, so macOS needs no data transfe
 still go stale — it reflects the pages as of the last build, so `shelliq index refresh`
 after an upgrade is what keeps it honest.
 
-## Experimental model alpha
+## Optional documentation model (experimental)
 
-The current 0.5B GGUF is a development baseline, not a release candidate. It
-failed the frozen P1B production-path gate after unsafe and unsupported requests
-crossed the ready boundary; see
-[`p1b-runtime-v1-results.md`](training/experiments/p1b-runtime-v1-results.md).
-The existing Salesforce CodeT5 checkpoint also failed its fresh production-path
-gate: 0/4 supported unseen commands, 0/4 correct poisoned-context responses, and
-10.16 s CPU p95. Deterministic grounding safely rejected its invented operands,
-but did not make it useful; see
-[`codet5-runtime-v1-results.md`](training/experiments/codet5-runtime-v1-results.md).
-A replacement documentation-conditioned CodeT5 ranker has now passed a fresh
+The documentation-conditioned CodeT5 ranker passed a fresh
 command-disjoint gate: 104/128 unseen commands compiled ready, 128/128
 insufficient-documentation cases abstained, and CPU p95 was 215 ms. It ranks
-local Rust-valid recipes instead of generating command words. The frozen recipe
-index and ranker head are included in the source tree; setup downloads the exact
-pinned Salesforce CodeT5 base revision. The evaluation is documented in
+locally verified recipes instead of generating command words. The release binary
+embeds the hash-checked recipe index, ranker head, locked dependency graph, and
+small Python bootstrap; it does not embed Python, PyTorch, or model weights.
+Setup downloads the exact pinned Salesforce CodeT5 base revision. The evaluation is documented in
 [`documentation-cross-encoder-v2-results.md`](training/experiments/documentation-cross-encoder-v2-results.md);
-the model runtime remains optional and is not embedded in the Rust binary.
+the inference runtime remains optional.
 
 `shelliq suggest` can query an OpenAI-compatible model server bound to numeric
 loopback, deserialize compact SemanticDocumentV2 JSON, validate its Rust
 render/reparse round trip, and check recognized flags against the local index.
 It prints an editable command and never executes it:
 
-### Run the documentation model
+### Run the model
 
-With [uv](https://docs.astral.sh/uv/) installed, the release binary extracts its
-hash-checked runtime bundle on demand:
+With uv installed, setup and a first request are:
 
 ```console
 shelliq model setup --scan
@@ -234,6 +261,18 @@ of CodeT5 weights (about 500 MB of downloads in total). Neither setup nor
 suggestion executes a generated command.
 From a source checkout, `cargo build --release` produces the same model-enabled
 binary; `./shelliq-model` remains a direct development entry point.
+
+Troubleshoot with `shelliq model doctor`. ShellIQ prints the exact official uv
+installation command when uv is missing. Model files live under the user's XDG
+data and cache directories (normally `~/.local/share/shelliq/model` and
+`~/.cache/shelliq/`); `shelliq model remove` removes those optional files while
+preserving `~/.local/share/shelliq/index.sqlite`.
+
+The earlier 0.5B GGUF and generative CodeT5 checkpoints remain documented
+development baselines, not release candidates. They failed their frozen
+production gates; see
+[`p1b-runtime-v1-results.md`](training/experiments/p1b-runtime-v1-results.md) and
+[`codet5-runtime-v1-results.md`](training/experiments/codet5-runtime-v1-results.md).
 
 For any compatible loopback adapter, the lower-level client remains:
 
@@ -327,8 +366,9 @@ a standalone high-coverage generator. Full evidence is in
 
 ## Footprint
 
-The Rust binary links no inference library, opens no socket until `suggest` is explicitly
-invoked, and needs no GPU. The optional `shelliq-model` process owns PyTorch and the pinned
+The Rust binary embeds about 1.1 MB of compressed recipes plus the small runtime
+bootstrap, but links no inference library, installs nothing automatically, and
+needs no GPU. The optional `shelliq-model` process owns PyTorch and the pinned
 CodeT5 weights and is reached only over numeric loopback.
 
 ## Layout
@@ -339,7 +379,7 @@ crates/harvest/   man page parser, --help crawler
 crates/index/     schema, FTS5, ranking
 crates/verify/    tokenizer, bundle decomposition, option checking
 shell/            Zsh and Bash interactive integrations
-training/         JAX/Flax fine-tuning (uv, Python 3.14, development only)
+training/         Optional Python runtime plus development-only training tools
 ```
 
 `PLAN.md` has the full design, the measurements behind it, and the things that turned out

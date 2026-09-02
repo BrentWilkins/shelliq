@@ -99,7 +99,7 @@ enum Command {
     /// Install or run the optional documentation-conditioned model runtime.
     #[cfg(feature = "model")]
     Model {
-        /// Runtime command and options: setup, serve, or run.
+        /// Runtime command and options: setup, serve, run, doctor, or remove.
         #[arg(required = true, trailing_var_arg = true, allow_hyphen_values = true)]
         arguments: Vec<std::ffi::OsString>,
     },

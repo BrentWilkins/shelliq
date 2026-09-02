@@ -1,4 +1,9 @@
-# Current development handoff
+# Historical model-development handoff
+
+> This August 2026 checkpoint records superseded generative-model experiments.
+> It is retained for research provenance, not as current setup guidance. For the
+> supported optional ranker, use `shelliq model doctor` and see
+> [docs/ALPHA_RELEASE.md](docs/ALPHA_RELEASE.md).
 
 ## Current checkpoint — 2026-08-21 preference pilot
 

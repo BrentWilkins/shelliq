@@ -2,8 +2,9 @@
 set -eu
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-export UV_CACHE_DIR=${UV_CACHE_DIR:-"${TMPDIR:-/tmp}/shelliq-uv-cache"}
 runtime_cache=${XDG_CACHE_HOME:-"$HOME/.cache"}
+export UV_CACHE_DIR=${UV_CACHE_DIR:-"$runtime_cache/shelliq/uv-cache"}
+export HF_HOME=${HF_HOME:-"$runtime_cache/shelliq/huggingface"}
 export UV_PROJECT_ENVIRONMENT=${SHELLIQ_MODEL_VENV:-"$runtime_cache/shelliq/model-venv"}
 unset VIRTUAL_ENV
 export PYTHONPATH="$script_dir/training${PYTHONPATH:+:$PYTHONPATH}"

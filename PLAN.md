@@ -1089,6 +1089,16 @@ diagnostic returned Darwin-only `sw_vers`. No Cargo checkout or separate semanti
 codec is required after installing the release; uv remains an explicit optional
 runtime prerequisite.
 
+**Release-readiness follow-up (2026-09-02): first-use path verified.** The
+standalone cargo-dist archive now exposes Rust-only `model doctor` diagnostics,
+actionable official uv installation guidance, dependency and model storage in
+ShellIQ-owned XDG directories, and scoped `model remove` cleanup that preserves
+the command index. A clean Linux x86-64 simulation downloaded the locked CPU
+runtime and pinned model, scanned 2,446 installed commands, returned `lscpu`
+with `source: model`, and removed the optional runtime successfully. CI covers
+the embedded Python runtime and the release binary's platform diagnostics;
+cargo-dist again plans all four Linux/macOS x86-64/ARM64 archives.
+
 - Non-loopback endpoint refused unless explicitly enabled; proxies and redirects ignored.
 - Model emits a structured command AST; shelliq renders and quotes it deterministically.
 - Nothing is executed. Buffer replacement only, undo intact, no automatic case rewrites.

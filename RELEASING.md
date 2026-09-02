@@ -26,7 +26,7 @@ prerelease when its semantic version contains a prerelease suffix.
    cargo fmt --all --check
    cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
    cargo test --locked --workspace --all-features
-   cargo package --locked --workspace
+   cargo package --locked --workspace --exclude shelliq
    bash shell/tests/run.bash
    shellcheck -x shell/shelliq.bash shell/tests/run.bash shell/tests/suggest-widget.bash
    uv run --frozen ruff check .
@@ -68,3 +68,10 @@ installer, and publishes a GitHub prerelease. After it completes:
    that `~/.local/bin/shelliq` works after a fresh shell starts.
 4. Smoke-test `shelliq --version`, `shelliq index build grep`, and
    `shelliq explain grep -r` on representative Linux and macOS hosts.
+5. On a supported model host, run `shelliq model doctor`, confirm a missing-uv
+   machine prints the official installation command without changing state,
+   then install uv and run `shelliq model setup --scan` followed by
+   `shelliq model run --json 'Show information about all CPUs'`. Require a
+   `ready` envelope with `source: model`.
+6. Run `shelliq model remove`; confirm it preserves both the `shelliq` binary and
+   local command index, then rerun `shelliq model doctor`.

@@ -5,6 +5,12 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "A local, verifiable CLI assistant that answers from your own man pages"
+# The application embeds repository runtime assets and ships through cargo-dist.
+# Reusable workspace libraries remain independently publishable to crates.io.
+publish = false
+
+[package.metadata.dist]
+dist = true
 
 [[bin]]
 name = "shelliq"

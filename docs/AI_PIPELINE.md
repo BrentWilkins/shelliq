@@ -1,5 +1,9 @@
 # ShellIQ AI pipeline architecture
 
+> This is the longer-term generative architecture. The current alpha ships a
+> smaller, optional documentation-conditioned ranker; see
+> [ALPHA_RELEASE.md](ALPHA_RELEASE.md) for supported setup and behavior.
+
 This document sketches the stable boundaries of the data, training, and runtime
 systems. It is deliberately independent of a particular post-training algorithm
 or serving library. The detailed Zsh parser and AST contract lives in
