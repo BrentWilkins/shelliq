@@ -32,9 +32,10 @@ The passing checkpoint is served by
 `training/scripts/serve_documentation_cross_encoder.py`. It accepts only
 loopback chat completions, extracts ShellIQ's bounded shortlist or final selected
 command, ranks at most 32 local templates per command, binds request-visible
-values, and returns only Rust-round-tripped `SemanticDocumentV2` JSON. A score
-below zero, missing documentation, unresolved slot, or codec failure returns
-HTTP 422.
+values, and returns only structures drawn from the frozen Rust-round-tripped
+recipe index. A score below zero, missing documentation, or unresolved slot
+returns HTTP 422. The real ShellIQ client remains authoritative: it parses,
+renders, reparses, verifies, and applies deterministic policy to every response.
 
 The release `shelliq suggest` two-pass path was exercised with `lscpu`, a fresh
 v2 command absent from supervised training:
@@ -53,19 +54,16 @@ ShellIQ safely selected its deterministic documentation fallback instead.
 
 ## Running the experimental adapter
 
-From `training/`:
+From the repository root:
 
 ```sh
-uv run --frozen python scripts/serve_documentation_cross_encoder.py \
-  --documentation-index artifacts/documentation-template-index-v2/index.jsonl \
-  --checkpoint artifacts/documentation-cross-encoder-v2/checkpoint.pt \
-  --actions ../target/debug/semantic-actions \
-  --device cpu
+./shelliq-model setup
+./shelliq-model serve --device cpu
 ```
 
-Then point the model-feature CLI at
-`http://127.0.0.1:8766/v1/chat/completions`. The checkpoint is an experimental
-local artifact, not part of the model-free release.
+The release-style interface is `shelliq model setup|serve|run`; it extracts the
+same locked runtime and frozen assets embedded in the model-enabled binary. The
+pinned CodeT5 base weights are downloaded on first setup rather than embedded.
 
 ## Frozen identities
 

@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+export UV_CACHE_DIR=${UV_CACHE_DIR:-"${TMPDIR:-/tmp}/shelliq-uv-cache"}
+runtime_cache=${XDG_CACHE_HOME:-"$HOME/.cache"}
+export UV_PROJECT_ENVIRONMENT=${SHELLIQ_MODEL_VENV:-"$runtime_cache/shelliq/model-venv"}
+unset VIRTUAL_ENV
+export PYTHONPATH="$script_dir/training${PYTHONPATH:+:$PYTHONPATH}"
+exec uv run --frozen --project "$script_dir/training" --no-dev --no-group training \
+  python -m shelliq_training.model_runtime "$@"

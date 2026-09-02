@@ -8,13 +8,15 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Protocol, cast
-
-import jax.numpy as jnp
+from typing import TYPE_CHECKING, Protocol, cast
 
 from shelliq_training.prompt import LEGACY_SEMANTIC_CONTEXT_PREFIX, PromptContract
 from shelliq_training.prompt import format_user_message as format_prompt_user_message
-from shelliq_training.training import IGNORE_INDEX, CausalLMBatch
+
+if TYPE_CHECKING:
+    from shelliq_training.training import CausalLMBatch
+
+IGNORE_INDEX = -100
 
 SCHEMA_VERSION = 1
 
@@ -357,6 +359,10 @@ def collate_sft(
     pad_token_id: int,
 ) -> CausalLMBatch:
     """Right-pad to a fixed shape, avoiding a JAX recompilation per batch."""
+    import jax.numpy as jnp
+
+    from shelliq_training.training import CausalLMBatch
+
     if not examples:
         raise ValueError('cannot collate an empty batch')
     if sequence_length < 2:

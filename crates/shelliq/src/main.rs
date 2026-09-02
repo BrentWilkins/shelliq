@@ -8,6 +8,8 @@ mod documentation;
 #[cfg(feature = "model")]
 mod model;
 #[cfg(feature = "model")]
+mod model_runtime;
+#[cfg(feature = "model")]
 mod policy;
 #[cfg(feature = "model")]
 mod response;
@@ -62,7 +64,6 @@ enum Command {
         #[arg(long)]
         raw: bool,
     },
-    /// Show exactly where a citation such as `grep(1):168` came from.
     /// Generate an experimental command through a local model server, with a
     /// fail-closed vendored-documentation fallback.
     #[cfg(feature = "model")]
@@ -95,9 +96,15 @@ enum Command {
         #[arg(long, conflicts_with = "json")]
         zsh_widget: bool,
     },
-    Source {
-        citation: String,
+    /// Install or run the optional documentation-conditioned model runtime.
+    #[cfg(feature = "model")]
+    Model {
+        /// Runtime command and options: setup, serve, or run.
+        #[arg(required = true, trailing_var_arg = true, allow_hyphen_values = true)]
+        arguments: Vec<std::ffi::OsString>,
     },
+    /// Show exactly where a citation such as `grep(1):168` came from.
+    Source { citation: String },
 }
 
 #[derive(Subcommand)]
@@ -170,6 +177,8 @@ fn main() -> Result<()> {
             json,
             zsh_widget,
         ),
+        #[cfg(feature = "model")]
+        Command::Model { arguments } => model_runtime::run(&arguments),
         Command::Source { citation } => source(&path, &citation),
     }
 }
@@ -857,6 +866,18 @@ mod tests {
                 action: IndexAction::Scan
             }
         ));
+    }
+
+    #[test]
+    fn model_runtime_forwards_nested_options_verbatim() {
+        let cli = Cli::try_parse_from(["shelliq", "model", "run", "--index", "local.sqlite", "--json", "show CPUs"]).unwrap();
+        let Command::Model { arguments } = cli.command else {
+            panic!("expected model command");
+        };
+        assert_eq!(
+            arguments,
+            ["run", "--index", "local.sqlite", "--json", "show CPUs"].map(std::ffi::OsString::from)
+        );
     }
 
     #[test]

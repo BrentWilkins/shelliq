@@ -1078,6 +1078,17 @@ adapter passed the real two-stage `shelliq suggest` path for unseen `lscpu`; loc
 verification and deterministic policy remained final authority. See
 `training/experiments/documentation-cross-encoder-v2-results.md`.
 
+**Usable runtime follow-up (2026-09-01): release path verified.** The default
+release binary now embeds the hash-checked 1.1 MB compressed recipe index,
+ranker head, minimal Python sources, and locked runtime graph. `shelliq model
+setup` extracts them and obtains the exact pinned CodeT5 revision; `shelliq model
+run` owns a temporary loopback adapter for one request, while `serve` supports
+widgets and repeated requests. A clean isolated CPU-only environment returned
+`lscpu` with `source: model` through the release binary, and a Darwin two-pass
+diagnostic returned Darwin-only `sw_vers`. No Cargo checkout or separate semantic
+codec is required after installing the release; uv remains an explicit optional
+runtime prerequisite.
+
 - Non-loopback endpoint refused unless explicitly enabled; proxies and redirects ignored.
 - Model emits a structured command AST; shelliq renders and quotes it deterministically.
 - Nothing is executed. Buffer replacement only, undo intact, no automatic case rewrites.

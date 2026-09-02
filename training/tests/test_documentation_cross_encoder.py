@@ -9,6 +9,8 @@ from shelliq_training.documentation_cross_encoder import (
     context_commands,
     paraphrase,
     parse_authoritative_prompt,
+    prompt_platform,
+    runtime_groups,
     split_commands,
     threshold_for_complete_abstention,
 )
@@ -54,10 +56,12 @@ def test_abstention_threshold_is_strictly_above_every_negative() -> None:
 def test_runtime_parses_bounded_shelliq_prompt() -> None:
     source = (
         '# prompt-contract: context-authoritative-v1\n'
+        '# platform: darwin\n'
         '<context>\nSelection pass\nCommands:\n- date\n- printf\n</context>\n'
         '<instruction>\nShow the current date\n</instruction>'
     )
     context, instruction = parse_authoritative_prompt(source)
+    assert prompt_platform(source) == 'darwin'
     assert context_commands(context) == ('date', 'printf')
     assert instruction == 'Show the current date'
 
@@ -65,6 +69,21 @@ def test_runtime_parses_bounded_shelliq_prompt() -> None:
 def test_runtime_parses_final_selected_command() -> None:
     context = 'Final pass: use exactly command `date`. Option tokens are case-sensitive.'
     assert context_commands(context) == ('date',)
+
+
+def test_runtime_keeps_darwin_and_linux_recipes_separate() -> None:
+    def template(record_id: str, platform: Platform) -> DocumentationTemplate:
+        return DocumentationTemplate(
+            record_id=record_id,
+            command='date',
+            platform=platform,
+            instruction='Show date',
+            context='date: Show date.',
+            document={'v': 2, 'd': 'zsh', 's': [{'t': 'p', 'c': [{'n': {'s': 'date'}, 'a': []}]}]},
+        )
+
+    groups = runtime_groups([template('linux:date', Platform.LINUX), template('darwin:date', Platform.DARWIN)])
+    assert groups == {('darwin', 'date'): ('darwin:date',), ('linux', 'date'): ('linux:date',)}
 
 
 def test_unresolved_binding_returns_none_not_false() -> None:
@@ -92,3 +111,23 @@ def test_unresolved_binding_returns_none_not_false() -> None:
         ActionsMustNotRun(),
     )
     assert result is None
+
+
+def test_runtime_binding_can_defer_round_trip_to_shelliq_boundary() -> None:
+    template = DocumentationTemplate(
+        record_id='fixture:1',
+        command='fixture',
+        platform=Platform.DARWIN,
+        instruction='Show status',
+        context='fixture: Show status.',
+        document={'v': 2, 'd': 'zsh', 's': [{'t': 'p', 'c': [{'n': {'s': 'fixture'}, 'a': []}]}]},
+    )
+    assert (
+        bind_selected(
+            RankCase('fixture', 'fixture:1', 'Show status'),
+            'fixture:1',
+            {'fixture:1': template},
+            None,
+        )
+        == template.document
+    )

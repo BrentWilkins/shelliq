@@ -5,16 +5,12 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import os
 import re
 import threading
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-
-os.environ.setdefault('HF_HUB_OFFLINE', '1')
-os.environ.setdefault('TRANSFORMERS_OFFLINE', '1')
 
 import torch
 from torch import nn
@@ -160,11 +156,11 @@ def candidate_pool(
 
 
 class FrozenCodeT5CrossEncoder(nn.Module):
-    def __init__(self) -> None:
+    def __init__(self, model_path: str | Path = MODEL_ID) -> None:
         super().__init__()
         pretrained = AutoModelForSeq2SeqLM.from_pretrained(
-            MODEL_ID,
-            revision=REVISION,
+            model_path,
+            revision=REVISION if str(model_path) == MODEL_ID else None,
             local_files_only=True,
         )
         self.encoder = pretrained.get_encoder()
@@ -183,9 +179,10 @@ class FrozenCodeT5CrossEncoder(nn.Module):
         return self.head(embeddings).squeeze(-1)
 
 
-def tokenizer() -> RobertaTokenizer:
-    vocab = cached_file(MODEL_ID, 'vocab.json', revision=REVISION, local_files_only=True)
-    merges = cached_file(MODEL_ID, 'merges.txt', revision=REVISION, local_files_only=True)
+def tokenizer(model_path: str | Path = MODEL_ID) -> RobertaTokenizer:
+    revision = REVISION if str(model_path) == MODEL_ID else None
+    vocab = cached_file(model_path, 'vocab.json', revision=revision, local_files_only=True)
+    merges = cached_file(model_path, 'merges.txt', revision=revision, local_files_only=True)
     return RobertaTokenizer(vocab=vocab, merges=merges)
 
 
@@ -253,13 +250,15 @@ def bind_selected(
     case: RankCase,
     selected_record_id: str,
     typed_by_id: Mapping[str, DocumentationTemplate],
-    actions: SemanticActionClient,
+    actions: SemanticActionClient | None,
 ) -> dict[str, object] | None:
     template = typed_by_id[selected_record_id]
     required = set(unresolved_placeholders(template.document))
     bound = bind_template(RetrievedTemplate(template, 1.0), case.query)
     if not required.issubset(dict(bound.bindings)):
         return None
+    if actions is None:
+        return bound.document
     try:
         encoded = actions.encode([bound.document])
         decoded = actions.decode(encoded)[0]
@@ -281,26 +280,41 @@ class DocumentationCrossEncoderRuntime:
         self,
         documentation_index: Path,
         checkpoint_path: Path,
-        actions_path: Path,
+        actions_path: Path | None = None,
         device: str = 'auto',
+        model_path: str | Path = MODEL_ID,
     ) -> None:
         self.device = runtime_device(device)
-        self.typed_by_id, self.raw_by_id, self.grouped = load_templates(documentation_index)
+        self.typed_by_id, self.raw_by_id, _ = load_templates(documentation_index)
+        self.grouped = runtime_groups(self.typed_by_id.values())
         checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=True)
         if checkpoint.get('experiment') != EXPERIMENT_V2 or checkpoint.get('threshold') != 0.0:
             raise ValueError('runtime requires the frozen v2 zero-logit checkpoint')
         self.threshold = float(checkpoint['threshold'])
-        self.model = FrozenCodeT5CrossEncoder().to(self.device)
+        self.model = FrozenCodeT5CrossEncoder(model_path).to(self.device)
         self.model.head.load_state_dict(checkpoint['head_state_dict'])
         self.model.eval()
-        self.tokenizer = tokenizer()
-        self.actions = SemanticActionClient(actions_path)
+        self.tokenizer = tokenizer(model_path)
+        self.actions = SemanticActionClient(actions_path) if actions_path is not None else None
         self._lock = threading.Lock()
 
+    def warm(self) -> None:
+        """Initialize tokenizer and encoder kernels before accepting a timed request."""
+        record_id = next(iter(self.raw_by_id))
+        with self._lock:
+            embed_texts(
+                self.model,
+                self.tokenizer,
+                [pair_text('warm local documentation ranker', self.raw_by_id[record_id])],
+                device=self.device,
+                batch_size=1,
+            )
+
     def generate(self, source: str) -> dict[str, object]:
+        platform = prompt_platform(source)
         context, instruction = parse_authoritative_prompt(source)
         commands = context_commands(context)
-        record_ids = tuple(record_id for command in commands for record_id in self.grouped.get(command, ())[:32])
+        record_ids = tuple(record_id for command in commands for record_id in self.grouped.get((platform, command), ())[:32])
         if not record_ids:
             raise ValueError('no local documentation candidates for the bounded command context')
         texts = [pair_text(instruction, self.raw_by_id[record_id]) for record_id in record_ids]
@@ -356,6 +370,23 @@ def parse_authoritative_prompt(source: str) -> tuple[str, str]:
     if not context or not instruction:
         raise ValueError('context and instruction must be nonempty')
     return context, instruction
+
+
+def prompt_platform(source: str) -> str:
+    match = re.match(r'# prompt-contract: context-authoritative-v1\n# platform: (linux|darwin)\n', source)
+    if match is None:
+        raise ValueError('adapter requires a supported platform in the authoritative prompt header')
+    return match.group(1)
+
+
+def runtime_groups(
+    templates: Iterable[DocumentationTemplate],
+) -> dict[tuple[str, str], tuple[str, ...]]:
+    grouped: dict[tuple[str, str], list[str]] = defaultdict(list)
+    for template in templates:
+        if SAFE_COMMAND.fullmatch(template.command):
+            grouped[(template.platform.value, template.command)].append(template.record_id)
+    return {key: tuple(sorted(record_ids)) for key, record_ids in grouped.items()}
 
 
 def context_commands(context: str) -> tuple[str, ...]:

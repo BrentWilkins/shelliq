@@ -191,21 +191,51 @@ gate: 0/4 supported unseen commands, 0/4 correct poisoned-context responses, and
 10.16 s CPU p95. Deterministic grounding safely rejected its invented operands,
 but did not make it useful; see
 [`codet5-runtime-v1-results.md`](training/experiments/codet5-runtime-v1-results.md).
-The model-free CLI release is unaffected.
-
 A replacement documentation-conditioned CodeT5 ranker has now passed a fresh
 command-disjoint gate: 104/128 unseen commands compiled ready, 128/128
 insufficient-documentation cases abstained, and CPU p95 was 215 ms. It ranks
-local Rust-valid recipes instead of generating command words. The experimental
-loopback adapter and reproduction commands are documented in
+local Rust-valid recipes instead of generating command words. The frozen recipe
+index and ranker head are included in the source tree; setup downloads the exact
+pinned Salesforce CodeT5 base revision. The evaluation is documented in
 [`documentation-cross-encoder-v2-results.md`](training/experiments/documentation-cross-encoder-v2-results.md);
-it is not bundled with the model-free release.
+the model runtime remains optional and is not embedded in the Rust binary.
 
-An opt-in `cargo build --release --features model` build adds
-`shelliq suggest`. It can query an OpenAI-compatible model server bound to numeric
+`shelliq suggest` can query an OpenAI-compatible model server bound to numeric
 loopback, deserialize compact SemanticDocumentV2 JSON, validate its Rust
 render/reparse round trip, and check recognized flags against the local index.
 It prints an editable command and never executes it:
+
+### Run the documentation model
+
+With [uv](https://docs.astral.sh/uv/) installed, the release binary extracts its
+hash-checked runtime bundle on demand:
+
+```console
+shelliq model setup --scan
+shelliq model run --json 'Show information about all CPUs'
+```
+
+`setup` verifies and installs the frozen assets, downloads only the pinned
+CodeT5 revision, and optionally builds the ordinary per-machine man-page index.
+`run` starts a temporary loopback adapter, asks the real ShellIQ client for one
+suggestion, and shuts the adapter down. The locked runtime supports x86-64 and
+ARM64 Linux (including WSL2) and Apple-silicon macOS; inference is CPU-only.
+
+For shell widgets or repeated requests, keep the warmed adapter running:
+
+```console
+shelliq model serve
+shelliq suggest --endpoint http://127.0.0.1:8080/v1/chat/completions \
+  --timeout-ms 10000 copy a tree while preserving its attributes
+```
+
+The first setup downloads an isolated CPU-only Python runtime and roughly 250 MB
+of CodeT5 weights (about 500 MB of downloads in total). Neither setup nor
+suggestion executes a generated command.
+From a source checkout, `cargo build --release` produces the same model-enabled
+binary; `./shelliq-model` remains a direct development entry point.
+
+For any compatible loopback adapter, the lower-level client remains:
 
 ```console
 $ shelliq suggest --endpoint http://127.0.0.1:8080/v1/chat/completions \
@@ -297,10 +327,9 @@ a standalone high-coverage generator. Full evidence is in
 
 ## Footprint
 
-The default build links no inference library, opens no socket, and needs no GPU. A model is
-optional, downloaded on demand, and reached over HTTP through whatever you already run
-(`ollama` or `llama-server`) — which is also how Metal, Vulkan, and CUDA support arrive
-without ShellIQ containing any backend code.
+The Rust binary links no inference library, opens no socket until `suggest` is explicitly
+invoked, and needs no GPU. The optional `shelliq-model` process owns PyTorch and the pinned
+CodeT5 weights and is reached only over numeric loopback.
 
 ## Layout
 

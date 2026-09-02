@@ -21,7 +21,9 @@ repos:
       - id: check-added-large-files
         # Vendored tldr-pages content (crates/harvest/vendor/) — see NOTICE.md. A deliberate,
         # one-time addition, not the kind of accidental large binary this hook guards against.
-        exclude: '^crates/harvest/vendor/'
+        # The compressed recipe index is the same attributed TLDR corpus plus frozen Rust-valid
+        # documents; its committed hashes are checked before installation and decompression.
+        exclude: '^(crates/harvest/vendor/|training/shelliq_training/assets/documentation-index-v2\.jsonl\.xz$)'
       - id: check-toml
       - id: check-yaml
 

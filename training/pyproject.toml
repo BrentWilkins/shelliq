@@ -1,21 +1,10 @@
 [project]
 name = "shelliq-training"
 version = "0.1.0"
-description = "JAX/Flax nnx fine-tuning for shelliq. Development only; never shipped to users."
+description = "Optional ShellIQ model runtime and development-only training tools."
 requires-python = ">=3.14"
 license = "MIT OR Apache-2.0"
 dependencies = [
-    "datasets>=5.0.1",
-    "flax>=0.12.8",
-    "grain>=0.2.18",
-    "jax[cuda13]>=0.11.0",
-    "numpy>=2.5.1",
-    "optax>=0.2.8",
-    "orbax-checkpoint>=0.12.1",
-    "rich>=15.0.0",
-    "safetensors>=0.8.0",
-    "sentencepiece>=0.2.2",
-    "tokenizers>=0.22.2",
     "torch>=2.13.0",
     "transformers>=5.14.1",
 ]
@@ -31,9 +20,29 @@ exclude = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
     "ruff>=0.16.0",
-    "torch>=2.13.0",
+]
+training = [
+    "datasets>=5.0.1",
+    "flax>=0.12.8",
+    "grain>=0.2.18",
+    "jax[cuda13]>=0.11.0",
+    "numpy>=2.5.1",
+    "optax>=0.2.8",
+    "orbax-checkpoint>=0.12.1",
+    "rich>=15.0.0",
+    "safetensors>=0.8.0",
+    "sentencepiece>=0.2.2",
+    "tokenizers>=0.22.2",
 ]

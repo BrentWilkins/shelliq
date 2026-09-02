@@ -11,7 +11,7 @@ name = "shelliq"
 path = "src/main.rs"
 
 [features]
-default = []
+default = ["model"]
 model = ["dep:serde", "dep:serde_json", "dep:shelliq-syntax", "dep:ureq"]
 
 [dependencies]
