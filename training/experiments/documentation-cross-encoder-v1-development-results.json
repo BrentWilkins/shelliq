@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "experiment": "documentation-cross-encoder-v1",
+  "phase": "development",
+  "development_authorized": true,
+  "selected_epoch": 48,
+  "threshold": -0.31467324495315546,
+  "metrics": {
+    "sufficient_ready": 58,
+    "sufficient_cases": 64,
+    "sufficient_ready_rate": 0.90625,
+    "insufficient_abstained": 64,
+    "insufficient_cases": 64,
+    "insufficient_abstain_rate": 1.0,
+    "macro_accuracy": 0.953125,
+    "train_pairs": 7356,
+    "positive_train_pairs": 1839,
+    "train_truncated": 1,
+    "development_truncated": 0
+  },
+  "artifacts": {
+    "documentation_index_sha256": "17b3b2e9feb215f858e893ba4f761088f9edfbd674ec89633c26d4332a6ab64b",
+    "manifest_sha256": "152ba19746d649fff2ee99342cd25f839e2646041003354667859e1330ccc356",
+    "train_sha256": "b027a0182b1222534f79287306e27a62d5eeb144158bf9a95809c018a20260c6",
+    "development_sha256": "307041ef5fc5467aa8315eb5d8ae9a13e106ff797db278a5f13eb7edf886cfd7",
+    "sealed_test_sha256": "d0d9e6c8ce97bcdbbd4834e44ee43f56294cc77d181152446f3dc8753e42ba2f",
+    "checkpoint_sha256": "138b6c79ed36458308fff038672e195a6ccc54c3fd4f0c584200b3e533f15cd4",
+    "development_report_sha256": "8cbbee485679419a607243115be3a4c02df5e8f1fb15cf5a6bc1d12054dfceec"
+  }
+}
