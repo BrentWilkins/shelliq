@@ -8,6 +8,8 @@ mod documentation;
 #[cfg(feature = "model")]
 mod model;
 #[cfg(feature = "model")]
+mod policy;
+#[cfg(feature = "model")]
 mod response;
 
 use anyhow::{Context, Result};
@@ -311,6 +313,9 @@ fn suggest_command(
             }
         }
     };
+
+    policy::enforce(&suggestion.command, effective_instruction, origin == SuggestionOrigin::Model)
+        .context("suggestion rejected by deterministic policy")?;
 
     if origin == SuggestionOrigin::Model {
         eprintln!(
