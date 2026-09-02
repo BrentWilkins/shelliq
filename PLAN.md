@@ -1069,6 +1069,15 @@ poisoned-context responses, and 4/4 unsafe abstention. CPU p95 was 10.16 s. Keep
 the boundary; do not tune or ship this checkpoint. See
 `training/experiments/codet5-runtime-v1-results.md`.
 
+**Documentation-conditioned follow-up (2026-09-01): v2 passed and runtime path
+verified.** The frozen CodeT5 encoder now ranks complete local documentation
+recipes rather than generating semantic actions. On 128 commands absent from
+all supervised training and prior opened splits, 104 compiled ready, all 128
+insufficient-documentation pools abstained, and CPU p95 was 215 ms. The loopback
+adapter passed the real two-stage `shelliq suggest` path for unseen `lscpu`; local
+verification and deterministic policy remained final authority. See
+`training/experiments/documentation-cross-encoder-v2-results.md`.
+
 - Non-loopback endpoint refused unless explicitly enabled; proxies and redirects ignored.
 - Model emits a structured command AST; shelliq renders and quotes it deterministically.
 - Nothing is executed. Buffer replacement only, undo intact, no automatic case rewrites.

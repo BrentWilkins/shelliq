@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+from shelliq_training.data import Platform
 from shelliq_training.documentation_cross_encoder import (
     EXPERIMENT,
     RankCase,
+    bind_selected,
     candidate_pool,
+    context_commands,
     paraphrase,
+    parse_authoritative_prompt,
     split_commands,
     threshold_for_complete_abstention,
 )
+from shelliq_training.documentation_templates import DocumentationTemplate
 
 
 def test_command_split_is_deterministic_and_disjoint() -> None:
@@ -44,3 +49,46 @@ def test_paraphrase_is_command_agnostic_and_preserves_literals() -> None:
 def test_abstention_threshold_is_strictly_above_every_negative() -> None:
     threshold = threshold_for_complete_abstention([-1.0, 0.5, 0.25])
     assert threshold > 0.5
+
+
+def test_runtime_parses_bounded_shelliq_prompt() -> None:
+    source = (
+        '# prompt-contract: context-authoritative-v1\n'
+        '<context>\nSelection pass\nCommands:\n- date\n- printf\n</context>\n'
+        '<instruction>\nShow the current date\n</instruction>'
+    )
+    context, instruction = parse_authoritative_prompt(source)
+    assert context_commands(context) == ('date', 'printf')
+    assert instruction == 'Show the current date'
+
+
+def test_runtime_parses_final_selected_command() -> None:
+    context = 'Final pass: use exactly command `date`. Option tokens are case-sensitive.'
+    assert context_commands(context) == ('date',)
+
+
+def test_unresolved_binding_returns_none_not_false() -> None:
+    template = DocumentationTemplate(
+        record_id='fixture:1',
+        command='fixture',
+        platform=Platform.LINUX,
+        instruction='Process a file',
+        context='fixture: Process a file.',
+        document={
+            'v': 2,
+            'd': 'zsh',
+            's': [{'t': 'p', 'c': [{'n': {'s': 'fixture'}, 'a': [{'s': 'path/to/file'}]}]}],
+        },
+    )
+
+    class ActionsMustNotRun:
+        def encode(self, documents):  # pragma: no cover - failure sentinel
+            raise AssertionError(documents)
+
+    result = bind_selected(
+        RankCase('fixture', 'fixture:1', 'Process it'),
+        'fixture:1',
+        {'fixture:1': template},
+        ActionsMustNotRun(),
+    )
+    assert result is None

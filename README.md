@@ -193,6 +193,14 @@ but did not make it useful; see
 [`codet5-runtime-v1-results.md`](training/experiments/codet5-runtime-v1-results.md).
 The model-free CLI release is unaffected.
 
+A replacement documentation-conditioned CodeT5 ranker has now passed a fresh
+command-disjoint gate: 104/128 unseen commands compiled ready, 128/128
+insufficient-documentation cases abstained, and CPU p95 was 215 ms. It ranks
+local Rust-valid recipes instead of generating command words. The experimental
+loopback adapter and reproduction commands are documented in
+[`documentation-cross-encoder-v2-results.md`](training/experiments/documentation-cross-encoder-v2-results.md);
+it is not bundled with the model-free release.
+
 An opt-in `cargo build --release --features model` build adds
 `shelliq suggest`. It can query an OpenAI-compatible model server bound to numeric
 loopback, deserialize compact SemanticDocumentV2 JSON, validate its Rust
