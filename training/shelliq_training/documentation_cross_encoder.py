@@ -242,8 +242,11 @@ def compile_selected(
     bound = bind_template(RetrievedTemplate(template, 1.0), case.query)
     if not required.issubset(dict(bound.bindings)):
         return False
-    encoded = actions.encode([bound.document])
-    decoded = actions.decode(encoded)[0]
+    try:
+        encoded = actions.encode([bound.document])
+        decoded = actions.decode(encoded)[0]
+    except ValueError:
+        return False
     return decoded.valid and decoded.document == bound.document
 
 

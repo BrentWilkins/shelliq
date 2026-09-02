@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "experiment": "documentation-cross-encoder-v1",
+  "status": "failed",
+  "decision": "reject_v1_abstention_threshold",
+  "metrics": {
+    "test_commands": 128,
+    "sufficient_ready": 109,
+    "sufficient_ready_rate": 0.8515625,
+    "exact_top_record": 123,
+    "insufficient_abstained": 127,
+    "insufficient_abstain_rate": 0.9921875,
+    "truncated_pairs": 0,
+    "warm_cpu_p95_ms": 164.88543499144726
+  },
+  "failed_gate": "insufficient documentation abstention required 128/128",
+  "artifacts": {
+    "checkpoint_sha256": "138b6c79ed36458308fff038672e195a6ccc54c3fd4f0c584200b3e533f15cd4",
+    "sealed_test_sha256": "d0d9e6c8ce97bcdbbd4834e44ee43f56294cc77d181152446f3dc8753e42ba2f",
+    "raw_test_report_sha256": "79d70e441c96ffca6193e0f7c173dafc779aa1233103235efa33e642f9f36bc7"
+  }
+}
