@@ -186,6 +186,11 @@ The current 0.5B GGUF is a development baseline, not a release candidate. It
 failed the frozen P1B production-path gate after unsafe and unsupported requests
 crossed the ready boundary; see
 [`p1b-runtime-v1-results.md`](training/experiments/p1b-runtime-v1-results.md).
+The existing Salesforce CodeT5 checkpoint also failed its fresh production-path
+gate: 0/4 supported unseen commands, 0/4 correct poisoned-context responses, and
+10.16 s CPU p95. Deterministic grounding safely rejected its invented operands,
+but did not make it useful; see
+[`codet5-runtime-v1-results.md`](training/experiments/codet5-runtime-v1-results.md).
 The model-free CLI release is unaffected.
 
 An opt-in `cargo build --release --features model` build adds

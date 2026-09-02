@@ -43,11 +43,12 @@ def handler(runtime: CodeT5SemanticRuntime) -> type[BaseHTTPRequestHandler]:
                     raise ValueError('request body is empty or too large')
                 body = self.rfile.read(length)
                 request = json.loads(body)
-                response = runtime.chat_completion(request)
             except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as error:
                 self._json(400, {'error': str(error)})
                 return
-            except Exception as error:  # inference errors are abstentions, not completions
+            try:
+                response = runtime.chat_completion(request)
+            except Exception as error:  # inference errors are abstentions, not malformed requests
                 self._json(422, {'error': str(error)})
                 return
             self._json(200, response)

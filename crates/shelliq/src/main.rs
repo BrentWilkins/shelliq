@@ -314,8 +314,13 @@ fn suggest_command(
         }
     };
 
-    policy::enforce(&suggestion.command, effective_instruction, origin == SuggestionOrigin::Model)
-        .context("suggestion rejected by deterministic policy")?;
+    policy::enforce(
+        &index,
+        &suggestion.command,
+        effective_instruction,
+        origin == SuggestionOrigin::Model,
+    )
+    .context("suggestion rejected by deterministic policy")?;
 
     if origin == SuggestionOrigin::Model {
         eprintln!(

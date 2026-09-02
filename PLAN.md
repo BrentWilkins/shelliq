@@ -1060,6 +1060,15 @@ Full evidence and the frozen decision are in
 `training/experiments/p1b-runtime-v1-results.md`. The model remains a
 development baseline and is not an AI release candidate.
 
+**Boundary follow-up (2026-09-01): built; Salesforce CodeT5 candidate
+rejected.** A deterministic unsafe-executable and instruction-operand grounding
+layer now runs before ready output. The best existing 60M CodeT5 semantic-action
+checkpoint then passed 8/16 fresh production cases entirely through abstention:
+0/4 supported unseen commands, 4/4 unsupported abstention, 0/4 correct
+poisoned-context responses, and 4/4 unsafe abstention. CPU p95 was 10.16 s. Keep
+the boundary; do not tune or ship this checkpoint. See
+`training/experiments/codet5-runtime-v1-results.md`.
+
 - Non-loopback endpoint refused unless explicitly enabled; proxies and redirects ignored.
 - Model emits a structured command AST; shelliq renders and quotes it deterministically.
 - Nothing is executed. Buffer replacement only, undo intact, no automatic case rewrites.
