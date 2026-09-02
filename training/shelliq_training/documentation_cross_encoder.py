@@ -30,6 +30,7 @@ from shelliq_training.documentation_templates import (
 from shelliq_training.semantic_actions import SemanticActionClient
 
 EXPERIMENT = 'documentation-cross-encoder-v1'
+EXPERIMENT_V2 = 'documentation-cross-encoder-v2'
 MODEL_ID = 'Salesforce/codet5-small'
 REVISION = 'b1ee9570c289f21b5922b9c768a1ce12957bf968'
 MAX_LENGTH = 256
@@ -66,14 +67,20 @@ class RankedPool:
     top_score: float
 
 
-def split_commands(commands: Iterable[str]) -> dict[str, tuple[str, ...]]:
-    ordered = sorted(
-        commands,
-        key=lambda command: (
-            hashlib.sha256(f'{EXPERIMENT}\0{command}'.encode()).hexdigest(),
-            command,
-        ),
+def ordered_commands(commands: Iterable[str]) -> tuple[str, ...]:
+    return tuple(
+        sorted(
+            commands,
+            key=lambda command: (
+                hashlib.sha256(f'{EXPERIMENT}\0{command}'.encode()).hexdigest(),
+                command,
+            ),
+        )
     )
+
+
+def split_commands(commands: Iterable[str]) -> dict[str, tuple[str, ...]]:
+    ordered = ordered_commands(commands)
     if len(ordered) < 704:
         raise ValueError(f'need at least 704 eligible commands, found {len(ordered)}')
     return {

@@ -19,6 +19,7 @@ from torch import nn
 
 from shelliq_training.documentation_cross_encoder import (
     EXPERIMENT,
+    EXPERIMENT_V2,
     REVISION,
     FrozenCodeT5CrossEncoder,
     RankCase,
@@ -161,7 +162,7 @@ def train(args: argparse.Namespace, manifest: dict[str, object], device: torch.d
     )
     checkpoint = {
         'schema_version': 1,
-        'experiment': EXPERIMENT,
+        'experiment': manifest['experiment'],
         'codet5_revision': REVISION,
         'seed': SEED,
         'selected_epoch': best['epoch'],
@@ -270,7 +271,7 @@ def test(args: argparse.Namespace, manifest: dict[str, object], device: torch.de
     passed = sufficient_ready >= 90 and insufficient_abstained == 128 and p95 <= 5_000
     report = {
         'schema_version': 1,
-        'experiment': EXPERIMENT,
+        'experiment': manifest['experiment'],
         'phase': 'test',
         'gate_passed': passed,
         'threshold': threshold,
@@ -370,11 +371,15 @@ def _assert_cases(cases, commands):
 
 
 def _validate_manifest(manifest, documentation_index):
-    if manifest.get('experiment') != EXPERIMENT or manifest.get('schema_version') != 1:
+    if manifest.get('experiment') not in {EXPERIMENT, EXPERIMENT_V2} or manifest.get('schema_version') != 1:
         raise ValueError('unexpected cross-encoder manifest')
     if manifest.get('documentation_index_sha256') != _sha256(documentation_index):
         raise ValueError('documentation index hash mismatch')
     splits = manifest['splits']
+    if manifest.get('experiment') == EXPERIMENT_V2:
+        if set(splits) != {'test'} or len(set(splits['test']['commands'])) != 128:
+            raise ValueError('invalid v2 test manifest')
+        return
     sets = {name: set(splits[name]['commands']) for name in ('train', 'development', 'test')}
     if sets['train'] & sets['development'] or sets['train'] & sets['test'] or sets['development'] & sets['test']:
         raise ValueError('command-disjoint split invariant failed')

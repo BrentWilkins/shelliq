@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "experiment": "documentation-cross-encoder-v2",
+  "status": "frozen_before_test",
+  "threshold": 0.0,
+  "test_commands": 128,
+  "artifacts": {
+    "source_v1_checkpoint_sha256": "138b6c79ed36458308fff038672e195a6ccc54c3fd4f0c584200b3e533f15cd4",
+    "v2_checkpoint_sha256": "8cdaf55e4df0670452d1eb2bfc32c68bb1ebbbe1ac20cdda3fb3905d32436ee8",
+    "v2_manifest_sha256": "193392c0eb04127d5a44fb6f30ca469dcce5b82d3e8c316fab8c0eaea6048cd7",
+    "v2_test_sha256": "96992cca0137dea165cdb2733200930553525eb53cff5a517f73ca34c407884d"
+  }
+}
